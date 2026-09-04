@@ -69,33 +69,33 @@ export default function Home() {
     : allModules;
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
+    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans space-y-8">
       
       {/* HERO SECTION */}
-      <section className="bg-white border-b border-slate-200 py-16 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-5xl mx-auto text-center space-y-6">
+      <section className="bg-white border border-slate-200 rounded-2xl p-6 sm:p-10 shadow-xs text-center space-y-6">
+        <div className="max-w-4xl mx-auto space-y-5">
           
           <div className="inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-orange-50 border border-orange-200 text-orange-700 text-xs font-bold shadow-2xs">
             <Sparkles className="w-4 h-4 text-orange-600 animate-pulse" />
             <span>Hệ Thống Quản Lý Bán Hàng Gà Ủ Muối Smart v2.0</span>
           </div>
 
-          <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight text-slate-900 leading-tight">
+          <h1 className="text-2xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-slate-900 leading-tight">
             Quản Lý Vận Hành Bán Hàng <br className="hidden sm:inline" />
             <span className="text-orange-600">Đa Chi Nhánh Tự Động &amp; AI Smart POS</span>
           </h1>
 
-          <p className="max-w-2xl mx-auto text-sm sm:text-base text-slate-600 leading-relaxed font-normal">
+          <p className="max-w-2xl mx-auto text-xs sm:text-sm md:text-base text-slate-600 leading-relaxed font-normal">
             Bóc tách đơn hàng từ tin nhắn Zalo/Facebook bằng AI, tự động áp dụng ưu đãi, điều phối đơn về đúng bếp chi nhánh gần nhất và theo dõi doanh thu gộp GMV realtime.
           </p>
 
           {/* Quick Demo CTA Buttons */}
-          <div className="flex flex-wrap items-center justify-center gap-3 pt-4">
+          <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
             {user ? (
               <>
                 <Link
                   href="/admin/orders"
-                  className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-6 py-3 rounded-xl shadow-sm transition flex items-center space-x-2 text-sm cursor-pointer"
+                  className="w-full sm:w-auto bg-orange-600 hover:bg-orange-700 text-white font-bold px-6 py-3 rounded-xl shadow-sm transition flex items-center justify-center space-x-2 text-xs sm:text-sm cursor-pointer"
                 >
                   <ClipboardList className="w-4 h-4" />
                   <span>Quản Lý Đơn Hàng</span>
@@ -103,7 +103,7 @@ export default function Home() {
                 </Link>
                 <Link
                   href="/admin/create-order"
-                  className="bg-slate-900 hover:bg-slate-800 text-white font-bold px-6 py-3 rounded-xl shadow-sm transition flex items-center space-x-2 text-sm cursor-pointer"
+                  className="w-full sm:w-auto bg-slate-900 hover:bg-slate-800 text-white font-bold px-6 py-3 rounded-xl shadow-sm transition flex items-center justify-center space-x-2 text-xs sm:text-sm cursor-pointer"
                 >
                   <Bot className="w-4 h-4 text-orange-400" />
                   <span>+ Tạo Đơn Hàng Mới</span>
@@ -113,7 +113,7 @@ export default function Home() {
               <>
                 <Link
                   href="/login"
-                  className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-6 py-3 rounded-xl shadow-sm transition flex items-center space-x-2 text-sm cursor-pointer"
+                  className="w-full sm:w-auto bg-orange-600 hover:bg-orange-700 text-white font-bold px-6 py-3 rounded-xl shadow-sm transition flex items-center justify-center space-x-2 text-xs sm:text-sm cursor-pointer"
                 >
                   <LogIn className="w-4 h-4" />
                   <span>Đăng Nhập Trải Nghiệm Demo</span>
@@ -121,7 +121,7 @@ export default function Home() {
                 </Link>
                 <Link
                   href="/track"
-                  className="bg-white border border-slate-300 hover:bg-slate-50 text-slate-800 font-bold px-6 py-3 rounded-xl transition flex items-center space-x-2 text-sm cursor-pointer"
+                  className="w-full sm:w-auto bg-white border border-slate-300 hover:bg-slate-50 text-slate-800 font-bold px-6 py-3 rounded-xl transition flex items-center justify-center space-x-2 text-xs sm:text-sm cursor-pointer"
                 >
                   <Search className="w-4 h-4 text-slate-500" />
                   <span>Tra Cứu Đơn Hàng (Khách)</span>
@@ -134,20 +134,20 @@ export default function Home() {
       </section>
 
       {/* SYSTEM MODULES GRID */}
-      <section className="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8 space-y-6">
-        <div className="flex items-center justify-between border-b border-slate-200 pb-4">
+      <section className="space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-slate-200 pb-4 gap-2">
           <div>
-            <h2 className="text-xl font-bold text-slate-900">Các Phân Hệ Quản Lý Hệ Thống</h2>
+            <h2 className="text-lg sm:text-xl font-bold text-slate-900">Các Phân Hệ Quản Lý Hệ Thống</h2>
             <p className="text-xs text-slate-500 mt-0.5">Lựa chọn phân hệ làm việc theo quyền hạn được phân công.</p>
           </div>
           {user && (
-            <span className="text-xs bg-slate-200 text-slate-800 font-bold px-3 py-1.5 rounded-lg border border-slate-300">
-              Quyền hiện tại: {user.role}
+            <span className="text-xs bg-slate-200 text-slate-800 font-bold px-3 py-1.5 rounded-lg border border-slate-300 self-start sm:self-auto">
+              Quyền: {user.role}
             </span>
           )}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {visibleModules.map((mod, idx) => {
             const Icon = mod.icon;
             const isAccessible = !user || mod.roles.includes(user.role) || mod.roles.includes('PUBLIC');
@@ -155,9 +155,9 @@ export default function Home() {
             return (
               <div
                 key={idx}
-                className={`bg-white border rounded-xl p-6 flex flex-col justify-between transition-all duration-200 ${
+                className={`bg-white border rounded-xl p-5 sm:p-6 flex flex-col justify-between transition-all duration-200 ${
                   isAccessible
-                    ? 'border-slate-200 shadow-sm hover:shadow-md hover:border-slate-300'
+                    ? 'border-slate-200 shadow-xs hover:shadow-md hover:border-slate-300'
                     : 'border-slate-200 opacity-60 bg-slate-50'
                 }`}
               >
@@ -172,14 +172,14 @@ export default function Home() {
                   </div>
 
                   <div>
-                    <h3 className="text-base font-bold text-slate-900">{mod.title}</h3>
+                    <h3 className="text-sm sm:text-base font-bold text-slate-900">{mod.title}</h3>
                     <p className="text-xs text-slate-600 mt-1.5 leading-relaxed font-normal">
                       {mod.desc}
                     </p>
                   </div>
                 </div>
 
-                <div className="pt-6 border-t border-slate-100 mt-6">
+                <div className="pt-5 border-t border-slate-100 mt-5">
                   {isAccessible ? (
                     <Link
                       href={mod.route}

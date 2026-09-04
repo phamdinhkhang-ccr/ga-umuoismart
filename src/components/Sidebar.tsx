@@ -13,10 +13,16 @@ import {
   PlusCircle, 
   LogOut, 
   Bot,
-  ChevronRight
+  ChevronRight,
+  X
 } from 'lucide-react';
 
-export default function Sidebar() {
+interface SidebarProps {
+  mobileOpen?: boolean;
+  onCloseMobile?: () => void;
+}
+
+export default function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarProps) {
   const pathname = usePathname();
   const { user, logout } = useAuth();
 
@@ -61,29 +67,46 @@ export default function Sidebar() {
   const navLinks = getNavLinks();
   const canCreateOrder = user && (user.role === 'SUPER_ADMIN' || user.role === 'OPERATOR');
 
-  return (
-    <aside className="w-64 bg-white border-r border-slate-200 flex flex-col justify-between shrink-0 shadow-xs sticky top-0 h-screen z-40">
-      
+  const SidebarContent = (
+    <div className="flex flex-col justify-between h-full bg-white text-slate-800">
       <div className="p-4 space-y-5">
+        
         {/* Logo & Brand Header */}
-        <Link href="/" className="flex items-center space-x-3 cursor-pointer group pt-1">
-          <div className="w-10 h-10 rounded-xl bg-orange-600 group-hover:bg-orange-700 flex items-center justify-center text-white font-bold shadow-sm transition">
-            <Store className="w-5 h-5" />
-          </div>
-          <div>
-            <span className="font-extrabold text-base tracking-tight text-slate-900 block leading-tight">
-              Gà Ủ Muối Smart
-            </span>
-            <span className="text-[10px] block text-orange-600 font-bold uppercase tracking-wider mt-0.5">
-              {user ? user.role.replace('_', ' ') : 'Hệ Thống Bán Hàng'}
-            </span>
-          </div>
-        </Link>
+        <div className="flex items-center justify-between pt-1">
+          <Link
+            href="/"
+            onClick={onCloseMobile}
+            className="flex items-center space-x-3 cursor-pointer group"
+          >
+            <div className="w-10 h-10 rounded-xl bg-orange-600 group-hover:bg-orange-700 flex items-center justify-center text-white font-bold shadow-sm transition">
+              <Store className="w-5 h-5" />
+            </div>
+            <div>
+              <span className="font-extrabold text-base tracking-tight text-slate-900 block leading-tight">
+                Gà Ủ Muối Smart
+              </span>
+              <span className="text-[10px] block text-orange-600 font-bold uppercase tracking-wider mt-0.5">
+                {user ? user.role.replace('_', ' ') : 'Hệ Thống Bán Hàng'}
+              </span>
+            </div>
+          </Link>
+
+          {/* Close button for Mobile Drawer */}
+          {onCloseMobile && (
+            <button
+              onClick={onCloseMobile}
+              className="lg:hidden p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
+        </div>
 
         {/* Prominent Quick Action Button (+ Lên Đơn Mới AI) */}
         {canCreateOrder && (
           <Link
             href="/admin/create-order"
+            onClick={onCloseMobile}
             className="w-full bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-extrabold py-2.5 px-3.5 rounded-xl text-xs shadow-sm transition flex items-center justify-center space-x-2 cursor-pointer"
           >
             <PlusCircle className="w-4 h-4" />
@@ -103,6 +126,7 @@ export default function Sidebar() {
               <Link
                 key={link.href}
                 href={link.href}
+                onClick={onCloseMobile}
                 className={`flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all duration-150 cursor-pointer ${
                   isActive
                     ? 'bg-orange-50 text-orange-700 border border-orange-200 font-bold'
@@ -137,7 +161,10 @@ export default function Sidebar() {
             </div>
 
             <button
-              onClick={logout}
+              onClick={() => {
+                if (onCloseMobile) onCloseMobile();
+                logout();
+              }}
               className="text-slate-400 hover:text-rose-600 p-1.5 rounded-lg hover:bg-rose-50 transition cursor-pointer"
               title="Đăng xuất"
             >
@@ -147,13 +174,38 @@ export default function Sidebar() {
         ) : (
           <Link
             href="/login"
+            onClick={onCloseMobile}
             className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs py-2 px-3 rounded-lg transition flex items-center justify-center space-x-1.5 cursor-pointer shadow-2xs"
           >
             <span>Đăng Nhập Nội Bộ</span>
           </Link>
         )}
       </div>
+    </div>
+  );
 
-    </aside>
+  return (
+    <>
+      {/* DESKTOP FIXED SIDEBAR (lg:flex w-64) */}
+      <aside className="hidden lg:flex w-64 bg-white border-r border-slate-200 flex-col justify-between shrink-0 shadow-xs sticky top-0 h-screen z-40">
+        {SidebarContent}
+      </aside>
+
+      {/* MOBILE OVERLAY DRAWER (< lg) */}
+      {mobileOpen && (
+        <div className="lg:hidden fixed inset-0 z-50 flex">
+          {/* Backdrop Overlay */}
+          <div
+            className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs transition-opacity"
+            onClick={onCloseMobile}
+          />
+
+          {/* Sliding Drawer Panel */}
+          <div className="relative w-72 max-w-[80vw] bg-white h-full shadow-2xl flex flex-col z-10 animate-slide-in">
+            {SidebarContent}
+          </div>
+        </div>
+      )}
+    </>
   );
 }
