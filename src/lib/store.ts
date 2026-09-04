@@ -50,7 +50,8 @@ const KEYS = {
   BRANCHES: 'gum_smart_branches_v3',
   PRODUCTS: 'gum_smart_products_v3',
   CUSTOMERS: 'gum_smart_customers_v3',
-  NOTIFICATIONS: 'gum_smart_notifications_v3'
+  NOTIFICATIONS: 'gum_smart_notifications_v3',
+  CMS: 'gum_smart_storefront_cms_v1'
 };
 
 // Rich Pre-Populated Mock Expenses matching user request screenshot
@@ -1070,6 +1071,113 @@ export function markNotificationRead(id: string): SystemNotification[] {
   const current = getNotifications();
   const updated = current.map(n => n.id === id ? { ...n, read: true } : n);
   setItem(KEYS.NOTIFICATIONS, updated);
+  return updated;
+}
+
+// -------------------------------------------------------------
+// STOREFRONT CMS SETTINGS FUNCTIONS & DATA
+// -------------------------------------------------------------
+export interface CmsBranchItem {
+  id: string;
+  name: string;
+  address: string;
+  phone: string;
+  hours: string;
+  maps_url: string;
+  is_active: boolean;
+}
+
+export interface StorefrontCmsSettings {
+  hero_title: string;
+  hero_slogan: string;
+  hero_banner_image?: string;
+  hero_hotline: string;
+  branches: CmsBranchItem[];
+  social_facebook: string;
+  social_tiktok: string;
+  social_zalo: string;
+  hotline_complaints: string;
+}
+
+const DEFAULT_CMS_SETTINGS: StorefrontCmsSettings = {
+  hero_title: 'GÀ Ủ MUỐI SMART',
+  hero_slogan: 'Gà ủ muối da giòn sần sật - Thơm ngon đậm đà giao nóng tận nơi',
+  hero_hotline: '0988.123.456',
+  branches: [
+    {
+      id: 'b-vinsmart',
+      name: 'CƠ SỞ VIN SMART CITY',
+      address: 'Tòa S2.02 Vinhomes Smart City, Tây Mỗ, Nam Từ Liêm, Hà Nội',
+      phone: '0988.123.456',
+      hours: '08:00 - 22:30',
+      maps_url: 'https://maps.google.com/?q=Vin+Smart+City+Hanoi',
+      is_active: true
+    },
+    {
+      id: 'b-caugiay',
+      name: 'Chi Nhánh Cầu Giấy',
+      address: '102 Trần Thái Tông, Dịch Vọng, Cầu Giấy, Hà Nội',
+      phone: '0977.888.999',
+      hours: '08:00 - 22:30',
+      maps_url: 'https://maps.google.com/?q=Tran+Thai+Tong+Cau+Giay',
+      is_active: true
+    },
+    {
+      id: 'b-thanhtri',
+      name: 'Chi Nhánh Thanh Trì',
+      address: 'Số 9 Thượng Phúc, Đại Thanh, Huyện Thanh Trì, Hà Nội',
+      phone: '0243.855.5555',
+      hours: '08:00 - 22:30',
+      maps_url: 'https://maps.google.com/?q=Dai+Thanh+Thanh+Tri',
+      is_active: true
+    },
+    {
+      id: 'b-quan1',
+      name: 'Chi Nhánh Quận 1 (TP.HCM)',
+      address: '123 Lê Lợi, Phường Bến Thành, Quận 1, TP.HCM',
+      phone: '0283.811.1111',
+      hours: '08:00 - 22:30',
+      maps_url: 'https://maps.google.com/?q=Le+Loi+Quan+1',
+      is_active: true
+    },
+    {
+      id: 'b-quan3',
+      name: 'Chi Nhánh Quận 3 (TP.HCM)',
+      address: '456 Điện Biên Phủ, Phường 3, Quận 3, TP.HCM',
+      phone: '0283.822.2222',
+      hours: '08:00 - 22:30',
+      maps_url: 'https://maps.google.com/?q=Dien+Bien+Phu+Quan+3',
+      is_active: true
+    }
+  ],
+  social_facebook: 'https://facebook.com',
+  social_tiktok: 'https://tiktok.com',
+  social_zalo: 'https://zalo.me',
+  hotline_complaints: '1900.6868'
+};
+
+export function getCmsSettings(): StorefrontCmsSettings {
+  return getItem<StorefrontCmsSettings>(KEYS.CMS, DEFAULT_CMS_SETTINGS);
+}
+
+export function saveCmsSettings(newSettings: Partial<StorefrontCmsSettings>): StorefrontCmsSettings {
+  const current = getCmsSettings();
+  const updated: StorefrontCmsSettings = {
+    ...current,
+    ...newSettings,
+    branches: newSettings.branches || current.branches
+  };
+
+  setItem(KEYS.CMS, updated);
+
+  addNotification({
+    type: 'ORDER',
+    title: '🎨 Cập nhật giao diện Trang chủ',
+    message: 'Super Admin vừa lưu cấu hình mới cho trang chủ bán hàng.',
+    link: '/',
+    actionText: 'Xem trang chủ'
+  });
+
   return updated;
 }
 

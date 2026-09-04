@@ -21,7 +21,8 @@ import {
   LogOut, 
   ChevronRight,
   X,
-  Search
+  Search,
+  Sparkles
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -51,6 +52,7 @@ export default function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarPr
         { href: '/admin/branches', label: 'Cửa Hàng', icon: Building2 },
         { href: '/admin/product-analytics', label: 'Thống Kê Sản Phẩm', icon: BarChart3 },
         { href: '/admin/products', label: 'Sản Phẩm (Menu)', icon: UtensilsCrossed },
+        { href: '/admin/cms', label: 'Cấu Hình Trang Chủ (CMS)', icon: Sparkles },
         { href: '/admin/users', label: 'Nhân Sự', icon: Users },
         { href: '/admin/customers', label: 'Khách Hàng (CRM)', icon: UserCheck },
         { href: '/admin/inventory/import', label: 'Nhập Hàng Kho', icon: ArrowDownLeft },

@@ -5,7 +5,7 @@ import {
   UtensilsCrossed, Plus, Search, CheckCircle2, XCircle, 
   Edit3, Trash2, Sparkles, Filter, Building2, Flame, 
   Bot, Check, X, ShieldAlert, Tag, Package, Coffee, Salad, Drumstick,
-  Calendar, AlertTriangle, AlertOctagon, Hourglass, Layers
+  Calendar, AlertTriangle, AlertOctagon, Hourglass, Layers, Upload
 } from 'lucide-react';
 import { 
   getProducts, saveProduct, toggleProductAvailability, 
@@ -37,6 +37,7 @@ export default function ProductsPage() {
     cost_price: number | '';
     ai_keywords: string;
     is_best_seller: boolean;
+    image_url?: string;
     batch_code: string;
     production_date: string;
     shelf_life_days: number | '';
@@ -49,6 +50,7 @@ export default function ProductsPage() {
     cost_price: 110000,
     ai_keywords: '1 con, nguyên con, gà ủ cả con',
     is_best_seller: true,
+    image_url: '',
     batch_code: 'LÔ-GUM-0409',
     production_date: '2026-09-04',
     shelf_life_days: 14,
@@ -172,6 +174,7 @@ export default function ProductsPage() {
         cost_price: product.cost_price,
         ai_keywords: product.ai_keywords ? product.ai_keywords.join(', ') : '',
         is_best_seller: !!product.is_best_seller,
+        image_url: product.image_url || '',
         batch_code: product.batch_code || 'LÔ-GUM-0409',
         production_date: product.production_date || '2026-09-04',
         shelf_life_days: product.shelf_life_days || 7,
@@ -189,6 +192,7 @@ export default function ProductsPage() {
         cost_price: 110000,
         ai_keywords: 'gà nguyên con, 1 con, gà ủ muối',
         is_best_seller: false,
+        image_url: '',
         batch_code: `LÔ-GUM-${Date.now().toString().slice(-4)}`,
         production_date: todayStr,
         shelf_life_days: 14,
@@ -239,6 +243,7 @@ export default function ProductsPage() {
       cost_price: Number(formData.cost_price || 0),
       ai_keywords: keywordsArray.length > 0 ? keywordsArray : [formData.name.toLowerCase()],
       is_best_seller: formData.is_best_seller,
+      image_url: formData.image_url,
       batch_code: formData.batch_code || `LÔ-${Date.now().toString().slice(-4)}`,
       production_date: formData.production_date,
       shelf_life_days: Number(formData.shelf_life_days || 7),
@@ -541,9 +546,13 @@ export default function ProductsPage() {
                     {/* Column 1: Image & Product Details */}
                     <td className="px-4 py-3.5">
                       <div className="flex items-start gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0">
-                          {renderCategoryIcon(p.category)}
-                        </div>
+                        {p.image_url ? (
+                          <img src={p.image_url} alt={p.name} className="w-10 h-10 rounded-xl object-cover border border-slate-200 shrink-0 shadow-2xs" />
+                        ) : (
+                          <div className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0">
+                            {renderCategoryIcon(p.category)}
+                          </div>
+                        )}
                         <div className="space-y-1">
                           <div className="flex items-center gap-2">
                             <span className="font-extrabold text-sm text-slate-900 leading-snug">{p.name}</span>
@@ -705,6 +714,53 @@ export default function ProductsPage() {
             </div>
 
             <form onSubmit={handleSaveProduct} className="space-y-3.5 text-xs">
+              
+              {/* Image Upload Area */}
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700">Hình ảnh món ăn (Tải ảnh trực tiếp)</label>
+                {formData.image_url ? (
+                  <div className="flex items-center gap-3 bg-purple-50/50 p-2.5 rounded-xl border border-purple-200">
+                    <img src={formData.image_url} alt="Preview" className="w-16 h-16 object-cover rounded-xl border border-purple-300 shadow-2xs shrink-0" />
+                    <div className="space-y-1">
+                      <span className="text-[11px] font-bold text-purple-800 block">✓ Đã tải ảnh Base64 thành công</span>
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, image_url: '' })}
+                        className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold rounded-lg text-[10px] cursor-pointer transition flex items-center gap-1"
+                      >
+                        <X className="w-3 h-3" />
+                        <span>Xóa ảnh / Đổi ảnh khác</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <label className="border-2 border-dashed border-slate-300 hover:border-purple-500 rounded-2xl p-4 flex flex-col items-center justify-center text-center cursor-pointer bg-slate-50/50 hover:bg-purple-50/40 transition group">
+                    <input
+                      type="file"
+                      accept="image/png, image/jpeg, image/webp"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          if (!file.type.startsWith('image/')) {
+                            alert('Vui lòng chọn file hình ảnh (JPG, PNG, WebP)!');
+                            return;
+                          }
+                          const reader = new FileReader();
+                          reader.onload = (ev) => {
+                            setFormData(prev => ({ ...prev, image_url: ev.target?.result as string }));
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                      className="hidden"
+                    />
+                    <Upload className="w-6 h-6 text-purple-600 mb-1 group-hover:scale-110 transition" />
+                    <span className="font-bold text-slate-800 text-xs">Bấm để chọn file từ máy hoặc kéo thả ảnh</span>
+                    <span className="text-[10px] text-slate-500 mt-0.5">Hỗ trợ JPG, PNG, WebP (Tự động lưu Base64 Data URL)</span>
+                  </label>
+                )}
+              </div>
+
               <div className="space-y-1">
                 <label className="font-bold text-slate-700">Tên món ăn (*)</label>
                 <input

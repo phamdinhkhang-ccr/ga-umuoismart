@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { 
@@ -9,11 +9,25 @@ import {
   Bot, LogIn, Lock, ArrowRight, UserCheck, Star, Zap, PhoneCall, Headphones
 } from 'lucide-react';
 import { getAnalyticsData } from '@/actions/orders';
-import { getBranches, getProducts } from '@/lib/store';
+import { getProducts, getCmsSettings, StorefrontCmsSettings, ProductRecord } from '@/lib/store';
 import { Order } from '@/types/database';
 
 export default function PublicStorefrontHome() {
   const { user } = useAuth();
+
+  // Dynamic Storefront CMS & Products State
+  const [cmsSettings, setCmsSettings] = useState<StorefrontCmsSettings>({
+    hero_title: 'GÀ Ủ MUỐI SMART',
+    hero_slogan: 'Gà ủ muối da giòn sần sật - Thơm ngon đậm đà giao nóng tận nơi',
+    hero_hotline: '0988.123.456',
+    branches: [],
+    social_facebook: 'https://facebook.com',
+    social_tiktok: 'https://tiktok.com',
+    social_zalo: 'https://zalo.me',
+    hotline_complaints: '1900.6868'
+  });
+
+  const [productsList, setProductsList] = useState<ProductRecord[]>([]);
 
   // Search Order State
   const [searchQuery, setSearchQuery] = useState('');
@@ -21,112 +35,31 @@ export default function PublicStorefrontHome() {
   const [hasSearched, setHasSearched] = useState(false);
   const [searchError, setSearchError] = useState('');
 
-  // Sample menu items
-  const products = [
-    {
-      id: 'm1',
-      name: 'Gà Ủ Muối Nguyên Con (Kèm Nước Chấm)',
-      price: 190000,
-      unit: 'Con',
-      desc: 'Gà ủ muối hoa tiêu da giòn sần sật, kèm 2 bịch nước chấm thần thánh gia truyền.',
-      badge: '🌟 Bán Chạy Nhất',
-      image: '🍗'
-    },
-    {
-      id: 'm2',
-      name: 'Gà Ủ Muối Nửa Con (Kèm Nước Chấm)',
-      price: 100000,
-      unit: 'Nửa con',
-      desc: 'Phù hợp 1-2 người ăn, thịt mềm mọng ngọt giòn da chuẩn vị.',
-      badge: '👍 Phổ Biến',
-      image: '🍗'
-    },
-    {
-      id: 'm3',
-      name: 'Chân Gà Rút Xương Sốt Thái',
-      price: 65000,
-      unit: 'Hộp',
-      desc: 'Chân gà rút xương giòn sần sật quyện sốt Thái chua cay đậm đà.',
-      badge: '🌶️ Món Hot',
-      image: '🌶️'
-    },
-    {
-      id: 'm4',
-      name: 'Cánh Gà Ủ Muối (Phần 4 Cánh)',
-      price: 85000,
-      unit: 'Phần 4 cánh',
-      desc: 'Cánh gà ủ muối giòn da dai thịt, đậm đà thấm vị từng thớ thịt.',
-      badge: '🍗 Thích Nhất',
-      image: '🍗'
-    },
-    {
-      id: 'm5',
-      name: 'Nước Chấm Thần Thánh Extra',
-      price: 15000,
-      unit: 'Chai',
-      desc: 'Công thức nước chấm sốt tắc muối ớt cay nồng đậm vị đặc trưng.',
-      badge: '🥫 Extra Sốt',
-      image: '🥫'
-    },
-    {
-      id: 'm6',
-      name: 'Trà Tắc Khổng Lồ (1 Lít)',
-      price: 20000,
-      unit: 'Ly 1L',
-      desc: '100% trà tắc tươi mát lạnh 1 lít giải nhiệt tức thì khi ăn gà.',
-      badge: '🥤 Giải Nhiệt 1L',
-      image: '🥤'
-    }
-  ];
+  const loadStorefrontData = () => {
+    setCmsSettings(getCmsSettings());
+    setProductsList(getProducts());
+  };
 
-  // 5 Branches Data
-  const branches = [
-    {
-      id: 'b-vinsmart',
-      name: 'CƠ SỞ VIN SMART CITY',
-      address: 'Tòa S2.02 Vinhomes Smart City, Tây Mỗ, Nam Từ Liêm, Hà Nội',
-      phone: '0988.123.456',
-      hours: '08:00 - 22:30',
-      status: '🟢 Đang mở cửa',
-      mapsUrl: 'https://maps.google.com/?q=Vin+Smart+City+Hanoi'
-    },
-    {
-      id: 'b-caugiay',
-      name: 'Chi Nhánh Cầu Giấy',
-      address: '102 Trần Thái Tông, Dịch Vọng, Cầu Giấy, Hà Nội',
-      phone: '0977.888.999',
-      hours: '08:00 - 22:30',
-      status: '🟢 Đang mở cửa',
-      mapsUrl: 'https://maps.google.com/?q=Tran+Thai+Tong+Cau+Giay'
-    },
-    {
-      id: 'b-thanhtri',
-      name: 'Chi Nhánh Thanh Trì',
-      address: 'Số 9 Thượng Phúc, Đại Thanh, Huyện Thanh Trì, Hà Nội',
-      phone: '0243.855.5555',
-      hours: '08:00 - 22:30',
-      status: '🟢 Đang mở cửa',
-      mapsUrl: 'https://maps.google.com/?q=Dai+Thanh+Thanh+Tri'
-    },
-    {
-      id: 'b-quan1',
-      name: 'Chi Nhánh Quận 1 (TP.HCM)',
-      address: '123 Lê Lợi, Phường Bến Thành, Quận 1, TP.HCM',
-      phone: '0283.811.1111',
-      hours: '08:00 - 22:30',
-      status: '🟢 Đang mở cửa',
-      mapsUrl: 'https://maps.google.com/?q=Le+Loi+Quan+1'
-    },
-    {
-      id: 'b-quan3',
-      name: 'Chi Nhánh Quận 3 (TP.HCM)',
-      address: '456 Điện Biên Phủ, Phường 3, Quận 3, TP.HCM',
-      phone: '0283.822.2222',
-      hours: '08:00 - 22:30',
-      status: '🟢 Đang mở cửa',
-      mapsUrl: 'https://maps.google.com/?q=Dien+Bien+Phu+Quan+3'
-    }
-  ];
+  useEffect(() => {
+    loadStorefrontData();
+
+    const handleStoreUpdate = () => {
+      loadStorefrontData();
+    };
+
+    window.addEventListener('gum_store_update', handleStoreUpdate);
+    window.addEventListener('storage', handleStoreUpdate);
+
+    return () => {
+      window.removeEventListener('gum_store_update', handleStoreUpdate);
+      window.removeEventListener('storage', handleStoreUpdate);
+    };
+  }, []);
+
+  // Filter active branches only
+  const activeBranches = useMemo(() => {
+    return cmsSettings.branches?.filter((b) => b.is_active !== false) || [];
+  }, [cmsSettings.branches]);
 
   // Handle Order Tracking Search
   const handleSearchOrder = async (e?: React.FormEvent) => {
@@ -174,7 +107,7 @@ export default function PublicStorefrontHome() {
             </div>
             <div>
               <span className="text-lg font-black text-slate-900 tracking-tight flex items-center gap-1.5">
-                Gà Ủ Muối Smart
+                {cmsSettings.hero_title || 'Gà Ủ Muối Smart'}
                 <Sparkles className="w-4 h-4 text-orange-500 animate-pulse" />
               </span>
               <p className="text-[10px] text-slate-500 font-semibold hidden sm:block">Đặc Sản Da Giòn Sần Sật • Giao Hỏa Tốc</p>
@@ -185,7 +118,7 @@ export default function PublicStorefrontHome() {
           <nav className="hidden md:flex items-center space-x-6 text-xs font-extrabold text-slate-700">
             <a href="#menu" className="hover:text-orange-600 transition">Thực Đơn Món</a>
             <a href="#track" className="hover:text-orange-600 transition">Tra Cứu Đơn Hàng</a>
-            <a href="#branches" className="hover:text-orange-600 transition">5 Cơ Sở Bếp</a>
+            <a href="#branches" className="hover:text-orange-600 transition">Hệ Thống Cơ Sở ({activeBranches.length})</a>
             <a href="#contact" className="hover:text-orange-600 transition">Liên Hệ CSKH</a>
           </nav>
 
@@ -220,19 +153,26 @@ export default function PublicStorefrontHome() {
           
           <div className="inline-flex items-center space-x-2 px-4 py-1.5 rounded-full bg-orange-100 border border-orange-200 text-orange-800 text-xs font-extrabold shadow-2xs">
             <Flame className="w-4 h-4 text-orange-600 animate-bounce" />
-            <span>Đặc Sản Gà Ủ Muối Hoa Tiêu Đậm Vị Nóng Hổi</span>
+            <span>Hotline Đặt Ngay: {cmsSettings.hero_hotline}</span>
           </div>
 
           <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black text-slate-900 tracking-tight leading-tight max-w-4xl mx-auto">
-            Gà Ủ Muối Da Giòn Sần Sật <br />
+            {cmsSettings.hero_title} <br />
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-600 via-amber-600 to-rose-600">
               Thơm Ngon Đậm Đà • Giao Hỏa Tốc
             </span>
           </h1>
 
           <p className="max-w-2xl mx-auto text-xs sm:text-base text-slate-600 leading-relaxed font-medium">
-            Đặc sản gà ủ muối hoa tiêu chuẩn vị, da giòn sần sật, thịt mọng ngọt đậm đà, kèm hũ nước chấm thần thánh gia truyền. Giao nóng tận nơi trong 20-30 phút tại Hà Nội &amp; TP.HCM.
+            {cmsSettings.hero_slogan}
           </p>
+
+          {/* Banner Hero Image if Uploaded */}
+          {cmsSettings.hero_banner_image && (
+            <div className="max-w-3xl mx-auto my-4 overflow-hidden rounded-3xl border-2 border-orange-200 shadow-xl">
+              <img src={cmsSettings.hero_banner_image} alt="Hero Banner" className="w-full max-h-80 object-cover" />
+            </div>
+          )}
 
           {/* Badges */}
           <div className="flex flex-wrap items-center justify-center gap-2 pt-1 text-xs font-bold text-slate-700">
@@ -370,7 +310,7 @@ export default function PublicStorefrontHome() {
                     <div><strong>Khách hàng:</strong> {searchedOrder.customer_name} ({searchedOrder.customer_phone})</div>
                     <div><strong>Địa chỉ:</strong> {searchedOrder.shipping_address}</div>
                     <div><strong>Cơ sở phụ trách:</strong> {searchedOrder.branch?.name || 'CƠ SỞ VIN SMART CITY'}</div>
-                    <div><strong>Hotline bếp:</strong> {searchedOrder.branch?.phone || '0988.123.456'}</div>
+                    <div><strong>Hotline bếp:</strong> {searchedOrder.branch?.phone || cmsSettings.hero_hotline}</div>
                   </div>
 
                   {/* Items Summary */}
@@ -408,18 +348,22 @@ export default function PublicStorefrontHome() {
           </p>
         </div>
 
-        {/* Product Grid */}
+        {/* Product Grid Dynamic Sync */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {products.map((p) => (
+          {productsList.map((p) => (
             <div
               key={p.id}
               className="bg-white border border-slate-200 rounded-3xl p-5 shadow-xs hover:shadow-xl hover:border-orange-300 transition-all duration-300 flex flex-col justify-between group space-y-4"
             >
               <div className="space-y-3">
                 <div className="flex justify-between items-start">
-                  <span className="text-4xl">{p.image}</span>
+                  {p.image_url ? (
+                    <img src={p.image_url} alt={p.name} className="w-16 h-16 object-cover rounded-2xl border border-slate-200 shadow-xs" />
+                  ) : (
+                    <span className="text-4xl">🍗</span>
+                  )}
                   <span className="bg-orange-50 text-orange-700 border border-orange-200 text-[10px] font-black px-2.5 py-1 rounded-full">
-                    {p.badge}
+                    {p.is_best_seller ? '🌟 Bán Chạy Nhất' : p.category}
                   </span>
                 </div>
 
@@ -427,7 +371,9 @@ export default function PublicStorefrontHome() {
                   <h3 className="font-extrabold text-slate-900 text-base group-hover:text-orange-600 transition">
                     {p.name}
                   </h3>
-                  <p className="text-xs text-slate-500 font-medium mt-1 leading-relaxed">{p.desc}</p>
+                  <p className="text-xs text-slate-500 font-medium mt-1 leading-relaxed">
+                    {p.ai_keywords ? p.ai_keywords.join(' • ') : 'Gà ủ muối chuẩn vị'}
+                  </p>
                 </div>
               </div>
 
@@ -452,7 +398,7 @@ export default function PublicStorefrontHome() {
         </div>
       </section>
 
-      {/* 5. KHỐI HỆ THỐNG 5 CƠ SỞ PHỦ SÓNG (#branches) */}
+      {/* 5. KHỐI HỆ THỐNG CƠ SỞ PHỦ SÓNG (#branches) */}
       <section id="branches" className="bg-slate-100/70 border-y border-slate-200 py-12 scroll-mt-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
           
@@ -460,13 +406,15 @@ export default function PublicStorefrontHome() {
             <span className="bg-emerald-100 text-emerald-800 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-wider border border-emerald-200">
               Phủ Sóng Toàn Quốc
             </span>
-            <h2 className="text-2xl sm:text-4xl font-black text-slate-900">Hệ Thống 5 Cơ Sở Phủ Sóng Hà Nội &amp; TP.HCM</h2>
+            <h2 className="text-2xl sm:text-4xl font-black text-slate-900">
+              Hệ Thống {activeBranches.length} Cơ Sở Phủ Sóng Hà Nội &amp; TP.HCM
+            </h2>
             <p className="text-xs sm:text-sm text-slate-600 font-medium">Sẵn sàng phục vụ giao hỏa tốc trong 20-30 phút tại các quận nội thành.</p>
           </div>
 
-          {/* Branch Cards */}
+          {/* Branch Cards Dynamic Sync */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {branches.map((b) => (
+            {activeBranches.map((b) => (
               <div key={b.id} className="bg-white border border-slate-200 rounded-3xl p-5 shadow-xs space-y-3.5 hover:shadow-md transition">
                 <div className="flex justify-between items-start border-b border-slate-100 pb-2.5">
                   <h3 className="font-extrabold text-slate-900 text-sm flex items-center gap-1.5">
@@ -474,7 +422,7 @@ export default function PublicStorefrontHome() {
                     <span>{b.name}</span>
                   </h3>
                   <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 shrink-0">
-                    {b.status}
+                    🟢 Đang mở cửa
                   </span>
                 </div>
 
@@ -497,7 +445,7 @@ export default function PublicStorefrontHome() {
 
                 <div className="pt-2 flex space-x-2">
                   <a
-                    href={b.mapsUrl}
+                    href={b.maps_url}
                     target="_blank"
                     rel="noreferrer"
                     className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-[11px] transition text-center flex items-center justify-center space-x-1"
@@ -534,7 +482,7 @@ export default function PublicStorefrontHome() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
           {/* Facebook */}
           <a
-            href="https://facebook.com"
+            href={cmsSettings.social_facebook}
             target="_blank"
             rel="noreferrer"
             className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs hover:border-blue-300 hover:shadow-md transition flex items-center space-x-3 cursor-pointer"
@@ -550,7 +498,7 @@ export default function PublicStorefrontHome() {
 
           {/* TikTok */}
           <a
-            href="https://tiktok.com"
+            href={cmsSettings.social_tiktok}
             target="_blank"
             rel="noreferrer"
             className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs hover:border-slate-400 hover:shadow-md transition flex items-center space-x-3 cursor-pointer"
@@ -566,7 +514,7 @@ export default function PublicStorefrontHome() {
 
           {/* Zalo OA */}
           <a
-            href="https://zalo.me"
+            href={cmsSettings.social_zalo}
             target="_blank"
             rel="noreferrer"
             className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs hover:border-sky-300 hover:shadow-md transition flex items-center space-x-3 cursor-pointer"
@@ -576,13 +524,13 @@ export default function PublicStorefrontHome() {
             </div>
             <div>
               <h4 className="font-extrabold text-slate-900">Zalo OA Đặt Hàng</h4>
-              <p className="text-[11px] text-slate-500 font-medium">Zalo Chăm Sóc Khách Hàng</p>
+              <p className="text-[11px] text-slate-500 font-medium">Zalo CSKH Gà Ủ Muối</p>
             </div>
           </a>
 
           {/* Hotline */}
           <a
-            href="tel:19006868"
+            href={`tel:${cmsSettings.hotline_complaints}`}
             className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs hover:border-orange-300 hover:shadow-md transition flex items-center space-x-3 cursor-pointer"
           >
             <div className="w-10 h-10 rounded-xl bg-orange-50 text-orange-600 flex items-center justify-center font-black text-lg shrink-0">
@@ -590,7 +538,7 @@ export default function PublicStorefrontHome() {
             </div>
             <div>
               <h4 className="font-extrabold text-slate-900">Tổng Đài Phản Ánh</h4>
-              <p className="text-[11px] text-orange-600 font-black">1900.6868 (24/7)</p>
+              <p className="text-[11px] text-orange-600 font-black">{cmsSettings.hotline_complaints} (24/7)</p>
             </div>
           </a>
         </div>
@@ -601,7 +549,7 @@ export default function PublicStorefrontHome() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-slate-400">
           <div className="flex items-center space-x-2">
             <Store className="w-5 h-5 text-orange-500" />
-            <span className="font-extrabold text-white text-sm">Gà Ủ Muối Smart</span>
+            <span className="font-extrabold text-white text-sm">{cmsSettings.hero_title}</span>
             <span>- Thương hiệu Gà Ủ Muối Hoa Tiêu Đa Chi Nhánh</span>
           </div>
 
