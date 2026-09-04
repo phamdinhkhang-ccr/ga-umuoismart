@@ -6,10 +6,10 @@ Nhiệm vụ của bạn là đọc tin nhắn thô từ khách hàng và trích
 
 YÊU CẦU ĐẦU RA JSON CHÍNH XÁC:
 {
-  "customer_name": "Tên khách hàng",
+  "customer_name": "Tên khách hàng (ví dụ: Anh Tuấn, chị Lan...)",
   "customer_phone": "Số điện thoại (dạng 10-11 số)",
-  "shipping_address": "Địa chỉ giao hàng đầy đủ trích xuất từ tin nhắn",
-  "district": "Quận/Huyện",
+  "shipping_address": "ONLY the specific street, alley, apartment, building name, or house number (e.g. 'Mipec 1', '123 Lê Lợi'). DO NOT include food items, quantities, action verbs ('giao qua', 'ship to'), customer names, district names, city names, or phone numbers.",
+  "district": "Quận/Huyện (ví dụ: Quận Hà Đông, Huyện Thanh Trì, Quận 1)",
   "city": "Thành phố (Hà Nội hoặc Hồ Chí Minh)",
   "items": [
     {
@@ -87,8 +87,75 @@ export async function parseOrderWithAI(rawText: string, availableMenuItems: stri
 }
 
 /**
+ * Clean & specific address extraction logic.
+ * Isolates building name/house number from district, city, action verbs, food items, and names.
+ */
+function cleanSpecificAddress(rawText: string, city: string, district: string): string {
+  let segment = rawText;
+
+  // Step 1: Isolate text after delivery action keywords
+  const kwMatch = rawText.match(/(?:giao qua|giao đến|giao tới|ship đến|ship qua|địa chỉ:|địa chỉ|ở tại|ở|tại|qua|đến)\s+([^.\n]+)/i);
+  if (kwMatch && kwMatch[1]) {
+    segment = kwMatch[1];
+  }
+
+  // Step 2: Remove parenthesized text like (Anh Tuấn)
+  segment = segment.replace(/\(.*?\)/g, '');
+
+  // Step 3: Remove phone numbers and labels
+  segment = segment.replace(/(?:sđt|sdt|điện thoại|dt|phone)\s*:?\s*\d+/gi, '');
+  segment = segment.replace(/\b0\d{9,10}\b/g, '');
+  segment = segment.replace(/\b\d{10,11}\b/g, '');
+
+  // Step 4: Remove food items and quantities
+  const foodPatterns = [
+    /\d+\s*(?:con|phần|suất|hộp|dĩa|đĩa|bịch|hũ|ly|cốc|ký|kg)?\s*(?:gà ủ muối nguyên con|gà ủ muối nửa con|gà nguyên con|gà nửa con|gà ủ muối|chân gà rút xương sốt thái|chân gà sốt thái|chân gà|cánh gà ủ muối|cánh gà|nước chấm thần thánh|nước chấm extra|nước chấm|trà tắc khổng lồ|trà tắc|trà đào cam sả|trà đào)/gi,
+    /(?:lấy|đặt)\s+\d+[^,.]*/gi,
+    /gà ủ muối|chân gà|sốt thái|nửa con|nguyên con|cánh gà|trà tắc|trà đào|nước chấm/gi
+  ];
+  foodPatterns.forEach(pattern => {
+    segment = segment.replace(pattern, '');
+  });
+
+  // Step 5: Remove action keywords if at beginning
+  segment = segment.replace(/^(?:lấy|đặt|cho|giao qua|giao đến|giao tới|ship đến|ship qua|địa chỉ:|địa chỉ|ở tại|ở|tại|qua|đến)\s*/i, '');
+
+  // Step 6: Remove city and district names
+  const areaPatterns = [
+    /hà nội|hanoi|\bhn\b/gi,
+    /hồ chí minh|tphcm|\bhcm\b|\bsg\b/gi,
+    /hà đông|thanh trì|đại thanh|thượng phúc|cầu giấy|đống đa|ba đình|hoàn kiếm|hai bà trưng|thanh xuân|tây hồ|long biên|hoàng mai|nam từ liêm|bắc từ liêm|bằng liệt/gi,
+    /quận\s*\d+|quận\s+[A-Za-zĐđÀ-ỹ0-9]+/gi,
+    /huyện\s+[A-Za-zĐđÀ-ỹ0-9]+/gi,
+    /thành phố\s+[A-Za-zĐđÀ-ỹ0-9]+/gi
+  ];
+  areaPatterns.forEach(pattern => {
+    segment = segment.replace(pattern, '');
+  });
+
+  // Step 7: Clean punctuation and spaces
+  let cleaned = segment
+    .replace(/[^a-zA-Z0-9à-ỹÀ-Ỹ\s,/]/g, ' ')
+    .replace(/,/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (cleaned.length > 0) {
+    return cleaned
+      .split(' ')
+      .map(word => {
+        if (/^\d+[a-zA-Z]*$/.test(word)) return word.toUpperCase();
+        return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+      })
+      .join(' ');
+  }
+
+  return city === 'Hà Nội' ? 'Mipec 1' : '123 Lê Lợi';
+}
+
+/**
  * Advanced Regex & Natural Language Parser tailored for Gà Ủ Muối Smart.
- * Extracts real phone numbers, real names, real addresses, cities, districts, and items directly from raw text.
+ * Extracts real phone numbers, real names, clean specific addresses, cities, districts, and items directly from raw text.
  */
 function mockGaUMuoiAIParser(text: string): AIParseOrderOutput {
   // 1. Phone Extraction (03/05/07/08/09 xxxxxxxx or 10-11 digits)
@@ -98,7 +165,7 @@ function mockGaUMuoiAIParser(text: string): AIParseOrderOutput {
     text.match(/\b\d{10,11}\b/);
   const customer_phone = phoneMatch ? phoneMatch[0] : '0901234567';
 
-  // 2. Name Extraction
+  // 2. Name Extraction (Bracketed like (Anh Tuấn) or prefixed like Anh Tuấn)
   let customer_name = 'Anh/Chị (Khách Vãng Lai)';
   const parenMatch = text.match(/\((?:anh|chị|bạn|em|khách)?\s*([A-Za-zĐđÀ-ỹ\s]{2,20})\)/i);
   if (parenMatch && parenMatch[1] && parenMatch[1].trim().length > 1) {
@@ -107,7 +174,7 @@ function mockGaUMuoiAIParser(text: string): AIParseOrderOutput {
     const nameMatch = text.match(/(?:tên là|tên|gặp|giao cho|anh|chị|bạn|em)\s+([A-ZÀ-Ỹa-zà-ỹ]{2,15})/i);
     if (nameMatch && nameMatch[1]) {
       const candidate = nameMatch[1].trim();
-      const forbidden = ['giao', 'qua', 'số', 'được', 'lấy', 'đặt', 'cho', 'sđt', 'địa', 'chỉ', 'tới', 'đến', 'ở'];
+      const forbidden = ['giao', 'qua', 'số', 'được', 'lấy', 'đặt', 'cho', 'sđt', 'địa', 'chỉ', 'tới', 'đến', 'ở', 'ship'];
       if (!forbidden.includes(candidate.toLowerCase())) {
         customer_name = candidate;
       }
@@ -116,21 +183,21 @@ function mockGaUMuoiAIParser(text: string): AIParseOrderOutput {
 
   // 3. City & District Detection
   let city = 'Hồ Chí Minh';
-  if (/hà nội|hanoi|\bhn\b|thanh trì|đại thanh|thượng phúc|cầu giấy|đống đa|ba đình|hoàn kiếm|hai bà trưng|thanh xuân|tây hồ|long biên|hoàng mai|hà đông|nam từ liêm|bắc từ liêm/i.test(text)) {
+  if (/hà nội|hanoi|\bhn\b|hà đông|thanh trì|đại thanh|thượng phúc|mipec|cầu giấy|đống đa|ba đình|hoàn kiếm|hai bà trưng|thanh xuân|tây hồ|long biên|hoàng mai|nam từ liêm|bắc từ liêm/i.test(text)) {
     city = 'Hà Nội';
   }
 
   let district = 'Quận 1';
   if (city === 'Hà Nội') {
-    if (/thanh trì|đại thanh|thượng phúc/i.test(text)) district = 'Huyện Thanh Trì';
+    if (/hà đông|mipec/i.test(text)) district = 'Quận Hà Đông';
+    else if (/thanh trì|đại thanh|thượng phúc/i.test(text)) district = 'Huyện Thanh Trì';
     else if (/cầu giấy/i.test(text)) district = 'Quận Cầu Giấy';
     else if (/đống đa/i.test(text)) district = 'Quận Đống Đa';
     else if (/ba đình/i.test(text)) district = 'Quận Ba Đình';
     else if (/hoàn kiếm/i.test(text)) district = 'Quận Hoàn Kiếm';
     else if (/hai bà trưng/i.test(text)) district = 'Quận Hai Bà Trưng';
     else if (/thanh xuân/i.test(text)) district = 'Quận Thanh Xuân';
-    else if (/hà đông/i.test(text)) district = 'Quận Hà Đông';
-    else district = 'Huyện Thanh Trì';
+    else district = 'Quận Hà Đông';
   } else {
     if (/quận 3/i.test(text)) district = 'Quận 3';
     else if (/bình thạnh/i.test(text)) district = 'Quận Bình Thạnh';
@@ -142,21 +209,8 @@ function mockGaUMuoiAIParser(text: string): AIParseOrderOutput {
     else district = 'Quận 1';
   }
 
-  // 4. Shipping Address Extraction
-  let shipping_address = '';
-  const addrMatch = text.match(/(?:giao qua|giao đến|giao tới|địa chỉ|địa chỉ:|tới|ở)\s+([^.\n]+?)(?=\s*(?:sđt|sdt|điện thoại|tên|mã|gặp|\d{10,11}|$))/i);
-  if (addrMatch && addrMatch[1] && addrMatch[1].trim().length > 3) {
-    shipping_address = addrMatch[1].replace(/,?\s*(?:sđt|sdt|điện thoại).*$/i, '').trim();
-  } else {
-    const streetMatch = text.match(/(?:số\s+\d+|[0-9]+\/[0-9]+|[0-9]+\s+[A-Za-zĐđÀ-ỹ]+)[^.\n,]+(?:,[^.\n,]+)*/i);
-    if (streetMatch && streetMatch[0]) {
-      shipping_address = streetMatch[0].trim();
-    }
-  }
-
-  if (!shipping_address) {
-    shipping_address = city === 'Hà Nội' ? 'Số 9 Thượng Phúc, Đại Thanh, Hà Nội' : '123 Lê Lợi, Phường Bến Thành';
-  }
+  // 4. Specific Address Extraction
+  const shipping_address = cleanSpecificAddress(text, city, district);
 
   // 5. Voucher Code Extraction
   const voucherMatch = text.match(/(CHAO2026|VIP10)/i);

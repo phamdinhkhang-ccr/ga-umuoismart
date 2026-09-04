@@ -47,9 +47,9 @@ export default function CreateOrderPage() {
   }, []);
 
   const sampleMessages = useMemo(() => [
+    `lấy 1 con gà ủ muối + 1 chân gà sốt thái giao qua mipec 1, hà đông, hà nội (Anh Tuấn). Sđt 0889018221`,
     `1 con gà ủ muối, 1 chân gà sốt thái, giao qua số 9 thượng phúc, đại thanh, hà nội, sđt 0889018221`,
-    `Chào Gà Ủ Muối Smart, cho mình lấy 2 Gà Ủ Muối Nguyên Con và 2 Trà Tắc Khổng Lồ giao đến địa chỉ 123 Lê Lợi, Phường Bến Thành, Quận 1. Tên Nam, SĐT: 0901234567`,
-    `Lấy 1 Gà Ủ Muối Nửa Con + 1 Chân Gà Rút Xương Sốt Thái giao qua 456 Điện Biên Phủ, Quận 3. SĐT: 0988776655 (Anh Tuấn). Áp dụng mã CHAO2026`
+    `Chào Gà Ủ Muối Smart, cho mình lấy 2 Gà Ủ Muối Nguyên Con và 2 Trà Tắc Khổng Lồ giao đến địa chỉ 123 Lê Lợi, Phường Bến Thành, Quận 1. Tên Nam, SĐT: 0901234567`
   ], []);
 
   const handleParseOrder = useCallback(async (textToParse?: string) => {
