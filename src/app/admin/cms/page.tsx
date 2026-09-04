@@ -192,45 +192,45 @@ export default function AdminCmsPage() {
     }
   };
 
-  // Image Canvas Auto-Compression Helper (Max 600x600, JPEG/WebP under 100KB)
-  const compressImageFile = (file: File, maxWidth = 600, maxHeight = 600, quality = 0.82): Promise<string> => {
-    return new Promise((resolve) => {
+  // Image Canvas Auto-Compression Helper (Max 500x500, JPEG 0.7, < 100KB)
+  const compressImage = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onerror = () => resolve('');
-      reader.onload = (e) => {
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
         const img = new Image();
-        img.onerror = () => resolve(e.target?.result as string || '');
+        img.src = event.target?.result as string;
         img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const MAX_WIDTH = 500;
+          const MAX_HEIGHT = 500;
           let width = img.width;
           let height = img.height;
 
           if (width > height) {
-            if (width > maxWidth) {
-              height = Math.round((height * maxWidth) / width);
-              width = maxWidth;
+            if (width > MAX_WIDTH) {
+              height *= MAX_WIDTH / width;
+              width = MAX_WIDTH;
             }
           } else {
-            if (height > maxHeight) {
-              width = Math.round((width * maxHeight) / height);
-              height = maxHeight;
+            if (height > MAX_HEIGHT) {
+              width *= MAX_HEIGHT / height;
+              height = MAX_HEIGHT;
             }
           }
 
-          const canvas = document.createElement('canvas');
-          canvas.width = width;
-          canvas.height = height;
+          canvas.width = Math.round(width);
+          canvas.height = Math.round(height);
           const ctx = canvas.getContext('2d');
-          if (!ctx) {
-            resolve(e.target?.result as string);
-            return;
-          }
-          ctx.drawImage(img, 0, 0, width, height);
-          const dataUrl = canvas.toDataURL('image/jpeg', quality);
-          resolve(dataUrl);
+          ctx?.drawImage(img, 0, 0, width, height);
+
+          // Xuất ra base64 dạng JPEG chất lượng 0.7 (dung lượng cực nhẹ ~30-50KB)
+          const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
+          resolve(compressedBase64);
         };
-        img.src = e.target?.result as string;
+        img.onerror = (err) => reject(err);
       };
-      reader.readAsDataURL(file);
+      reader.onerror = (err) => reject(err);
     });
   };
 
@@ -248,10 +248,15 @@ export default function AdminCmsPage() {
 
   const handleProductImageUpload = async (id: string, file: File) => {
     showToast('⏳ Đang nén ảnh món ăn...');
-    const compressedBase64 = await compressImageFile(file);
-    if (compressedBase64) {
-      handleUpdateProductField(id, 'image_url', compressedBase64);
-      showToast('📸 Đã nén & cập nhật ảnh món ăn thành công!');
+    try {
+      const compressedBase64 = await compressImage(file);
+      if (compressedBase64) {
+        handleUpdateProductField(id, 'image_url', compressedBase64);
+        showToast('📸 Đã nén & cập nhật ảnh món ăn thành công!');
+      }
+    } catch (err) {
+      console.error('Lỗi nén ảnh món ăn:', err);
+      showToast('❌ Lỗi xử lý file ảnh!');
     }
   };
 
@@ -424,14 +429,17 @@ export default function AdminCmsPage() {
                   <input
                     type="file"
                     accept="image/png, image/jpeg, image/webp"
-                    onChange={(e) => {
+                    onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (file) {
-                        const reader = new FileReader();
-                        reader.onload = (ev) => {
-                          setSettings({ ...settings, hero_banner_image: ev.target?.result as string });
-                        };
-                        reader.readAsDataURL(file);
+                        showToast('⏳ Đang nén ảnh banner...');
+                        try {
+                          const compressedBase64 = await compressImage(file);
+                          setSettings(prev => ({ ...prev, hero_banner_image: compressedBase64 }));
+                          showToast('📸 Đã nén & cập nhật ảnh banner!');
+                        } catch (err) {
+                          console.error('Lỗi nén banner:', err);
+                        }
                       }
                     }}
                     className="hidden"
@@ -973,14 +981,17 @@ export default function AdminCmsPage() {
                     <input
                       type="file"
                       accept="image/png, image/jpeg, image/webp"
-                      onChange={(e) => {
+                      onChange={async (e) => {
                         const file = e.target.files?.[0];
                         if (file) {
-                          const reader = new FileReader();
-                          reader.onload = (ev) => {
-                            setNewProduct({ ...newProduct, image_url: ev.target?.result as string });
-                          };
-                          reader.readAsDataURL(file);
+                          showToast('⏳ Đang nén ảnh món mới...');
+                          try {
+                            const compressedBase64 = await compressImage(file);
+                            setNewProduct(prev => ({ ...prev, image_url: compressedBase64 }));
+                            showToast('📸 Đã nén ảnh món ăn mới thành công!');
+                          } catch (err) {
+                            console.error('Lỗi nén ảnh món mới:', err);
+                          }
                         }
                       }}
                       className="hidden"
