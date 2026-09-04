@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { AuthProvider } from '@/context/AuthContext';
@@ -16,7 +17,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="vi" className="h-full bg-slate-50">
+    <html lang="vi" className="h-full bg-slate-50 scroll-smooth">
       <body className={`${inter.className} min-h-screen text-slate-900 bg-slate-50 antialiased overflow-x-hidden`}>
         <AuthProvider>
           <AppShell>{children}</AppShell>
@@ -27,7 +28,19 @@ export default function RootLayout({
 }
 
 function AppShell({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const isAdminOrBranch = pathname.startsWith('/admin') || pathname.startsWith('/branch');
+
+  if (!isAdminOrBranch) {
+    return (
+      <div className="min-h-screen bg-slate-50 w-full overflow-x-hidden relative font-sans">
+        {children}
+        <CustomerChatWidget />
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen bg-slate-50 w-full overflow-x-hidden relative">

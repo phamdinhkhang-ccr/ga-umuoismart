@@ -164,10 +164,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem('gum_auth_user', JSON.stringify(userNoPass));
     } catch (e) {}
 
-    let redirectUrl = '/admin/orders';
+    let redirectUrl = '/admin/dashboard';
     if (found.role === 'OPERATOR') redirectUrl = '/admin/create-order';
     if (found.role === 'BRANCH_STAFF') redirectUrl = `/branch/${found.branch_id || 'b1111111-1111-1111-1111-111111111111'}`;
-    if (found.role === 'SUPER_ADMIN') redirectUrl = '/admin/orders';
+    if (found.role === 'SUPER_ADMIN') redirectUrl = '/admin/dashboard';
 
     return { success: true, redirectUrl };
   }, [accounts]);
