@@ -12,7 +12,7 @@ import {
 import { getAnalyticsData, addNewMockOrder } from '@/actions/orders';
 import { 
   getProducts, getCmsSettings, StorefrontCmsSettings, ProductRecord, 
-  addNotification, addOrUpdateCustomerFromOrder, getItem, setItem 
+  addNotification, addOrUpdateCustomerFromOrder, getItem, setItem, savePosOrder 
 } from '@/lib/store';
 import { Order } from '@/types/database';
 
@@ -243,49 +243,46 @@ export default function PublicStorefrontHome() {
 
     const calculatedTotal = selectedItemsSummary.reduce((sum, i) => sum + i.subtotal, 0);
 
-    const newOrderRecord: Order = {
-      id: `ord-web-${Date.now()}`,
+    const newOrderData: any = {
+      id: orderCode,
       order_code: orderCode,
+      customerName: fullName.trim(),
       customer_name: fullName.trim(),
+      phone: phone.trim(),
       customer_phone: phone.trim(),
+      address: address.trim(),
       shipping_address: address.trim(),
       district: (chosenBranch as any).district || 'Hà Nội',
       city: (chosenBranch as any).city || 'Hà Nội',
+      branchId: chosenBranch.id,
       branch_id: chosenBranch.id,
+      branchName: chosenBranch.name,
       branch: chosenBranch as any,
       items: selectedItemsSummary,
+      cutOption: cutPreference,
+      note: `Yêu cầu: ${cutPreference} | SL: ${quantityNote || 'Theo checkbox'} | Ghi chú: ${extraNote || 'Không'}`,
+      totalAmount: calculatedTotal,
       subtotal: calculatedTotal,
-      discount_amount: 0,
       final_amount: calculatedTotal,
       estimated_profit: Math.round(calculatedTotal * 0.45),
-      voucher_code: null,
-      note: `Yêu cầu: ${cutPreference} | SL: ${quantityNote || 'Theo checkbox'} | Ghi chú: ${extraNote || 'Không'} | Nguồn: Khách Web Đặt Nhanh`,
       status: 'RECEIVED',
+      source: 'Website Khách Đặt',
+      createdAt: new Date().toISOString(),
       created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
+      isRead: false
     };
 
-    // 1. Save to LocalStorage
-    const localOrders = getItem<Order[]>('gum_smart_orders_v3', []);
-    setItem('gum_smart_orders_v3', [newOrderRecord, ...localOrders]);
+    // 1. Save to LocalStorage key pos_orders_data & trigger cross-tab signals
+    savePosOrder(newOrderData);
 
     // 2. Add to in-memory global orders list
-    addNewMockOrder(newOrderRecord);
+    addNewMockOrder(newOrderData);
 
-    // 3. System Notification for Admin
-    addNotification({
-      type: 'ORDER',
-      title: `🍗 Đơn mới #${orderCode} (Khách Web Đặt Nhanh)`,
-      message: `Khách ${newOrderRecord.customer_name} (${newOrderRecord.customer_phone}) vừa đặt đơn ${calculatedTotal.toLocaleString('vi-VN')}đ tại ${chosenBranch.name}.`,
-      link: '/admin/orders',
-      actionText: 'Duyệt đơn ngay'
-    });
-
-    // 4. Update Customer Profile
+    // 3. Update Customer Profile
     addOrUpdateCustomerFromOrder({
-      customer_name: newOrderRecord.customer_name,
-      customer_phone: newOrderRecord.customer_phone,
-      shipping_address: newOrderRecord.shipping_address,
+      customer_name: newOrderData.customer_name,
+      customer_phone: newOrderData.customer_phone,
+      shipping_address: newOrderData.shipping_address,
       total_amount: calculatedTotal,
       order_code: orderCode,
       items_summary: selectedItemsSummary.map(i => `${i.quantity}x ${i.item_name}`).join(', ')
@@ -312,7 +309,7 @@ export default function PublicStorefrontHome() {
     window.dispatchEvent(new Event('storage'));
 
     // 7. Show Success View
-    setSuccessOrder(newOrderRecord);
+    setSuccessOrder(newOrderData);
   };
 
   // Handle Order Tracking Search

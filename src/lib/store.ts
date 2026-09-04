@@ -51,8 +51,77 @@ const KEYS = {
   PRODUCTS: 'gum_smart_products_v3',
   CUSTOMERS: 'gum_smart_customers_v3',
   NOTIFICATIONS: 'gum_smart_notifications_v3',
-  CMS: 'gum_smart_storefront_cms_v1'
+  CMS: 'gum_smart_storefront_cms_v1',
+  ORDERS: 'pos_orders_data'
 };
+
+export const ORDER_STORAGE_KEY = 'pos_orders_data';
+
+export function getPosOrders(): any[] {
+  return getItem<any[]>(ORDER_STORAGE_KEY, []);
+}
+
+export function savePosOrder(newOrderData: any): any[] {
+  const current = getPosOrders();
+  const rawId = newOrderData.id || newOrderData.order_code || `OD${Math.floor(1000 + Math.random() * 9000)}`;
+  const orderCode = newOrderData.order_code || newOrderData.id || `OD${Math.floor(1000 + Math.random() * 9000)}`;
+  
+  const formattedOrder = {
+    id: rawId,
+    order_code: orderCode,
+    customerName: newOrderData.customerName || newOrderData.customer_name || 'Khách Đặt Web',
+    customer_name: newOrderData.customer_name || newOrderData.customerName || 'Khách Đặt Web',
+    phone: newOrderData.phone || newOrderData.customer_phone || '',
+    customer_phone: newOrderData.customer_phone || newOrderData.phone || '',
+    address: newOrderData.address || newOrderData.shipping_address || '',
+    shipping_address: newOrderData.shipping_address || newOrderData.address || '',
+    district: newOrderData.district || 'Hà Nội',
+    city: newOrderData.city || 'Hà Nội',
+    branchId: newOrderData.branchId || newOrderData.branch_id || 'b1',
+    branch_id: newOrderData.branch_id || newOrderData.branchId || 'b1',
+    branchName: newOrderData.branchName || newOrderData.branch?.name || 'CƠ SỞ VIN SMART CITY',
+    branch: newOrderData.branch || { id: newOrderData.branch_id || 'b1', name: newOrderData.branchName || 'CƠ SỞ VIN SMART CITY' },
+    items: newOrderData.items || [],
+    cutOption: newOrderData.cutOption || 'Chặt sẵn',
+    note: newOrderData.note || '',
+    totalAmount: newOrderData.totalAmount || newOrderData.final_amount || 0,
+    subtotal: newOrderData.subtotal || newOrderData.totalAmount || newOrderData.final_amount || 0,
+    final_amount: newOrderData.final_amount || newOrderData.totalAmount || 0,
+    estimated_profit: newOrderData.estimated_profit || Math.round((newOrderData.totalAmount || newOrderData.final_amount || 0) * 0.45),
+    status: newOrderData.status || 'RECEIVED',
+    source: newOrderData.source || 'Website Khách Đặt',
+    createdAt: newOrderData.createdAt || newOrderData.created_at || new Date().toISOString(),
+    created_at: newOrderData.created_at || newOrderData.createdAt || new Date().toISOString(),
+    isRead: false
+  };
+
+  const updated = [formattedOrder, ...current.filter(o => o.id !== formattedOrder.id && o.order_code !== formattedOrder.order_code)];
+  setItem(ORDER_STORAGE_KEY, updated);
+  setItem('gum_smart_orders_v3', updated);
+
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem('pos_new_order_event', JSON.stringify({
+        orderId: formattedOrder.id,
+        orderCode: formattedOrder.order_code,
+        customerName: formattedOrder.customerName,
+        branchName: formattedOrder.branchName,
+        timestamp: Date.now()
+      }));
+      window.dispatchEvent(new CustomEvent('new_order_placed', { detail: formattedOrder }));
+    } catch (e) {}
+  }
+
+  addNotification({
+    type: 'ORDER',
+    title: `🔔 ĐƠN HÀNG MỚI #${formattedOrder.order_code}`,
+    message: `Khách ${formattedOrder.customerName} (${formattedOrder.phone}) vừa đặt đơn (${formattedOrder.totalAmount.toLocaleString('vi-VN')}đ) từ Website.`,
+    link: '/admin/orders',
+    actionText: 'Xem đơn'
+  });
+
+  return updated;
+}
 
 // Rich Pre-Populated Mock Expenses matching user request screenshot
 const DEFAULT_EXPENSES: ExpenseRecord[] = [

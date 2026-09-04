@@ -65,15 +65,88 @@ export default function Topbar({ onToggleMobileMenu }: TopbarProps) {
 
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Load Notifications
+  // Audio Alert Trigger (Web Audio API synth chime: D5 -> A5)
+  const playAlertSound = () => {
+    try {
+      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContext) return;
+      const audioCtx = new AudioContext();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(587.33, audioCtx.currentTime); // D5
+      osc.frequency.setValueAtTime(880, audioCtx.currentTime + 0.15); // A5
+      gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.6);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.6);
+    } catch (e) {
+      console.log('Audio autoplay blocked or not supported', e);
+    }
+  };
+
+  // Load Notifications & Listen to Cross-Tab & Internal Order Events
   useEffect(() => {
     setNotifications(getNotifications());
 
     const handleUpdate = () => {
       setNotifications(getNotifications());
     };
+
+    const triggerNewOrderAlert = (orderInfo?: any) => {
+      setNotifications(getNotifications());
+      setIsShaking(true);
+      setTimeout(() => setIsShaking(false), 1200);
+
+      playAlertSound();
+
+      const custName = orderInfo?.customerName || orderInfo?.customer_name || 'Khách';
+      const branchName = orderInfo?.branchName || orderInfo?.branch?.name || 'Cơ sở';
+      const code = orderInfo?.orderCode || orderInfo?.order_code || orderInfo?.id || '';
+
+      const toastNotif: SystemNotification = {
+        id: `toast-${Date.now()}`,
+        type: 'ORDER',
+        title: `🔔 ĐƠN HÀNG MỚI! Khách ${custName} vừa đặt món`,
+        message: `Đơn #${code} - ${branchName} - Tự động cập nhật vào Quản lý đơn.`,
+        timestamp: 'Vừa xong',
+        read: false,
+        link: '/admin/orders',
+        actionText: 'Xem đơn'
+      };
+      setActiveToast(toastNotif);
+      setTimeout(() => setActiveToast(null), 6000);
+    };
+
+    const handleStorage = (e: StorageEvent) => {
+      setNotifications(getNotifications());
+      if (e.key === 'pos_new_order_event' || e.key === 'pos_orders_data' || e.key === 'gum_smart_notifications_v3') {
+        let orderInfo;
+        try {
+          if (e.key === 'pos_new_order_event' && e.newValue) {
+            orderInfo = JSON.parse(e.newValue);
+          }
+        } catch (err) {}
+        triggerNewOrderAlert(orderInfo);
+      }
+    };
+
+    const handleCustomOrder = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      triggerNewOrderAlert(detail);
+    };
+
     window.addEventListener('gum_store_update', handleUpdate);
-    return () => window.removeEventListener('gum_store_update', handleUpdate);
+    window.addEventListener('storage', handleStorage);
+    window.addEventListener('new_order_placed', handleCustomOrder);
+
+    return () => {
+      window.removeEventListener('gum_store_update', handleUpdate);
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('new_order_placed', handleCustomOrder);
+    };
   }, []);
 
   // Backdrop click to close dropdown

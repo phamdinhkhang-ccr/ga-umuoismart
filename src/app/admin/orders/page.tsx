@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { getAnalyticsData, getBranches, updateOrderStatus } from '@/actions/orders';
 import { Branch, Order, OrderStatus } from '@/types/database';
-import { restoreInventoryForOrder, deductInventoryForOrder } from '@/lib/store';
+import { restoreInventoryForOrder, deductInventoryForOrder, getItem } from '@/lib/store';
 import {
   ClipboardList,
   Search,
@@ -26,7 +26,8 @@ import {
   Calendar,
   CreditCard,
   QrCode,
-  RotateCcw
+  RotateCcw,
+  Sparkles
 } from 'lucide-react';
 import ReceiptModal from '@/components/ReceiptModal';
 
@@ -152,9 +153,20 @@ export default function CentralizedOrdersPage() {
         getAnalyticsData('all', 'all')
       ]);
       setBranches(bList || []);
-      if (analyticsRes?.orders && analyticsRes.orders.length > 0) {
-        setOrders(analyticsRes.orders);
+
+      let allOrders: Order[] = analyticsRes?.orders || [];
+      if (typeof window !== 'undefined') {
+        const posOrders = getItem<any[]>('pos_orders_data', []);
+        if (posOrders && posOrders.length > 0) {
+          const existingIds = new Set(allOrders.map(o => o.id || o.order_code));
+          const newLocal = posOrders.filter(o => !existingIds.has(o.id) && !existingIds.has(o.order_code));
+          allOrders = [...newLocal, ...allOrders];
+        }
       }
+
+      // Sort newest orders to top
+      allOrders.sort((a, b) => new Date(b.created_at || (b as any).createdAt || 0).getTime() - new Date(a.created_at || (a as any).createdAt || 0).getTime());
+      setOrders(allOrders);
     } catch (e) {
       console.warn('Error loading orders:', e);
     }
@@ -162,6 +174,23 @@ export default function CentralizedOrdersPage() {
 
   useEffect(() => {
     loadData();
+
+    const handleUpdate = () => loadData();
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'pos_orders_data' || e.key === 'pos_new_order_event' || e.key === 'gum_smart_orders_v3') {
+        loadData();
+      }
+    };
+
+    window.addEventListener('gum_store_update', handleUpdate);
+    window.addEventListener('storage', handleStorage);
+    window.addEventListener('new_order_placed', handleUpdate);
+
+    return () => {
+      window.removeEventListener('gum_store_update', handleUpdate);
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('new_order_placed', handleUpdate);
+    };
   }, [loadData]);
 
   // Handle Quick Status Change with automatic Inventory restoration/deduction
@@ -462,35 +491,33 @@ export default function CentralizedOrdersPage() {
                 filteredOrders.map((o) => {
                   const totalQty = o.items?.reduce((sum, i) => sum + i.quantity, 0) || 1;
                   const itemSummary = o.items?.map(i => i.item_name).join(' + ') || 'Gà Ủ Muối';
+                  const isNewWebOrder = o.status === 'RECEIVED' || (o.status as string) === 'PENDING' || (o as any).source === 'Website Khách Đặt';
 
                   return (
-                    <tr key={o.id} className="hover:bg-slate-50/80 transition">
+                    <tr key={o.id} className={`transition ${isNewWebOrder ? 'bg-emerald-50/70 border-l-4 border-l-emerald-500 font-semibold' : 'hover:bg-slate-50/80'}`}>
                       {/* # Mã Đơn */}
                       <td className="p-3.5 text-center font-extrabold text-slate-900">
-                        #{o.order_code}
+                        #{o.order_code || o.id}
                       </td>
 
                       {/* Trạng Thái Badge */}
                       <td className="p-3.5">
-                        {o.status === 'RECEIVED' && (
-                          <span className="inline-flex items-center space-x-1 bg-rose-50 text-rose-700 border border-rose-200 font-bold px-2.5 py-1 rounded-lg text-[11px]">
-                            <Clock className="w-3 h-3 text-rose-600" />
-                            <span>Chờ thanh toán</span>
+                        {isNewWebOrder ? (
+                          <span className="inline-flex items-center space-x-1 bg-emerald-100 text-emerald-800 border border-emerald-300 font-black px-2.5 py-1 rounded-lg text-[11px] animate-pulse shadow-2xs">
+                            <Sparkles className="w-3 h-3 text-emerald-600" />
+                            <span>🟢 Đơn Mới (Web)</span>
                           </span>
-                        )}
-                        {o.status === 'PAID' && (
+                        ) : o.status === 'PAID' ? (
                           <span className="inline-flex items-center space-x-1 bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold px-2.5 py-1 rounded-lg text-[11px]">
                             <CheckCircle2 className="w-3 h-3 text-emerald-600" />
                             <span>Thành công</span>
                           </span>
-                        )}
-                        {o.status === 'SHIPPING' && (
+                        ) : o.status === 'SHIPPING' ? (
                           <span className="inline-flex items-center space-x-1 bg-purple-50 text-purple-700 border border-purple-200 font-bold px-2.5 py-1 rounded-lg text-[11px]">
                             <Truck className="w-3 h-3 text-purple-600" />
                             <span>Đang giao</span>
                           </span>
-                        )}
-                        {o.status === 'CANCELLED' && (
+                        ) : (
                           <span className="inline-flex items-center space-x-1 bg-slate-100 text-slate-500 border border-slate-200 font-bold px-2.5 py-1 rounded-lg text-[11px] line-through">
                             <span>Đã hủy</span>
                           </span>

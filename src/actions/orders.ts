@@ -331,11 +331,13 @@ export async function getAnalyticsData(period: 'today' | 'week' | 'month' | 'all
 
   if (typeof window !== 'undefined') {
     try {
-      const local = localStorage.getItem('gum_smart_orders_v3');
-      if (local) {
-        const parsed: Order[] = JSON.parse(local);
-        const existingIds = new Set(ordersList.map(o => o.id));
-        const newLocal = parsed.filter(o => !existingIds.has(o.id));
+      const posData = localStorage.getItem('pos_orders_data');
+      const gumData = localStorage.getItem('gum_smart_orders_v3');
+      const raw = posData || gumData;
+      if (raw) {
+        const parsed: Order[] = JSON.parse(raw);
+        const existingIds = new Set(ordersList.map(o => o.id || o.order_code));
+        const newLocal = parsed.filter(o => !existingIds.has(o.id) && !existingIds.has(o.order_code));
         ordersList = [...newLocal, ...ordersList];
       }
     } catch (e) {}
