@@ -10,6 +10,7 @@ import {
   getNotifications, addNotification, markAllNotificationsRead, 
   markNotificationRead, playBeep, SystemNotification 
 } from '@/lib/store';
+import { supabase } from '@/lib/supabaseClient';
 
 interface TopbarProps {
   onToggleMobileMenu?: () => void;
@@ -203,6 +204,42 @@ export default function Topbar({ onToggleMobileMenu }: TopbarProps) {
       }
     };
 
+    // Supabase Realtime Notification Subscription
+    const notifSubscription = supabase
+      .channel('realtime_notifications_channel')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'notifications' },
+        (payload) => {
+          if (payload.new) {
+            const newNotif = payload.new;
+            const formattedNotif: SystemNotification = {
+              id: newNotif.id || `notif_${Date.now()}`,
+              type: (newNotif.type || 'ORDER').toUpperCase() as any,
+              title: newNotif.title || 'Thông báo mới',
+              message: newNotif.content || newNotif.message || '',
+              timestamp: newNotif.created_at ? 'Vừa xong' : 'Vừa xong',
+              read: false,
+              link: newNotif.link || '/admin/orders',
+              actionText: 'Xem đơn'
+            };
+
+            if (isMounted) {
+              setNotifications(prev => [formattedNotif, ...(Array.isArray(prev) ? prev : [])]);
+              playBeep();
+              setIsShaking(true);
+              setTimeout(() => { if (isMounted) setIsShaking(false); }, 1200);
+
+              setActiveToast(formattedNotif);
+              setTimeout(() => { if (isMounted) setActiveToast(null); }, 6000);
+
+              window.dispatchEvent(new Event('gum_store_update'));
+            }
+          }
+        }
+      )
+      .subscribe();
+
     window.addEventListener('storage', handleStorage);
     window.addEventListener('pos_notify_event', handleCustomNotif);
     window.addEventListener('new_order_event', handleCustomNotif);
@@ -211,6 +248,9 @@ export default function Topbar({ onToggleMobileMenu }: TopbarProps) {
 
     return () => {
       isMounted = false;
+      try {
+        supabase.removeChannel(notifSubscription);
+      } catch (e) {}
       clearInterval(intervalId);
       window.removeEventListener('storage', handleStorage);
       window.removeEventListener('pos_notify_event', handleCustomNotif);

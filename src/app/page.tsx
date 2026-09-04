@@ -15,6 +15,7 @@ import {
   addNotification, addOrUpdateCustomerFromOrder, getItem, setItem, savePosOrder, playBeep 
 } from '@/lib/store';
 import { Order } from '@/types/database';
+import { supabase } from '@/lib/supabaseClient';
 
 const PRESET_COMBOS = [
   { id: 'cb1', name: 'Set nửa ủ muối + 1 hộp chân gà - 230k (Ship nội thành)', price: 230000, isHot: true },
@@ -314,6 +315,50 @@ export default function PublicStorefrontHome() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formattedOrder)
+      }).catch(() => {});
+    } catch (e) {}
+
+    // 1b. Insert into Supabase Realtime Database (orders & notifications)
+    try {
+      Promise.resolve(
+        supabase
+          .from('orders')
+          .insert([
+            {
+              id: orderId,
+              customer_name: fullName.trim() || 'Khách Vãng Lai',
+              phone: phone.trim(),
+              address: address.trim(),
+              branch_name: branchName,
+              items: selectedItemsList,
+              cut_option: cutPreference || 'Chặt sẵn ăn luôn',
+              note: formattedOrder.note || '',
+              total_amount: calculatedTotalAmount || 0,
+              status: 'PENDING',
+              source: 'Web Khách Đặt',
+              created_at: now
+            }
+          ])
+      ).then((res: any) => {
+        if (res?.error) console.warn('Supabase orders insert silent bypass:', res.error);
+      }).catch(() => {});
+
+      Promise.resolve(
+        supabase
+          .from('notifications')
+          .insert([
+            {
+              id: `notif_${Date.now()}`,
+              type: 'order',
+              title: `🍗 Đơn hàng mới #${orderId}`,
+              content: `Khách ${fullName.trim()} (${phone.trim()}) vừa đặt đơn ${Number(calculatedTotalAmount).toLocaleString('vi-VN')} đ`,
+              link: '/admin/orders',
+              is_read: false,
+              created_at: now
+            }
+          ])
+      ).then((res: any) => {
+        if (res?.error) console.warn('Supabase notifications insert silent bypass:', res.error);
       }).catch(() => {});
     } catch (e) {}
 

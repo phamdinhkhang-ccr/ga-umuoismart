@@ -59,22 +59,28 @@ export interface OrderItem {
 export interface Order {
   id: string;
   order_code: string;
+  code?: string;
   customer_name: string;
+  customerName?: string;
   customer_phone: string;
+  phone?: string;
   shipping_address: string;
+  address?: string;
   district: string;
   city: string;
   branch_id: string;
+  branchName?: string;
   items: OrderItem[];
   subtotal: number;
   discount_amount: number;
   final_amount: number;
+  totalAmount?: number;
   estimated_profit: number;
   voucher_code?: string | null;
   note?: string | null;
   status: OrderStatus;
   created_at: string;
-  updated_at: string;
+  updated_at?: string;
   branch?: Branch;
 }
 

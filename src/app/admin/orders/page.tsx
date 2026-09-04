@@ -30,6 +30,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import ReceiptModal from '@/components/ReceiptModal';
+import { supabase } from '@/lib/supabaseClient';
 
 const RICH_MOCK_ORDERS: Order[] = [
   {
@@ -244,6 +245,45 @@ export default function CentralizedOrdersPage() {
   useEffect(() => {
     loadData();
 
+    // Supabase Realtime Order Subscription
+    const orderSubscription = supabase
+      .channel('realtime_orders_channel')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'orders' },
+        (payload) => {
+          if (payload.new) {
+            const raw = payload.new;
+            const normalized: Order = {
+              ...raw,
+              id: raw.id || `OD${Math.floor(1000 + Math.random() * 9000)}`,
+              order_code: raw.order_code || raw.id || `OD${Math.floor(1000 + Math.random() * 9000)}`,
+              code: `#${raw.order_code || raw.id}`,
+              customer_name: raw.customer_name || raw.customerName || 'Khách Vãng Lai',
+              customerName: raw.customer_name || raw.customerName || 'Khách Vãng Lai',
+              customer_phone: raw.phone || raw.customer_phone || '',
+              phone: raw.phone || raw.customer_phone || '',
+              shipping_address: raw.address || raw.shipping_address || '',
+              address: raw.address || raw.shipping_address || '',
+              branch_id: raw.branch_id || 'b1',
+              branch: typeof raw.branch === 'object' && raw.branch !== null ? raw.branch : { id: 'b1', name: raw.branch_name || 'CƠ SỞ VIN SMART CITY' },
+              items: Array.isArray(raw.items) ? raw.items : [],
+              subtotal: raw.total_amount || raw.totalAmount || 0,
+              final_amount: raw.total_amount || raw.totalAmount || 0,
+              totalAmount: raw.total_amount || raw.totalAmount || 0,
+              district: raw.district || 'Hà Nội',
+              city: raw.city || 'Hà Nội',
+              discount_amount: raw.discount_amount || 0,
+              estimated_profit: raw.estimated_profit || Math.round((raw.total_amount || raw.totalAmount || 0) * 0.45),
+              status: raw.status || 'RECEIVED',
+              created_at: raw.created_at || new Date().toISOString()
+            };
+            setOrders(prev => [normalized, ...prev.filter(o => o.id !== normalized.id)]);
+          }
+        }
+      )
+      .subscribe();
+
     const intervalId = setInterval(() => {
       loadData();
     }, 2500);
@@ -268,6 +308,9 @@ export default function CentralizedOrdersPage() {
     window.addEventListener('new_order_event', handleUpdate);
 
     return () => {
+      try {
+        supabase.removeChannel(orderSubscription);
+      } catch (e) {}
       clearInterval(intervalId);
       window.removeEventListener('gum_store_update', handleUpdate);
       window.removeEventListener('storage', handleStorage);
