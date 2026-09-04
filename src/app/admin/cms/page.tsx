@@ -87,7 +87,7 @@ export default function AdminCmsPage() {
     window.dispatchEvent(new Event('gum_store_update'));
   };
 
-  const handleSaveAll = (e?: React.FormEvent) => {
+  const handleSaveAll = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const updated = saveCmsSettings({
       ...settings,
@@ -100,28 +100,27 @@ export default function AdminCmsPage() {
     } catch (e) {}
 
     try {
-      Promise.resolve(
-        supabase
-          .from('storefront_settings')
-          .upsert([
-            {
-              id: 'primary_config',
-              data: updated,
-              settings: updated,
-              updated_at: new Date().toISOString()
-            },
-            {
-              id: 'default_config',
-              data: updated,
-              settings: updated,
-              updated_at: new Date().toISOString()
-            }
-          ])
-      ).catch((err) => console.warn('Supabase storefront_settings upsert error:', err));
-    } catch (err) {}
+      const payload = {
+        id: 'primary_config',
+        data: updated,
+        settings: updated,
+        updated_at: new Date().toISOString()
+      };
+      const { data, error } = await supabase
+        .from('storefront_settings')
+        .upsert(payload, { onConflict: 'id' })
+        .select();
+
+      if (error) {
+        console.error('Lỗi lưu Supabase:', error);
+      } else {
+        showToast('✅ Đã lưu thành công lên Supabase Cloud!');
+      }
+    } catch (err: any) {
+      console.error('Crash khi lưu:', err);
+    }
 
     notifyUpdate();
-    showToast('✅ Đã lưu và cập nhật giao diện trang chủ thành công!');
   };
 
   const handleBranchChange = (index: number, field: keyof CmsBranchItem, value: any) => {

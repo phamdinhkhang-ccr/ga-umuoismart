@@ -114,7 +114,7 @@ export default function PublicStorefrontHome() {
 
     // Supabase Realtime Listener for Storefront Settings (Live Cross-Device Update)
     const storefrontChannel = supabase
-      .channel('realtime_storefront')
+      .channel('realtime_storefront_landing')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'storefront_settings' },
