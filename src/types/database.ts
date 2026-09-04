@@ -16,6 +16,17 @@ export interface Branch {
   city: string;
   phone: string;
   created_at?: string;
+  manager?: string;
+  status?: 'ACTIVE' | 'PAUSED' | 'OVERLOADED';
+  coverage_zones?: string[];
+  capacity_per_hour?: number;
+  bank_name?: string;
+  bank_account?: string;
+  bank_holder?: string;
+  orders_pending?: number;
+  orders_total_today?: number;
+  revenue_today?: number;
+  main_stock?: number;
 }
 
 export interface MenuItem {

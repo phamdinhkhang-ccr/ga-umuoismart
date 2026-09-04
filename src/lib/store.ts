@@ -2,7 +2,7 @@
 
 // Central Business Store for Automated Business Logic (Expenses, Inventory Audit, Order Deductions & Restorations)
 
-import { Order, OrderItem, OrderStatus } from '@/types/database';
+import { Order, OrderItem, OrderStatus, Branch } from '@/types/database';
 
 export interface InventoryAuditItem {
   id: string;
@@ -45,7 +45,8 @@ const KEYS = {
   LOGS: 'gum_smart_inventory_logs_v3',
   INITIAL_STOCK: 'gum_smart_initial_stock_v3',
   WASTED_STOCK: 'gum_smart_wasted_stock_v3',
-  IMPORTED_STOCK: 'gum_smart_imported_stock_v3'
+  IMPORTED_STOCK: 'gum_smart_imported_stock_v3',
+  BRANCHES: 'gum_smart_branches_v3'
 };
 
 // Rich Pre-Populated Mock Expenses matching user request screenshot
@@ -303,3 +304,172 @@ export function calculateInventoryAudit(ordersList: Order[]): InventoryAuditItem
     };
   });
 }
+
+// -------------------------------------------------------------
+// BRANCHES MANAGEMENT FUNCTIONS & DATA
+// -------------------------------------------------------------
+const DEFAULT_BRANCHES: Branch[] = [
+  {
+    id: 'b-vinsmart',
+    name: 'CƠ SỞ VIN SMART CITY',
+    address: 'Tòa S2.02 Vinhomes Smart City, Tây Mỗ',
+    district: 'Nam Từ Liêm',
+    city: 'Hà Nội',
+    phone: '0988.123.456',
+    manager: 'Nguyễn Văn Đức',
+    status: 'ACTIVE',
+    coverage_zones: ['Nam Từ Liêm', 'Hoài Đức', 'Hà Đông', 'Bắc Từ Liêm'],
+    capacity_per_hour: 45,
+    bank_name: 'MB Bank',
+    bank_account: '0988123456',
+    bank_holder: 'CHI NHANH VIN SMART CITY',
+    orders_pending: 5,
+    orders_total_today: 24,
+    revenue_today: 3420000,
+    main_stock: 42
+  },
+  {
+    id: 'b-caugiay',
+    name: 'Chi Nhánh Cầu Giấy',
+    address: '102 Trần Thái Tông, Dịch Vọng',
+    district: 'Cầu Giấy',
+    city: 'Hà Nội',
+    phone: '0977.888.999',
+    manager: 'Hoàng Văn Nam',
+    status: 'ACTIVE',
+    coverage_zones: ['Cầu Giấy', 'Đống Đa', 'Tây Hồ', 'Thanh Xuân'],
+    capacity_per_hour: 40,
+    bank_name: 'Vietcombank',
+    bank_account: '1012345678',
+    bank_holder: 'CHI NHANH CAU GIAY',
+    orders_pending: 3,
+    orders_total_today: 18,
+    revenue_today: 2580000,
+    main_stock: 35
+  },
+  {
+    id: 'b-thanhtri',
+    name: 'Chi Nhánh Thanh Trì',
+    address: 'Số 9 Thượng Phúc, Đại Thanh',
+    district: 'Huyện Thanh Trì',
+    city: 'Hà Nội',
+    phone: '0243.855.5555',
+    manager: 'Hoàng Văn Hà Nội',
+    status: 'ACTIVE',
+    coverage_zones: ['Thanh Trì', 'Hoàng Mai', 'Hà Đông', 'Gia Lâm'],
+    capacity_per_hour: 35,
+    bank_name: 'Techcombank',
+    bank_account: '190333444555',
+    bank_holder: 'CHI NHANH THANH TRI',
+    orders_pending: 2,
+    orders_total_today: 15,
+    revenue_today: 2150000,
+    main_stock: 28
+  },
+  {
+    id: 'b-quan1',
+    name: 'Chi Nhánh Quận 1 (TP.HCM)',
+    address: '123 Lê Lợi, Phường Bến Thành',
+    district: 'Quận 1',
+    city: 'Hồ Chí Minh',
+    phone: '0283.811.1111',
+    manager: 'Lê Văn Cơ Sở 1',
+    status: 'ACTIVE',
+    coverage_zones: ['Quận 1', 'Quận 3', 'Quận 4', 'Bình Thạnh', 'Phú Nhuận'],
+    capacity_per_hour: 30,
+    bank_name: 'ACB',
+    bank_account: '888999111',
+    bank_holder: 'CHI NHANH QUAN 1',
+    orders_pending: 4,
+    orders_total_today: 20,
+    revenue_today: 2890000,
+    main_stock: 32
+  }
+];
+
+export function getBranches(): Branch[] {
+  return getItem<Branch[]>(KEYS.BRANCHES, DEFAULT_BRANCHES);
+}
+
+export function saveBranch(branchData: Partial<Branch> & { name: string }): Branch[] {
+  const current = getBranches();
+  if (branchData.id) {
+    const updated = current.map(b => b.id === branchData.id ? { ...b, ...branchData } : b);
+    setItem(KEYS.BRANCHES, updated);
+    return updated;
+  } else {
+    const newBranch: Branch = {
+      id: `b-${Date.now()}`,
+      name: branchData.name,
+      address: branchData.address || '',
+      district: branchData.district || '',
+      city: branchData.city || 'Hà Nội',
+      phone: branchData.phone || '',
+      manager: branchData.manager || 'Quản lý cơ sở',
+      status: branchData.status || 'ACTIVE',
+      coverage_zones: branchData.coverage_zones || [branchData.district || 'Hà Nội'],
+      capacity_per_hour: branchData.capacity_per_hour || 35,
+      bank_name: branchData.bank_name || 'MB Bank',
+      bank_account: branchData.bank_account || '0988123456',
+      bank_holder: branchData.bank_holder || branchData.name.toUpperCase(),
+      orders_pending: branchData.orders_pending || 0,
+      orders_total_today: branchData.orders_total_today || 0,
+      revenue_today: branchData.revenue_today || 0,
+      main_stock: branchData.main_stock || 30
+    };
+    const updated = [...current, newBranch];
+    setItem(KEYS.BRANCHES, updated);
+    return updated;
+  }
+}
+
+export function updateBranchStatus(id: string, status: 'ACTIVE' | 'PAUSED' | 'OVERLOADED'): Branch[] {
+  const current = getBranches();
+  const updated = current.map(b => b.id === id ? { ...b, status } : b);
+  setItem(KEYS.BRANCHES, updated);
+  return updated;
+}
+
+export function transferInventoryBetweenBranches(
+  fromBranchId: string,
+  toBranchId: string,
+  itemName: string,
+  quantity: number,
+  note?: string
+): Branch[] {
+  const current = getBranches();
+  const fromB = current.find(b => b.id === fromBranchId);
+  const toB = current.find(b => b.id === toBranchId);
+
+  const updated = current.map(b => {
+    if (b.id === fromBranchId) {
+      return { ...b, main_stock: Math.max(0, (b.main_stock || 0) - quantity) };
+    }
+    if (b.id === toBranchId) {
+      return { ...b, main_stock: (b.main_stock || 0) + quantity };
+    }
+    return b;
+  });
+
+  setItem(KEYS.BRANCHES, updated);
+
+  // Add Inventory Transfer Logs
+  addInventoryLog({
+    type: 'WASTE',
+    branchName: fromB?.name || 'Chi Nhánh Nguồn',
+    itemName: `${itemName} (Xuất chuyển sang ${toB?.name || 'Cơ sở khác'})`,
+    quantityChange: -quantity,
+    note: note || `Điều chuyển ${quantity} ${itemName} tới ${toB?.name}`
+  });
+
+  addInventoryLog({
+    type: 'IMPORT',
+    branchName: toB?.name || 'Chi Nhánh Nhận',
+    itemName: `${itemName} (Nhận chuyển từ ${fromB?.name || 'Cơ sở khác'})`,
+    quantityChange: quantity,
+    note: note || `Nhận điều chuyển ${quantity} ${itemName} từ ${fromB?.name}`
+  });
+
+  return updated;
+}
+
