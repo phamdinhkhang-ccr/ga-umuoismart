@@ -1,28 +1,146 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import Link from 'next/link';
 import { getAnalyticsData, getBranches, updateOrderStatus } from '@/actions/orders';
 import { Branch, Order, OrderStatus } from '@/types/database';
 import { restoreInventoryForOrder, deductInventoryForOrder } from '@/lib/store';
-import { ClipboardList, Search, Filter, Printer, Eye, ArrowRightLeft, XCircle, Clock, CheckCircle2, Truck, Kanban, Store, MapPin, Phone, User, X } from 'lucide-react';
+import {
+  ClipboardList,
+  Search,
+  Filter,
+  Printer,
+  Eye,
+  ArrowRightLeft,
+  XCircle,
+  Clock,
+  CheckCircle2,
+  Truck,
+  Store,
+  MapPin,
+  Phone,
+  User,
+  X,
+  Plus,
+  Download,
+  Calendar,
+  CreditCard,
+  QrCode,
+  RotateCcw
+} from 'lucide-react';
+
+const RICH_MOCK_ORDERS: Order[] = [
+  {
+    id: 'ord-9672',
+    order_code: 'OD9672',
+    customer_name: 'Hẻm Xéo',
+    customer_phone: '0984263340',
+    shipping_address: 'Số 12 Ngõ 88 Cầu Giấy, Hà Nội',
+    district: 'Quận Cầu Giấy',
+    city: 'Hà Nội',
+    branch_id: 'b1111111-1111-1111-1111-111111111111',
+    branch: { id: 'b1', name: 'CƠ SỞ VIN SMART CITY', address: 'Tòa S2.01 Vin Smart City', district: 'Nam Từ Liêm', city: 'Hà Nội', phone: '0901234567' },
+    items: [
+      { menu_item_id: 'm1', item_name: 'Gà Ủ Muối Nguyên Con', quantity: 1, unit_price: 190000, cost_price: 110000, subtotal: 190000 },
+      { menu_item_id: 'm3', item_name: 'Chân gà sả tắc', quantity: 2, unit_price: 65000, cost_price: 32000, subtotal: 130000 }
+    ],
+    subtotal: 365000,
+    discount_amount: 95000,
+    final_amount: 270000,
+    estimated_profit: 96000,
+    voucher_code: 'KM95K',
+    note: 'Giao ngay trước 12h, cho thêm 2 bịch nước chấm',
+    status: 'PAID',
+    created_at: '2026-09-04 14:15:00',
+    updated_at: '2026-09-04 14:15:00'
+  },
+  {
+    id: 'ord-9671',
+    order_code: 'OD9671',
+    customer_name: 'KH-1788490501',
+    customer_phone: '0912888999',
+    shipping_address: '456 Nguyễn Trãi, Phường Thanh Xuân',
+    district: 'Quận Thanh Xuân',
+    city: 'Hà Nội',
+    branch_id: 'b2222222-2222-2222-2222-222222222222',
+    branch: { id: 'b2', name: 'Chi Nhánh Gà Ủ Muối Cầu Giấy', address: '88 Cầu Giấy', district: 'Cầu Giấy', city: 'Hà Nội', phone: '0902345678' },
+    items: [
+      { menu_item_id: 'm8', item_name: 'Nem Ngựa 10 Cuốn Special', quantity: 1, unit_price: 117500, cost_price: 60000, subtotal: 117500 }
+    ],
+    subtotal: 117500,
+    discount_amount: 0,
+    final_amount: 117500,
+    estimated_profit: 57500,
+    voucher_code: null,
+    note: 'Khách gọi trước khi đến',
+    status: 'RECEIVED',
+    created_at: '2026-09-04 13:40:00',
+    updated_at: '2026-09-04 13:40:00'
+  },
+  {
+    id: 'ord-9670',
+    order_code: 'OD9670',
+    customer_name: 'Live 4/9',
+    customer_phone: '0977665544',
+    shipping_address: '789 Xô Viết Nghệ Tĩnh',
+    district: 'Quận Bình Thạnh',
+    city: 'Hồ Chí Minh',
+    branch_id: 'b3333333-3333-3333-3333-333333333333',
+    branch: { id: 'b3', name: 'Chi Nhánh Gà Ủ Muối Đống Đa', address: '12 Đống Đa', district: 'Đống Đa', city: 'Hà Nội', phone: '0903456789' },
+    items: [
+      { menu_item_id: 'm1', item_name: 'Gà Ủ Muối Nguyên Con (Kèm Nước Chấm)', quantity: 1, unit_price: 190000, cost_price: 110000, subtotal: 190000 }
+    ],
+    subtotal: 190000,
+    discount_amount: 0,
+    final_amount: 190000,
+    estimated_profit: 80000,
+    voucher_code: null,
+    note: 'Đơn từ Livestream TikTok 4/9',
+    status: 'SHIPPING',
+    created_at: '2026-09-04 12:20:00',
+    updated_at: '2026-09-04 12:20:00'
+  },
+  {
+    id: 'ord-9669',
+    order_code: 'OD9669',
+    customer_name: 'Anh Tuấn',
+    customer_phone: '0988776655',
+    shipping_address: '456 Điện Biên Phủ',
+    district: 'Quận 3',
+    city: 'Hồ Chí Minh',
+    branch_id: 'b1111111-1111-1111-1111-111111111111',
+    branch: { id: 'b1', name: 'CƠ SỞ VIN SMART CITY', address: 'Tòa S2.01 Vin Smart City', district: 'Nam Từ Liêm', city: 'Hà Nội', phone: '0901234567' },
+    items: [
+      { menu_item_id: 'm4', item_name: 'Cánh Gà Ủ Muối (Phần 4 Cánh)', quantity: 1, unit_price: 85000, cost_price: 45000, subtotal: 85000 },
+      { menu_item_id: 'm6', item_name: 'Trà Tắc Khổng Lồ', quantity: 2, unit_price: 20000, cost_price: 6000, subtotal: 40000 }
+    ],
+    subtotal: 125000,
+    discount_amount: 20000,
+    final_amount: 105000,
+    estimated_profit: 48000,
+    voucher_code: 'HALO20',
+    note: 'Đã hủy đơn do khách đổi ý',
+    status: 'CANCELLED',
+    created_at: '2026-09-04 11:05:00',
+    updated_at: '2026-09-04 11:05:00'
+  }
+];
 
 export default function CentralizedOrdersPage() {
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [orders, setOrders] = useState<Order[]>(RICH_MOCK_ORDERS);
   const [branches, setBranches] = useState<Branch[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  // Filters State
+  
+  // Filter States
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
+  const [paymentMethod, setPaymentMethod] = useState<string>('ALL');
   const [selectedBranch, setSelectedBranch] = useState<string>('ALL');
+  const [statusTab, setStatusTab] = useState<string>('ALL');
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
 
-  // Selected Order for Detail Modal
+  // Modals
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
-
-  // Selected Order for Print Bill Modal
   const [printOrder, setPrintOrder] = useState<Order | null>(null);
-
-  // Selected Order for Branch Transfer Modal
   const [transferOrder, setTransferOrder] = useState<Order | null>(null);
   const [targetBranchId, setTargetBranchId] = useState<string>('');
 
@@ -33,7 +151,9 @@ export default function CentralizedOrdersPage() {
         getAnalyticsData('all', 'all')
       ]);
       setBranches(bList || []);
-      setOrders(analyticsRes?.orders || []);
+      if (analyticsRes?.orders && analyticsRes.orders.length > 0) {
+        setOrders(analyticsRes.orders);
+      }
     } catch (e) {
       console.warn('Error loading orders:', e);
     }
@@ -43,7 +163,7 @@ export default function CentralizedOrdersPage() {
     loadData();
   }, [loadData]);
 
-  // Handle Quick Status Change
+  // Handle Quick Status Change with automatic Inventory restoration/deduction
   const handleStatusChange = async (orderId: string, newStatus: OrderStatus) => {
     const targetOrder = orders.find(o => o.id === orderId);
     if (targetOrder) {
@@ -61,7 +181,7 @@ export default function CentralizedOrdersPage() {
     }
   };
 
-  // Handle Branch Transfer
+  // Branch Transfer Handler
   const handleConfirmTransfer = async () => {
     if (!transferOrder || !targetBranchId) return;
 
@@ -77,10 +197,42 @@ export default function CentralizedOrdersPage() {
     setTransferOrder(null);
   };
 
+  // Export Filtered Table to CSV/Excel
+  const handleExportExcel = () => {
+    const headers = ['Mã đơn', 'Trạng thái', 'Cửa hàng', 'Sản phẩm', 'Khách hàng', 'Số lượng', 'Giá bán', 'Giảm giá', 'Thành tiền', 'Người bán', 'Thanh toán', 'Thời gian'];
+    const csvRows = [headers.join(',')];
+    filteredOrders.forEach(o => {
+      const row = [
+        o.order_code,
+        o.status,
+        `"${o.branch?.name || o.branch_id}"`,
+        `"${o.items?.map(i => i.item_name).join(' + ')}"`,
+        `"${o.customer_name} (${o.customer_phone})"`,
+        o.items?.reduce((sum, i) => sum + i.quantity, 0) || 0,
+        o.subtotal,
+        o.discount_amount,
+        o.final_amount,
+        `"${o.note ? 'Ghi chú: ' + o.note : 'Đức'}"`,
+        o.status === 'PAID' ? 'Đã chuyển khoản' : 'Chưa thanh toán',
+        `"${new Date(o.created_at).toLocaleString('vi-VN')}"`
+      ];
+      csvRows.push(row.join(','));
+    });
+
+    const blob = new Blob(['\uFEFF' + csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `danh_sach_don_hang_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   // Filtered Orders Logic
   const filteredOrders = useMemo(() => {
     return orders.filter((o) => {
-      // 1. Search Query
+      // 1. Search Query (Name, Phone, or #OD code)
       const q = searchQuery.toLowerCase().trim();
       const matchSearch =
         !q ||
@@ -89,414 +241,533 @@ export default function CentralizedOrdersPage() {
         o.customer_phone.includes(q) ||
         o.shipping_address.toLowerCase().includes(q);
 
-      // 2. Status Filter
-      const matchStatus = selectedStatus === 'ALL' || o.status === selectedStatus;
+      // 2. Status Tab
+      const matchTab =
+        statusTab === 'ALL' ||
+        (statusTab === 'RECEIVED' && o.status === 'RECEIVED') ||
+        (statusTab === 'PAID' && (o.status === 'PAID' || o.status === 'DELIVERED')) ||
+        (statusTab === 'SHIPPING' && o.status === 'SHIPPING') ||
+        (statusTab === 'CANCELLED' && o.status === 'CANCELLED');
 
-      // 3. Branch Filter
+      // 3. Payment Method Filter
+      const matchPayment =
+        paymentMethod === 'ALL' ||
+        (paymentMethod === 'PAID' && o.status === 'PAID') ||
+        (paymentMethod === 'CASH' && o.status === 'SHIPPING') ||
+        (paymentMethod === 'UNPAID' && o.status === 'RECEIVED');
+
+      // 4. Branch Filter
       const matchBranch = selectedBranch === 'ALL' || o.branch_id === selectedBranch;
 
-      return matchSearch && matchStatus && matchBranch;
+      // 5. Date Filters
+      const orderDate = o.created_at.split('T')[0];
+      const matchStart = !startDate || orderDate >= startDate;
+      const matchEnd = !endDate || orderDate <= endDate;
+
+      return matchSearch && matchTab && matchPayment && matchBranch && matchStart && matchEnd;
     });
-  }, [orders, searchQuery, selectedStatus, selectedBranch]);
+  }, [orders, searchQuery, statusTab, paymentMethod, selectedBranch, startDate, endDate]);
+
+  const handleResetFilters = () => {
+    setSearchQuery('');
+    setPaymentMethod('ALL');
+    setSelectedBranch('ALL');
+    setStatusTab('ALL');
+    setStartDate('');
+    setEndDate('');
+  };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 p-4 sm:p-6 lg:p-8">
-      <div className="max-w-7xl mx-auto space-y-6">
-
-        {/* Page Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+    <div className="min-h-screen bg-slate-50 text-slate-900 p-4 sm:p-6 lg:p-8 space-y-6">
+      
+      {/* 1. BỘ LỌC TÌM KIẾM ĐA NĂNG & HEADER (FILTER SECTION) */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-4">
+        
+        {/* Header & Quick Order Button */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
           <div className="flex items-center space-x-3">
             <div className="p-3 bg-orange-50 text-orange-600 rounded-xl border border-orange-200">
               <ClipboardList className="w-6 h-6" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-                Quản Lý Đơn Hàng Tập Trung
-                <span className="bg-orange-50 text-orange-700 border border-orange-200 text-xs px-2.5 py-0.5 rounded-full font-bold">
-                  {filteredOrders.length} Đơn
-                </span>
+              <h1 className="text-xl font-extrabold text-slate-900 flex items-center gap-2">
+                Quản Lý Đơn Hàng Tập Trung ({orders.length})
               </h1>
-              <p className="text-xs text-slate-600 mt-0.5">
-                Theo dõi, tìm kiếm, đổi trạng thái & chuyển giao cơ sở cho toàn bộ đơn hàng trong hệ thống.
-              </p>
+              <p className="text-xs text-slate-600 mt-0.5">Bảng danh sách đơn đa chi nhánh, trạng thái dòng tiền &amp; in bill K80.</p>
             </div>
           </div>
+
+          <Link
+            href="/admin/create-order"
+            className="bg-sky-600 hover:bg-sky-700 text-white font-extrabold px-4 py-2.5 rounded-xl text-xs shadow-sm transition flex items-center justify-center space-x-2 cursor-pointer shrink-0"
+          >
+            <Plus className="w-4 h-4 bg-white/20 rounded-full p-0.5" />
+            <span>+ Tạo Đơn Hàng Mới</span>
+          </Link>
         </div>
 
-        {/* Search & Filters Bar */}
-        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex flex-col lg:flex-row items-center justify-between gap-3 text-xs">
+        {/* Filter Controls Row 1 & Row 2 */}
+        <div className="space-y-3 text-xs">
           
-          {/* Search Box */}
-          <div className="relative flex-1 w-full">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Tìm theo SĐT, Tên khách hàng, Mã đơn hàng GUM-..."
-              className="w-full bg-white border border-slate-300 rounded-lg pl-9 pr-3 py-2 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500 font-semibold"
-            />
+          {/* Row 1: Search Customer + Payment Method */}
+          <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+            <div className="sm:col-span-8 relative">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Tên khách hàng, SĐT hoặc Mã đơn #OD..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold outline-none focus:border-orange-500 transition"
+              />
+            </div>
+
+            <div className="sm:col-span-4">
+              <select
+                value={paymentMethod}
+                onChange={(e) => setPaymentMethod(e.target.value)}
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none cursor-pointer"
+              >
+                <option value="ALL">Tất cả hình thức thanh toán</option>
+                <option value="PAID">Đã chuyển khoản</option>
+                <option value="CASH">Tiền mặt</option>
+                <option value="UNPAID">Chưa thanh toán (Chờ CK)</option>
+              </select>
+            </div>
           </div>
 
-          {/* Filters */}
-          <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
-            {/* Status Filter */}
-            <select
-              value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value)}
-              className="bg-white border border-slate-300 text-slate-900 rounded-lg px-3 py-2 font-semibold focus:outline-none focus:ring-2 focus:ring-orange-500 cursor-pointer"
-            >
-              <option value="ALL">Tất cả trạng thái</option>
-              <option value="RECEIVED">Tiếp nhận (RECEIVED)</option>
-              <option value="PREPARING">Chuẩn bị gà (PREPARING)</option>
-              <option value="SHIPPING">Đang giao (SHIPPING)</option>
-              <option value="PAID">Đã giao / Thanh toán (PAID)</option>
-              <option value="CANCELLED">Đã hủy (CANCELLED)</option>
-            </select>
+          {/* Row 2: Branch + Date Range + Action Buttons */}
+          <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
+            
+            {/* Cửa hàng */}
+            <div className="sm:col-span-4">
+              <select
+                value={selectedBranch}
+                onChange={(e) => setSelectedBranch(e.target.value)}
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none cursor-pointer"
+              >
+                <option value="ALL">Tất cả cửa hàng / chi nhánh</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
+                ))}
+              </select>
+            </div>
 
-            {/* Branch Filter */}
-            <select
-              value={selectedBranch}
-              onChange={(e) => setSelectedBranch(e.target.value)}
-              className="bg-white border border-slate-300 text-slate-900 rounded-lg px-3 py-2 font-semibold focus:outline-none focus:ring-2 focus:ring-orange-500 cursor-pointer"
-            >
-              <option value="ALL">Tất cả chi nhánh</option>
-              {branches.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
-              ))}
-            </select>
+            {/* Từ ngày */}
+            <div className="sm:col-span-2">
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800 outline-none"
+              />
+            </div>
+
+            {/* Đến ngày */}
+            <div className="sm:col-span-2">
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800 outline-none"
+              />
+            </div>
+
+            {/* Actions: Lọc, Reset, Xuất Excel */}
+            <div className="sm:col-span-4 flex items-center space-x-2">
+              <button
+                onClick={() => {}}
+                className="flex-1 py-2.5 px-3 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl transition flex items-center justify-center space-x-1 cursor-pointer"
+              >
+                <Filter className="w-3.5 h-3.5" />
+                <span>Lọc</span>
+              </button>
+
+              <button
+                onClick={handleResetFilters}
+                className="py-2.5 px-3 bg-white border border-slate-200 hover:border-slate-300 text-slate-700 font-bold rounded-xl transition flex items-center justify-center space-x-1 cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
+                <span>Reset</span>
+              </button>
+
+              <button
+                onClick={handleExportExcel}
+                className="py-2.5 px-3 bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 font-extrabold rounded-xl transition flex items-center justify-center space-x-1 cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Xuất Excel</span>
+              </button>
+            </div>
+
           </div>
+
         </div>
 
-        {/* ORDER TABLE */}
-        <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-4">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-700">
-              <thead className="bg-slate-50 text-slate-600 uppercase text-[10px] tracking-wider border-b border-slate-200 font-bold">
+        {/* Hàng Tab Trạng Thái Đơn Nhanh */}
+        <div className="flex bg-slate-100 p-1 rounded-xl text-xs font-semibold text-slate-600 w-fit">
+          {[
+            { id: 'ALL', label: 'Tất cả đơn' },
+            { id: 'RECEIVED', label: '🔴 Chờ thanh toán' },
+            { id: 'PAID', label: '🟢 Thành công' },
+            { id: 'SHIPPING', label: '🟣 Đang giao' },
+            { id: 'CANCELLED', label: '⚪ Đã hủy' },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setStatusTab(tab.id)}
+              className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
+                statusTab === tab.id
+                  ? 'bg-white text-orange-600 shadow-2xs font-bold'
+                  : 'hover:text-slate-900'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+      </div>
+
+      {/* 2. BẢNG DANH SÁCH ĐƠN HÀNG (RESPONSIVE TABLE - 13 CỘT) */}
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs whitespace-nowrap">
+            <thead className="bg-slate-50 border-b border-slate-200 text-slate-700 font-bold uppercase text-[10px] tracking-wider">
+              <tr>
+                <th className="p-3.5 text-center">#</th>
+                <th className="p-3.5">Trạng thái</th>
+                <th className="p-3.5">Cửa hàng</th>
+                <th className="p-3.5">Sản phẩm</th>
+                <th className="p-3.5">Khách hàng</th>
+                <th className="p-3.5 text-center">Số lượng</th>
+                <th className="p-3.5 text-right">Giá bán</th>
+                <th className="p-3.5 text-right">Giảm giá</th>
+                <th className="p-3.5 text-right">Thành tiền</th>
+                <th className="p-3.5">Người bán</th>
+                <th className="p-3.5">Thanh toán</th>
+                <th className="p-3.5 text-center">Thời gian</th>
+                <th className="p-3.5 text-center">Thao tác</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
+              {filteredOrders.length === 0 ? (
                 <tr>
-                  <th className="px-4 py-3">Mã Đơn</th>
-                  <th className="px-4 py-3">Khách Hàng</th>
-                  <th className="px-4 py-3">Chi Nhánh Phụ Trách</th>
-                  <th className="px-4 py-3">Món Đặt</th>
-                  <th className="px-4 py-3 text-right">Thành Tiền</th>
-                  <th className="px-4 py-3 text-center">Trạng Thái</th>
-                  <th className="px-4 py-3 text-center">Thao Tác Nhanh</th>
+                  <td colSpan={13} className="p-8 text-center text-slate-400">
+                    Không tìm thấy đơn hàng phù hợp với bộ lọc
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {filteredOrders.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="text-center py-10 text-slate-500 font-medium">
-                      Không tìm thấy đơn hàng phù hợp với bộ lọc
-                    </td>
-                  </tr>
-                ) : (
-                  filteredOrders.map((order) => (
-                    <tr
-                      key={order.id}
-                      className="hover:bg-slate-50 transition cursor-pointer"
-                      onClick={() => setSelectedOrder(order)}
-                    >
-                      <td className="px-4 py-3.5 font-extrabold text-orange-600">
-                        {order.order_code}
-                        <span className="block text-[10px] text-slate-500 font-normal">
-                          {new Date(order.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
-                        </span>
+              ) : (
+                filteredOrders.map((o) => {
+                  const totalQty = o.items?.reduce((sum, i) => sum + i.quantity, 0) || 1;
+                  const itemSummary = o.items?.map(i => i.item_name).join(' + ') || 'Gà Ủ Muối';
+
+                  return (
+                    <tr key={o.id} className="hover:bg-slate-50/80 transition">
+                      {/* # Mã Đơn */}
+                      <td className="p-3.5 text-center font-extrabold text-slate-900">
+                        #{o.order_code}
                       </td>
 
-                      <td className="px-4 py-3.5 font-semibold text-slate-900">
-                        {order.customer_name}
-                        <span className="block text-[10px] text-slate-500 font-normal">{order.customer_phone}</span>
-                        <span className="block text-[10px] text-slate-500 max-w-xs truncate">{order.shipping_address}</span>
+                      {/* Trạng Thái Badge */}
+                      <td className="p-3.5">
+                        {o.status === 'RECEIVED' && (
+                          <span className="inline-flex items-center space-x-1 bg-rose-50 text-rose-700 border border-rose-200 font-bold px-2.5 py-1 rounded-lg text-[11px]">
+                            <Clock className="w-3 h-3 text-rose-600" />
+                            <span>Chờ thanh toán</span>
+                          </span>
+                        )}
+                        {o.status === 'PAID' && (
+                          <span className="inline-flex items-center space-x-1 bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold px-2.5 py-1 rounded-lg text-[11px]">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                            <span>Thành công</span>
+                          </span>
+                        )}
+                        {o.status === 'SHIPPING' && (
+                          <span className="inline-flex items-center space-x-1 bg-purple-50 text-purple-700 border border-purple-200 font-bold px-2.5 py-1 rounded-lg text-[11px]">
+                            <Truck className="w-3 h-3 text-purple-600" />
+                            <span>Đang giao</span>
+                          </span>
+                        )}
+                        {o.status === 'CANCELLED' && (
+                          <span className="inline-flex items-center space-x-1 bg-slate-100 text-slate-500 border border-slate-200 font-bold px-2.5 py-1 rounded-lg text-[11px] line-through">
+                            <span>Đã hủy</span>
+                          </span>
+                        )}
                       </td>
 
-                      <td className="px-4 py-3.5 font-semibold text-slate-800">
-                        {order.branch?.name || 'Chi Nhánh'}
-                        <span className="block text-[10px] text-slate-500 font-normal">{order.district}</span>
+                      {/* Cửa hàng */}
+                      <td className="p-3.5 font-bold text-slate-900">
+                        {o.branch?.name || 'CƠ SỞ VIN SMART CITY'}
                       </td>
 
-                      <td className="px-4 py-3.5 text-slate-800 max-w-xs truncate font-medium">
-                        {order.items.map((i: any) => `${i.quantity}x ${i.item_name}`).join(', ')}
+                      {/* Sản phẩm */}
+                      <td className="p-3.5 text-slate-700 max-w-xs truncate font-medium" title={itemSummary}>
+                        {itemSummary}
                       </td>
 
-                      <td className="px-4 py-3.5 text-right font-extrabold text-slate-900 text-sm">
-                        {Number(order.final_amount).toLocaleString('vi-VN')} VNĐ
+                      {/* Khách hàng */}
+                      <td className="p-3.5">
+                        <div className="font-bold text-slate-900">{o.customer_name}</div>
+                        <div className="text-[11px] text-slate-500">{o.customer_phone}</div>
                       </td>
 
-                      <td className="px-4 py-3.5 text-center" onClick={(e) => e.stopPropagation()}>
-                        <select
-                          value={order.status}
-                          onChange={(e) => handleStatusChange(order.id, e.target.value as OrderStatus)}
-                          className={`px-2.5 py-1 rounded-full text-[10px] font-bold border focus:outline-none cursor-pointer ${
-                            order.status === 'PAID' || order.status === 'DELIVERED'
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                              : order.status === 'SHIPPING'
-                              ? 'bg-purple-50 text-purple-700 border-purple-200'
-                              : order.status === 'PREPARING'
-                              ? 'bg-blue-50 text-blue-700 border-blue-200'
-                              : order.status === 'CANCELLED'
-                              ? 'bg-rose-50 text-rose-700 border-rose-200'
-                              : 'bg-amber-50 text-amber-700 border-amber-200'
-                          }`}
-                        >
-                          <option value="RECEIVED">Tiếp nhận</option>
-                          <option value="PREPARING">Chuẩn bị gà</option>
-                          <option value="SHIPPING">Đang giao</option>
-                          <option value="PAID">Đã giao / Thanh toán</option>
-                          <option value="CANCELLED">Hủy đơn</option>
-                        </select>
+                      {/* Số lượng */}
+                      <td className="p-3.5 text-center font-extrabold text-slate-900">
+                        {totalQty}
                       </td>
 
-                      <td className="px-4 py-3.5 text-center" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-center space-x-1">
+                      {/* Giá bán */}
+                      <td className="p-3.5 text-right font-medium text-slate-600">
+                        {o.subtotal.toLocaleString('vi-VN')} đ
+                      </td>
+
+                      {/* Giảm giá */}
+                      <td className="p-3.5 text-right font-semibold text-rose-600">
+                        -{o.discount_amount.toLocaleString('vi-VN')} đ
+                      </td>
+
+                      {/* Thành tiền */}
+                      <td className="p-3.5 text-right font-extrabold text-blue-700 text-sm">
+                        {o.final_amount.toLocaleString('vi-VN')} đ
+                      </td>
+
+                      {/* Người bán */}
+                      <td className="p-3.5 font-semibold text-slate-700">
+                        {o.note?.includes('AI') ? 'AI Parser' : 'Đức'}
+                      </td>
+
+                      {/* Thanh toán */}
+                      <td className="p-3.5">
+                        {o.status === 'PAID' ? (
+                          <span className="text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 text-[11px]">Đã chuyển khoản</span>
+                        ) : o.status === 'SHIPPING' ? (
+                          <span className="text-amber-700 font-bold bg-amber-50 px-2 py-0.5 rounded border border-amber-200 text-[11px]">Tiền mặt</span>
+                        ) : (
+                          <span className="text-rose-700 font-bold bg-rose-50 px-2 py-0.5 rounded border border-rose-200 text-[11px]">Chưa thanh toán</span>
+                        )}
+                      </td>
+
+                      {/* Thời gian */}
+                      <td className="p-3.5 text-center text-slate-500 text-[11px]">
+                        {new Date(o.created_at).toLocaleString('vi-VN')}
+                      </td>
+
+                      {/* Thao tác */}
+                      <td className="p-3.5 text-center">
+                        <div className="flex items-center justify-center space-x-1.5">
                           <button
-                            onClick={() => setSelectedOrder(order)}
-                            className="p-1.5 text-slate-600 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition"
+                            onClick={() => setSelectedOrder(o)}
                             title="Xem chi tiết đơn"
+                            className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition cursor-pointer"
                           >
                             <Eye className="w-4 h-4" />
                           </button>
 
                           <button
-                            onClick={() => {
-                              setTransferOrder(order);
-                              setTargetBranchId(order.branch_id);
-                            }}
-                            className="p-1.5 text-slate-600 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition"
-                            title="Chuyển sang chi nhánh khác"
+                            onClick={() => setPrintOrder(o)}
+                            title="In Bill Chế Biến K80"
+                            className="p-1.5 bg-orange-50 hover:bg-orange-100 text-orange-600 rounded-lg transition cursor-pointer border border-orange-200"
                           >
-                            <ArrowRightLeft className="w-4 h-4" />
+                            <Printer className="w-4 h-4" />
                           </button>
 
                           <button
-                            onClick={() => setPrintOrder(order)}
-                            className="p-1.5 text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition"
-                            title="In hóa đơn / phiếu giao"
+                            onClick={() => setTransferOrder(o)}
+                            title="Chuyển sang cơ sở khác"
+                            className="p-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg transition cursor-pointer border border-blue-200"
                           >
-                            <Printer className="w-4 h-4" />
+                            <ArrowRightLeft className="w-4 h-4" />
                           </button>
                         </div>
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
         </div>
-
       </div>
 
-      {/* MODAL 1: ORDER DETAIL MODAL */}
+      {/* 3. MODAL CHI TIẾT ĐƠN HÀNG (ORDER DETAIL DRAWER) */}
       {selectedOrder && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-2xl p-6 max-w-xl w-full shadow-xl space-y-5 animate-scale-up">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div>
-                <h3 className="font-extrabold text-base text-slate-900 flex items-center gap-2">
-                  Chi Tiết Đơn Hàng <span className="text-orange-600">{selectedOrder.order_code}</span>
-                </h3>
-                <span className="text-xs text-slate-500 font-medium">
-                  Tạo lúc: {new Date(selectedOrder.created_at).toLocaleString('vi-VN')}
-                </span>
-              </div>
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <ClipboardList className="w-5 h-5 text-orange-600" />
+                Chi Tiết Đơn Hàng #{selectedOrder.order_code}
+              </h3>
               <button
                 onClick={() => setSelectedOrder(null)}
-                className="text-slate-400 hover:text-slate-700 p-1 rounded-lg transition cursor-pointer"
+                className="text-slate-400 hover:text-slate-600 font-bold text-sm cursor-pointer"
               >
-                <X className="w-5 h-5" />
+                ✕
               </button>
             </div>
 
-            {/* Customer & Shipping */}
-            <div className="grid grid-cols-2 gap-4 bg-slate-50 p-3.5 rounded-xl border border-slate-200 text-xs">
-              <div>
-                <span className="font-bold text-slate-900 block mb-0.5">Khách Hàng:</span>
-                <p className="text-slate-800 font-semibold">{selectedOrder.customer_name}</p>
-                <p className="text-slate-500">{selectedOrder.customer_phone}</p>
-              </div>
-              <div>
-                <span className="font-bold text-slate-900 block mb-0.5">Giao Đến:</span>
-                <p className="text-slate-800 truncate">{selectedOrder.shipping_address}</p>
-                <p className="text-slate-500">{selectedOrder.district}, {selectedOrder.city}</p>
-              </div>
-            </div>
-
-            {/* Items Breakdown */}
-            <div className="space-y-2">
-              <span className="text-xs font-bold text-slate-900 block">Danh Sách Món Đã Đặt:</span>
-              <div className="border border-slate-200 rounded-xl divide-y divide-slate-100 text-xs">
-                {selectedOrder.items.map((it: any, idx: number) => (
-                  <div key={idx} className="p-3 flex justify-between items-center">
-                    <div>
-                      <span className="font-bold text-slate-900">{it.quantity}x {it.item_name}</span>
-                      <span className="block text-[10px] text-slate-500">Đơn giá: {it.unit_price.toLocaleString('vi-VN')} VNĐ</span>
-                    </div>
-                    <span className="font-bold text-slate-900">{it.subtotal.toLocaleString('vi-VN')} VNĐ</span>
+            <div className="space-y-4 text-xs">
+              {/* Receiver Info Card */}
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-extrabold text-slate-900 text-sm">{selectedOrder.customer_name}</span>
+                  <span className="font-bold text-orange-600">{selectedOrder.customer_phone}</span>
+                </div>
+                <div className="text-slate-600 flex items-start space-x-1.5">
+                  <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
+                  <span>{selectedOrder.shipping_address}, {selectedOrder.district}, {selectedOrder.city}</span>
+                </div>
+                {selectedOrder.note && (
+                  <div className="bg-amber-50 border border-amber-200 p-2 rounded-lg text-amber-900 font-semibold italic">
+                    Ghi chú: {selectedOrder.note}
                   </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Financial Calculations */}
-            <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2 text-xs">
-              <div className="flex justify-between text-slate-600">
-                <span>Tổng tiền hàng:</span>
-                <span className="font-semibold">{Number(selectedOrder.subtotal).toLocaleString('vi-VN')} VNĐ</span>
-              </div>
-              <div className="flex justify-between text-orange-700">
-                <span>Giảm giá:</span>
-                <span className="font-bold">-{Number(selectedOrder.discount_amount).toLocaleString('vi-VN')} VNĐ</span>
-              </div>
-              <div className="flex justify-between text-slate-900 font-extrabold text-sm border-t border-slate-200 pt-2">
-                <span>Khách Thanh Toán:</span>
-                <span className="text-orange-600">{Number(selectedOrder.final_amount).toLocaleString('vi-VN')} VNĐ</span>
-              </div>
-              <div className="flex justify-between text-emerald-700 font-bold text-xs pt-1">
-                <span>Lợi Nhuận Dự Tính (Profit):</span>
-                <span>+{Number(selectedOrder.estimated_profit).toLocaleString('vi-VN')} VNĐ</span>
-              </div>
-            </div>
-
-            {selectedOrder.note && (
-              <p className="text-xs bg-amber-50 border border-amber-200 text-amber-800 p-2.5 rounded-lg font-medium">
-                Ghi chú của khách: {selectedOrder.note}
-              </p>
-            )}
-
-            <div className="flex gap-2 pt-2">
-              <button
-                onClick={() => {
-                  setPrintOrder(selectedOrder);
-                  setSelectedOrder(null);
-                }}
-                className="flex-1 bg-slate-900 hover:bg-slate-800 text-white font-bold py-2.5 px-4 rounded-xl text-xs shadow-sm transition flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                <Printer className="w-4 h-4" />
-                <span>In Hóa Đơn Bill</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL 2: BRANCH TRANSFER MODAL */}
-      {transferOrder && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-2xl p-6 max-w-md w-full shadow-xl space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="font-bold text-sm text-slate-900 flex items-center gap-2">
-                <ArrowRightLeft className="w-4 h-4 text-purple-600" /> Điều Chuyển Chi Nhánh Phụ Trách
-              </h3>
-              <button onClick={() => setTransferOrder(null)} className="text-slate-400 hover:text-slate-700">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <p className="text-xs text-slate-600">
-              Đơn hàng <span className="font-bold text-orange-600">{transferOrder.order_code}</span> đang do <span className="font-bold">{transferOrder.branch?.name || 'Chi Nhánh'}</span> xử lý. Bạn có muốn chuyển sang chi nhánh khác không?
-            </p>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Chọn Chi Nhánh Mới:</label>
-              <select
-                value={targetBranchId}
-                onChange={(e) => setTargetBranchId(e.target.value)}
-                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-900 focus:ring-2 focus:ring-purple-500 focus:outline-none"
-              >
-                {branches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name} - ({b.district})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex justify-end space-x-2 pt-2">
-              <button
-                onClick={() => setTransferOrder(null)}
-                className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg text-xs font-semibold hover:bg-slate-200"
-              >
-                Hủy Bỏ
-              </button>
-              <button
-                onClick={handleConfirmTransfer}
-                className="px-4 py-2 bg-purple-700 text-white rounded-lg text-xs font-bold hover:bg-purple-800 shadow-sm"
-              >
-                Xác Nhận Chuyển
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL 3: PRINT BILL RECEIPT VIEW */}
-      {printOrder && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-2xl p-6 max-w-sm w-full shadow-2xl space-y-4">
-            
-            {/* Thermal Print Receipt Layout */}
-            <div className="border border-slate-300 p-4 rounded-xl font-mono text-xs text-slate-900 space-y-3 bg-white">
-              <div className="text-center border-b border-dashed border-slate-400 pb-3">
-                <h2 className="font-extrabold text-sm uppercase">GÀ Ủ MUỐI SMART</h2>
-                <p className="text-[10px] text-slate-600">Hóa Đơn Giao Hàng - {printOrder.order_code}</p>
-                <p className="text-[10px] text-slate-500">{new Date(printOrder.created_at).toLocaleString('vi-VN')}</p>
+                )}
               </div>
 
-              <div className="space-y-1 text-[11px]">
-                <p>Khách: <span className="font-bold">{printOrder.customer_name}</span></p>
-                <p>SĐT: <span className="font-bold">{printOrder.customer_phone}</span></p>
-                <p>ĐC: {printOrder.shipping_address}, {printOrder.district}</p>
+              {/* Order Items Table */}
+              <div className="border border-slate-200 rounded-xl overflow-hidden">
+                <table className="w-full text-left">
+                  <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200 uppercase text-[10px]">
+                    <tr>
+                      <th className="p-2.5">Sản Phẩm</th>
+                      <th className="p-2.5 text-center">SL</th>
+                      <th className="p-2.5 text-right">Đơn Giá</th>
+                      <th className="p-2.5 text-right">Thành Tiền</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 font-medium">
+                    {selectedOrder.items?.map((item, idx) => (
+                      <tr key={idx}>
+                        <td className="p-2.5 font-bold text-slate-900">{item.item_name}</td>
+                        <td className="p-2.5 text-center font-bold text-slate-800">{item.quantity}</td>
+                        <td className="p-2.5 text-right text-slate-600">{item.unit_price.toLocaleString('vi-VN')} đ</td>
+                        <td className="p-2.5 text-right font-extrabold text-slate-900">{item.subtotal.toLocaleString('vi-VN')} đ</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
 
-              <div className="border-t border-b border-dashed border-slate-400 py-2 space-y-1 text-[11px]">
-                {printOrder.items.map((it: any, idx: number) => (
-                  <div key={idx} className="flex justify-between">
-                    <span>{it.quantity}x {it.item_name}</span>
-                    <span>{it.subtotal.toLocaleString('vi-VN')}</span>
-                  </div>
-                ))}
-              </div>
-
-              <div className="space-y-1 text-[11px]">
-                <div className="flex justify-between">
+              {/* Financial Totals */}
+              <div className="space-y-1.5 border-t border-slate-100 pt-3">
+                <div className="flex justify-between text-slate-600">
                   <span>Tạm tính:</span>
-                  <span>{Number(printOrder.subtotal).toLocaleString('vi-VN')}</span>
+                  <span>{selectedOrder.subtotal.toLocaleString('vi-VN')} đ</span>
                 </div>
-                <div className="flex justify-between font-bold">
-                  <span>Giảm giá:</span>
-                  <span>-{Number(printOrder.discount_amount).toLocaleString('vi-VN')}</span>
+                <div className="flex justify-between text-rose-600 font-semibold">
+                  <span>Khuyến mãi / Giảm giá:</span>
+                  <span>-{selectedOrder.discount_amount.toLocaleString('vi-VN')} đ</span>
                 </div>
-                <div className="flex justify-between font-extrabold text-sm border-t border-slate-300 pt-1">
-                  <span>TỔNG THU:</span>
-                  <span className="text-orange-600">{Number(printOrder.final_amount).toLocaleString('vi-VN')} VNĐ</span>
+                <div className="flex justify-between text-base font-extrabold text-blue-700 border-t border-slate-200 pt-2">
+                  <span>Tổng tiền thanh toán:</span>
+                  <span>{selectedOrder.final_amount.toLocaleString('vi-VN')} đ</span>
                 </div>
               </div>
 
-              <div className="text-center text-[10px] text-slate-500 border-t border-dashed border-slate-400 pt-2">
-                Cảm ơn quý khách đã chọn Gà Ủ Muối Smart!
+              {/* Quick Status Action Buttons */}
+              <div className="grid grid-cols-3 gap-2 pt-2">
+                <button
+                  onClick={() => handleStatusChange(selectedOrder.id, 'PAID')}
+                  className="py-2.5 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 transition cursor-pointer text-center text-[11px]"
+                >
+                  ✓ Đã Thanh Toán
+                </button>
+                <button
+                  onClick={() => {
+                    setTransferOrder(selectedOrder);
+                    setSelectedOrder(null);
+                  }}
+                  className="py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition cursor-pointer text-center text-[11px]"
+                >
+                  ⇄ Chuyển Cơ Sở
+                </button>
+                <button
+                  onClick={() => handleStatusChange(selectedOrder.id, 'CANCELLED')}
+                  className="py-2.5 bg-rose-600 text-white font-bold rounded-xl hover:bg-rose-700 transition cursor-pointer text-center text-[11px]"
+                >
+                  ✕ Hủy Đơn &amp; Hoàn Kho
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PRINT BILL MODAL K80 */}
+      {printOrder && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl space-y-4">
+            <div className="border-b border-slate-200 pb-3 text-center space-y-1">
+              <h3 className="font-extrabold text-lg text-slate-900">GÀ Ủ MUỐI SMART POS</h3>
+              <p className="text-xs text-slate-500 font-bold">PHIẾU CHẾ BIẾN BẾP (K80)</p>
+              <p className="text-xs font-mono font-bold text-orange-600">#{printOrder.order_code}</p>
+            </div>
+
+            <div className="text-xs space-y-2 font-mono">
+              <div>Khách: {printOrder.customer_name} ({printOrder.customer_phone})</div>
+              <div>Đ/c: {printOrder.shipping_address}</div>
+              <div className="border-t border-dashed border-slate-300 pt-2 space-y-1">
+                {printOrder.items?.map((item, idx) => (
+                  <div key={idx} className="flex justify-between font-bold text-slate-900">
+                    <span>{item.quantity}x {item.item_name}</span>
+                    <span>{item.subtotal.toLocaleString('vi-VN')}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="border-t border-dashed border-slate-300 pt-2 flex justify-between font-extrabold text-sm">
+                <span>TỔNG CỘNG:</span>
+                <span>{printOrder.final_amount.toLocaleString('vi-VN')} đ</span>
               </div>
             </div>
 
-            <div className="flex space-x-2">
+            <div className="flex space-x-2 pt-2">
               <button
                 onClick={() => setPrintOrder(null)}
-                className="flex-1 py-2 bg-slate-100 text-slate-700 rounded-lg text-xs font-semibold hover:bg-slate-200"
+                className="flex-1 py-2 bg-slate-100 text-slate-700 rounded-xl font-bold text-xs hover:bg-slate-200 cursor-pointer"
               >
                 Đóng
               </button>
               <button
                 onClick={() => {
-                  window.print();
+                  alert('Đang gửi lệnh in tới máy in K80...');
                   setPrintOrder(null);
                 }}
-                className="flex-1 py-2 bg-orange-600 text-white rounded-lg text-xs font-bold hover:bg-orange-700 shadow-sm flex items-center justify-center gap-1.5"
+                className="flex-1 py-2 bg-orange-600 text-white rounded-xl font-bold text-xs hover:bg-orange-700 cursor-pointer shadow-sm"
               >
-                <Printer className="w-3.5 h-3.5" />
-                <span>In Phiếu</span>
+                In Ngay (K80)
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* BRANCH TRANSFER MODAL */}
+      {transferOrder && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <h3 className="font-extrabold text-slate-900 text-sm">Chuyển Cơ Sở Tiếp Nhận Đơn #{transferOrder.order_code}</h3>
+              <button onClick={() => setTransferOrder(null)} className="text-slate-400 hover:text-slate-600 font-bold">✕</button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <label className="block font-bold text-slate-700">Chọn Chi Nhánh Mới Mới Tiếp Nhận:</label>
+              <select
+                value={targetBranchId}
+                onChange={(e) => setTargetBranchId(e.target.value)}
+                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 outline-none"
+              >
+                <option value="">-- Chọn cơ sở mới --</option>
+                {branches.map(b => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
+                ))}
+              </select>
+
+              <div className="flex justify-end space-x-2 pt-2">
+                <button onClick={() => setTransferOrder(null)} className="px-4 py-2 bg-slate-100 font-bold rounded-xl">Hủy</button>
+                <button onClick={handleConfirmTransfer} className="px-4 py-2 bg-blue-600 text-white font-bold rounded-xl shadow-sm">Xác Nhận Chuyển</button>
+              </div>
             </div>
           </div>
         </div>
