@@ -420,13 +420,13 @@ export default function AdminCmsPage() {
             </div>
 
             <div className="space-y-1">
-              <label className="font-bold text-slate-700">Số điện thoại Hotline gọi nhanh (*)</label>
+              <label className="font-bold text-slate-700 block">Số điện thoại Hotline gọi nhanh (*)</label>
               <input
                 type="text"
-                required
-                value={settings.hero_hotline}
-                onChange={(e) => setSettings({ ...settings, hero_hotline: e.target.value, hotline: e.target.value })}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-orange-600 outline-none focus:border-orange-500 focus:bg-white transition"
+                value={settings.hotline ?? settings.hero_hotline ?? ''}
+                onChange={(e) => setSettings({ ...settings, hotline: e.target.value, hero_hotline: e.target.value })}
+                placeholder="Nhập số hotline..."
+                className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl font-bold text-orange-600 outline-none focus:border-orange-500 transition"
               />
             </div>
 
