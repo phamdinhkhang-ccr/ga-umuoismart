@@ -14,6 +14,7 @@ export interface InventoryAuditItem {
   totalRestored: number;  // Hoàn hàng do hủy
   totalWasted: number;    // Xuất hao hụt
   currentStock: number;   // Tồn cuối = đầu + nhập - bán + hoàn - hao hụt
+  minStock: number;       // Ngưỡng an toàn (Min)
 }
 
 export interface InventoryLog {
@@ -123,13 +124,13 @@ const DEFAULT_EXPENSES: ExpenseRecord[] = [
 
 // Base Inventory Items Schema
 const BASE_INVENTORY_ITEMS = [
-  { id: 'm1111111-1111-1111-1111-111111111111', name: 'Gà Ủ Muối Nguyên Con', unit: 'Con', initialStock: 120, totalImported: 50, totalWasted: 2 },
-  { id: 'm2222222-2222-2222-2222-222222222222', name: 'Gà Ủ Muối Nửa Con', unit: 'Khay', initialStock: 80, totalImported: 30, totalWasted: 1 },
-  { id: 'm3333333-3333-3333-3333-333333333333', name: 'Chân Gà Rút Xương Sốt Thái', unit: 'Hộp', initialStock: 150, totalImported: 40, totalWasted: 0 },
-  { id: 'm4444444-4444-4444-4444-444444444444', name: 'Cánh Gà Ủ Muối (Phần 4 Cánh)', unit: 'Phần', initialStock: 90, totalImported: 20, totalWasted: 1 },
-  { id: 'm5555555-5555-5555-5555-555555555555', name: 'Nước Chấm Thần Thánh Extra', unit: 'Chai', initialStock: 200, totalImported: 100, totalWasted: 3 },
-  { id: 'm6666666-6666-6666-6666-666666666666', name: 'Trà Tắc Khổng Lồ', unit: 'Ly', initialStock: 300, totalImported: 150, totalWasted: 5 },
-  { id: 'm7777777-7777-7777-7777-777777777777', name: 'Trà Đào Cam Sả', unit: 'Ly', initialStock: 250, totalImported: 100, totalWasted: 2 }
+  { id: 'm1111111-1111-1111-1111-111111111111', name: 'Gà Ủ Muối Nguyên Con', unit: 'Con', initialStock: 120, totalImported: 50, totalWasted: 2, minStock: 50 },
+  { id: 'm2222222-2222-2222-2222-222222222222', name: 'Gà Ủ Muối Nửa Con', unit: 'Khay', initialStock: 80, totalImported: 30, totalWasted: 1, minStock: 40 },
+  { id: 'm3333333-3333-3333-3333-333333333333', name: 'Chân Gà Rút Xương Sốt Thái', unit: 'Hộp', initialStock: 150, totalImported: 40, totalWasted: 0, minStock: 60 },
+  { id: 'm4444444-4444-4444-4444-444444444444', name: 'Cánh Gà Ủ Muối (Phần 4 Cánh)', unit: 'Phần', initialStock: 90, totalImported: 20, totalWasted: 1, minStock: 30 },
+  { id: 'm5555555-5555-5555-5555-555555555555', name: 'Nước Chấm Thần Thánh Extra', unit: 'Chai', initialStock: 200, totalImported: 100, totalWasted: 3, minStock: 100 },
+  { id: 'm6666666-6666-6666-6666-666666666666', name: 'Trà Tắc Khổng Lồ', unit: 'Ly', initialStock: 300, totalImported: 150, totalWasted: 5, minStock: 150 },
+  { id: 'm7777777-7777-7777-7777-777777777777', name: 'Trà Đào Cam Sả', unit: 'Ly', initialStock: 250, totalImported: 100, totalWasted: 2, minStock: 100 }
 ];
 
 // Helper to safely access LocalStorage
@@ -302,7 +303,8 @@ export function calculateInventoryAudit(ordersList: Order[]): InventoryAuditItem
       totalSold,
       totalRestored,
       totalWasted,
-      currentStock: Math.max(0, currentStock)
+      currentStock: Math.max(0, currentStock),
+      minStock: base.minStock || 30
     };
   });
 }
