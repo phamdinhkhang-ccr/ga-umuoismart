@@ -778,17 +778,23 @@ export default function PublicStorefrontHome() {
             >
               <div className="space-y-3">
                 <div className="flex justify-between items-start gap-3">
-                  {p.image_url ? (
-                    <img
-                      src={p.image_url}
-                      alt={p.name}
-                      className="w-20 h-20 sm:w-24 sm:h-24 object-cover rounded-2xl border border-slate-200 shadow-2xs shrink-0"
-                    />
-                  ) : (
-                    <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-amber-100/70 border border-amber-200 flex items-center justify-center text-4xl shrink-0">
+                  {/* Product Image Box with onError Fallback */}
+                  <div className="relative w-20 h-20 sm:w-24 sm:h-24 bg-amber-50/80 rounded-2xl overflow-hidden shrink-0 border border-slate-200 shadow-2xs flex items-center justify-center">
+                    {(p.image_url || (p as any).imageUrl || (p as any).image) ? (
+                      <img
+                        src={p.image_url || (p as any).imageUrl || (p as any).image}
+                        alt={p.name}
+                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                          e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                        }}
+                      />
+                    ) : null}
+                    <div className={`w-full h-full flex items-center justify-center text-3xl sm:text-4xl ${(p.image_url || (p as any).imageUrl || (p as any).image) ? 'hidden' : ''}`}>
                       🍗
                     </div>
-                  )}
+                  </div>
                   <div className="flex flex-col items-end gap-1">
                     {p.is_best_seller && (
                       <span className="bg-amber-100 text-amber-900 border border-amber-300 font-extrabold text-[10px] px-2.5 py-1 rounded-full flex items-center gap-1 shadow-2xs">

@@ -158,6 +158,48 @@ export default function AdminCmsPage() {
     });
   };
 
+  // Image Canvas Auto-Compression Helper (Max 600x600, JPEG/WebP under 100KB)
+  const compressImageFile = (file: File, maxWidth = 600, maxHeight = 600, quality = 0.82): Promise<string> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onerror = () => resolve('');
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onerror = () => resolve(e.target?.result as string || '');
+        img.onload = () => {
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height) {
+            if (width > maxWidth) {
+              height = Math.round((height * maxWidth) / width);
+              width = maxWidth;
+            }
+          } else {
+            if (height > maxHeight) {
+              width = Math.round((width * maxHeight) / height);
+              height = maxHeight;
+            }
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            resolve(e.target?.result as string);
+            return;
+          }
+          ctx.drawImage(img, 0, 0, width, height);
+          const dataUrl = canvas.toDataURL('image/jpeg', quality);
+          resolve(dataUrl);
+        };
+        img.src = e.target?.result as string;
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
   // Product Operations
   const handleUpdateProductField = (id: string, field: keyof ProductRecord, value: any) => {
     const target = products.find(p => p.id === id);
@@ -169,14 +211,13 @@ export default function AdminCmsPage() {
     notifyUpdate();
   };
 
-  const handleProductImageUpload = (id: string, file: File) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const base64Url = e.target?.result as string;
-      handleUpdateProductField(id, 'image_url', base64Url);
-      showToast('📸 Đã cập nhật ảnh món ăn thành công!');
-    };
-    reader.readAsDataURL(file);
+  const handleProductImageUpload = async (id: string, file: File) => {
+    showToast('⏳ Đang nén ảnh món ăn...');
+    const compressedBase64 = await compressImageFile(file);
+    if (compressedBase64) {
+      handleUpdateProductField(id, 'image_url', compressedBase64);
+      showToast('📸 Đã nén & cập nhật ảnh món ăn thành công!');
+    }
   };
 
   const handleDeleteProductClick = (id: string, name: string) => {
@@ -609,17 +650,14 @@ export default function AdminCmsPage() {
                       </div>
 
                       <div>
-                        <label className="text-[10px] font-bold text-slate-600 block">Danh mục món:</label>
-                        <select
-                          value={p.category}
-                          onChange={(e) => handleUpdateProductField(p.id, 'category', e.target.value)}
-                          className="w-full p-1.5 bg-slate-50 border border-slate-200 rounded-lg font-semibold text-slate-800 outline-none focus:border-orange-500"
-                        >
-                          <option value="Món Gà Ủ Muối">Món Gà Ủ Muối</option>
-                          <option value="Món Ăn Kèm">Món Ăn Kèm</option>
-                          <option value="Nước Uống">Nước Uống</option>
-                          <option value="Gia Vị &amp; Extra">Gia Vị &amp; Extra</option>
-                        </select>
+                        <label className="text-[10px] font-bold text-slate-600 block">Link ảnh online (Imgur/CDN...):</label>
+                        <input
+                          type="text"
+                          value={p.image_url || ''}
+                          onChange={(e) => handleUpdateProductField(p.id, 'image_url', e.target.value)}
+                          placeholder="https://..."
+                          className="w-full p-1.5 bg-slate-50 border border-slate-200 rounded-lg font-mono text-[10px] text-slate-800 outline-none focus:border-orange-500 focus:bg-white"
+                        />
                       </div>
                     </div>
                   </div>
