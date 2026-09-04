@@ -101,10 +101,28 @@ export default function AdminCmsPage() {
 
   const handleSaveAll = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    const updated = saveCmsSettings({
+
+    const fullConfigData = {
       ...settings,
-      hotline: settings.hero_hotline || settings.hotline || '0889018221'
-    });
+      brandName: settings.brandName || 'Gà Ủ Muối Smart',
+      hero_title: settings.hero_title,
+      hero_slogan: settings.hero_slogan,
+      hotlineBadgeText: settings.hotlineBadgeText || 'Hotline Đặt Ngay:',
+      hotlinePrefix: settings.hotlinePrefix || settings.hotlineBadgeText || 'Hotline Đặt Ngay:',
+      hero_hotline: settings.hero_hotline || settings.hotline || '0889018221',
+      hotline: settings.hero_hotline || settings.hotline || '0889018221',
+      promoBannerText: settings.promoBannerText || '',
+      heroSubtitle: settings.hero_slogan,
+      branches: settings.branches || [],
+      social_facebook: settings.social_facebook,
+      social_tiktok: settings.social_tiktok,
+      social_zalo: settings.social_zalo,
+      hotline_complaints: settings.hotline_complaints,
+      bankInfo: settings.bankInfo,
+      hero_banner_image: settings.hero_banner_image || ''
+    };
+
+    const updated = saveCmsSettings(fullConfigData);
     setSettings(updated);
 
     try {
@@ -112,31 +130,37 @@ export default function AdminCmsPage() {
     } catch (e) {}
 
     try {
-      const payload = {
-        id: 'default_config',
-        data: updated,
-        settings: updated,
-        updated_at: new Date().toISOString()
-      };
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('storefront_settings')
-        .upsert(payload, { onConflict: 'id' });
+        .upsert({
+          id: 'default_config',
+          data: fullConfigData,
+          settings: fullConfigData,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'id' });
 
       if (error) {
-        console.error('Lỗi Supabase:', error);
-        showToast('❌ Lưu thất bại: ' + error.message);
+        alert('Lưu Supabase thất bại: ' + error.message);
+        console.error(error);
+        showToast('❌ Lưu Supabase thất bại: ' + error.message);
         return;
+      } else {
+        alert('Đã cập nhật dữ liệu thành công lên Supabase!');
+        showToast('✅ Đã cập nhật dữ liệu thành công lên Supabase!');
       }
 
-      showToast('✅ Đã lưu cấu hình thành công lên Cloud!');
-
-      // Upsert primary_config as backup
+      // Also upsert primary_config as backup
       await supabase
         .from('storefront_settings')
-        .upsert({ ...payload, id: 'primary_config' }, { onConflict: 'id' });
+        .upsert({
+          id: 'primary_config',
+          data: fullConfigData,
+          settings: fullConfigData,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'id' });
     } catch (err: any) {
       console.error('Lỗi khi lưu:', err);
-      showToast('❌ Có lỗi xảy ra: ' + (err.message || 'Lỗi hệ thống'));
+      alert('Có lỗi xảy ra: ' + (err.message || 'Lỗi hệ thống'));
     }
 
     notifyUpdate();
