@@ -16,9 +16,10 @@ export default function AdminCmsPage() {
   const [settings, setSettings] = useState<StorefrontCmsSettings>({
     hero_title: 'GÀ Ủ MUỐI SMART',
     hero_slogan: 'Gà ủ muối da giòn sần sật - Thơm ngon đậm đà giao nóng tận nơi',
-    hero_hotline: '0988.123.456',
-    hotline: '0988.123.456',
+    hero_hotline: '0889018221',
+    hotline: '0889018221',
     hotlineBadgeText: 'Hotline Đặt Ngay:',
+    hotlinePrefix: 'Hotline Đặt Ngay:',
     promoBannerText: '🔥 Khuyến mãi đặc biệt: Đồng giá Gà Ủ Muối Nguyên Con 190.000đ - Giao hỏa tốc 20 phút!',
     brandName: 'Gà Ủ Muối Smart',
     branches: [],
@@ -56,19 +57,30 @@ export default function AdminCmsPage() {
     setProducts(getProducts());
 
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('storefront_settings')
         .select('*')
-        .in('id', ['primary_config', 'default_config']);
+        .eq('id', 'default_config')
+        .maybeSingle();
       
-      if (Array.isArray(data) && data.length > 0) {
-        const primary = data.find(d => d.id === 'primary_config') || data[0];
-        const configData = primary.data || primary.settings;
-        if (configData) {
-          setSettings(prev => ({ ...prev, ...configData }));
+      const configData = data?.data || data?.settings;
+      if (configData) {
+        setSettings(prev => ({ ...prev, ...configData }));
+      } else {
+        const { data: primaryData } = await supabase
+          .from('storefront_settings')
+          .select('*')
+          .eq('id', 'primary_config')
+          .maybeSingle();
+
+        const primaryConfigData = primaryData?.data || primaryData?.settings;
+        if (primaryConfigData) {
+          setSettings(prev => ({ ...prev, ...primaryConfigData }));
         }
       }
-    } catch (e) {}
+    } catch (err) {
+      console.warn('Lỗi đọc settings:', err);
+    }
   };
 
   useEffect(() => {
@@ -91,7 +103,7 @@ export default function AdminCmsPage() {
     if (e) e.preventDefault();
     const updated = saveCmsSettings({
       ...settings,
-      hotline: settings.hero_hotline || settings.hotline
+      hotline: settings.hero_hotline || settings.hotline || '0889018221'
     });
     setSettings(updated);
 
@@ -101,23 +113,30 @@ export default function AdminCmsPage() {
 
     try {
       const payload = {
-        id: 'primary_config',
+        id: 'default_config',
         data: updated,
         settings: updated,
         updated_at: new Date().toISOString()
       };
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('storefront_settings')
-        .upsert(payload, { onConflict: 'id' })
-        .select();
+        .upsert(payload, { onConflict: 'id' });
 
       if (error) {
-        console.error('Lỗi lưu Supabase:', error);
-      } else {
-        showToast('✅ Đã lưu thành công lên Supabase Cloud!');
+        console.error('Lỗi Supabase:', error);
+        showToast('❌ Lưu thất bại: ' + error.message);
+        return;
       }
+
+      showToast('✅ Đã lưu cấu hình thành công lên Cloud!');
+
+      // Upsert primary_config as backup
+      await supabase
+        .from('storefront_settings')
+        .upsert({ ...payload, id: 'primary_config' }, { onConflict: 'id' });
     } catch (err: any) {
-      console.error('Crash khi lưu:', err);
+      console.error('Lỗi khi lưu:', err);
+      showToast('❌ Có lỗi xảy ra: ' + (err.message || 'Lỗi hệ thống'));
     }
 
     notifyUpdate();

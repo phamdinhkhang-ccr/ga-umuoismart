@@ -1241,6 +1241,7 @@ export interface StorefrontCmsSettings {
   hero_hotline: string;
   hotline?: string;
   hotlineBadgeText?: string;
+  hotlinePrefix?: string;
   promoBannerText?: string;
   brandName?: string;
   branches: CmsBranchItem[];
@@ -1258,8 +1259,8 @@ export interface StorefrontCmsSettings {
 const DEFAULT_CMS_SETTINGS: StorefrontCmsSettings = {
   hero_title: 'GÀ Ủ MUỐI SMART',
   hero_slogan: 'Gà ủ muối da giòn sần sật - Thơm ngon đậm đà giao nóng tận nơi',
-  hero_hotline: '0988.123.456',
-  hotline: '0988.123.456',
+  hero_hotline: '0889018221',
+  hotline: '0889018221',
   hotlineBadgeText: 'Hotline Đặt Ngay:',
   promoBannerText: '🔥 Khuyến mãi đặc biệt: Đồng giá Gà Ủ Muối Nguyên Con 190.000đ - Giao hỏa tốc 20 phút!',
   brandName: 'Gà Ủ Muối Smart',

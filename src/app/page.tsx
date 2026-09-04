@@ -37,7 +37,9 @@ export default function PublicStorefrontHome() {
   const [cmsSettings, setCmsSettings] = useState<StorefrontCmsSettings>({
     hero_title: 'GÀ Ủ MUỐI SMART',
     hero_slogan: 'Gà ủ muối da giòn sần sật - Thơm ngon đậm đà giao nóng tận nơi',
-    hero_hotline: '0988.123.456',
+    hero_hotline: '0889018221',
+    hotline: '0889018221',
+    hotlineBadgeText: 'Hotline Đặt Ngay:',
     branches: [],
     social_facebook: 'https://facebook.com',
     social_tiktok: 'https://tiktok.com',
@@ -85,7 +87,7 @@ export default function PublicStorefrontHome() {
       const { data } = await supabase
         .from('storefront_settings')
         .select('*')
-        .eq('id', 'primary_config')
+        .eq('id', 'default_config')
         .maybeSingle();
 
       const configData = data?.data || data?.settings;
@@ -95,15 +97,15 @@ export default function PublicStorefrontHome() {
           localStorage.setItem('storefront_settings', JSON.stringify(configData));
         } catch (e) {}
       } else {
-        const { data: defaultData } = await supabase
+        const { data: primaryData } = await supabase
           .from('storefront_settings')
           .select('*')
-          .eq('id', 'default_config')
+          .eq('id', 'primary_config')
           .maybeSingle();
 
-        const defaultConfigData = defaultData?.data || defaultData?.settings;
-        if (defaultConfigData) {
-          setCmsSettings(prev => ({ ...prev, ...defaultConfigData }));
+        const primaryConfigData = primaryData?.data || primaryData?.settings;
+        if (primaryConfigData) {
+          setCmsSettings(prev => ({ ...prev, ...primaryConfigData }));
         }
       }
     } catch (e) {}
@@ -571,12 +573,12 @@ export default function PublicStorefrontHome() {
 
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-orange-50 border border-orange-200 text-orange-800 text-xs sm:text-sm font-semibold shadow-2xs">
             <span className="text-base">🔥</span>
-            <span>{cmsSettings?.hotlineBadgeText || 'Hotline Đặt Ngay:'}</span>
+            <span>{(cmsSettings as any)?.hotlinePrefix || cmsSettings?.hotlineBadgeText || 'Hotline Đặt Ngay:'}</span>
             <a 
-              href={`tel:${(cmsSettings?.hero_hotline || cmsSettings?.hotline || '0988123456').replace(/\s+/g, '').replace(/\./g, '')}`} 
+              href={`tel:${(cmsSettings?.hero_hotline || cmsSettings?.hotline || '0889018221').replace(/\s+/g, '').replace(/\./g, '')}`} 
               className="font-bold text-orange-900 hover:underline"
             >
-              {cmsSettings?.hero_hotline || cmsSettings?.hotline || '0988.123.456'}
+              {cmsSettings?.hero_hotline || cmsSettings?.hotline || '0889018221'}
             </a>
           </div>
 
