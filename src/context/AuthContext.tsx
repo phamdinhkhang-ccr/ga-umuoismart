@@ -21,6 +21,14 @@ export const INITIAL_DEMO_ACCOUNTS: (UserAccount & { password?: string })[] = [
     last_active: '2026-09-04 19:55',
     orders_count: 1420,
     shifts_count: 180,
+    hourly_rate: 40000,
+    commission_per_order: 3000,
+    permissions: {
+      can_view_revenue: true,
+      can_create_expense: true,
+      can_cancel_order: true,
+      can_edit_price: true
+    },
     branch_name: 'Toàn Chuỗi / Tất Cả'
   },
   {
@@ -39,6 +47,14 @@ export const INITIAL_DEMO_ACCOUNTS: (UserAccount & { password?: string })[] = [
     last_active: '2026-09-04 19:40',
     orders_count: 850,
     shifts_count: 95,
+    hourly_rate: 28000,
+    commission_per_order: 2000,
+    permissions: {
+      can_view_revenue: true,
+      can_create_expense: true,
+      can_cancel_order: fontCancelOrderDefault(true),
+      can_edit_price: false
+    },
     branch_name: 'Trung Tâm Điều Phối'
   },
   {
@@ -57,6 +73,14 @@ export const INITIAL_DEMO_ACCOUNTS: (UserAccount & { password?: string })[] = [
     last_active: '2026-09-04 18:30',
     orders_count: 320,
     shifts_count: 42,
+    hourly_rate: 25000,
+    commission_per_order: 1500,
+    permissions: {
+      can_view_revenue: false,
+      can_create_expense: true,
+      can_cancel_order: false,
+      can_edit_price: false
+    },
     branch_id: 'b1111111-1111-1111-1111-111111111111',
     branch_name: 'Chi Nhánh Gà Ủ Muối Quận 1'
   },
@@ -76,10 +100,20 @@ export const INITIAL_DEMO_ACCOUNTS: (UserAccount & { password?: string })[] = [
     last_active: '2026-09-04 17:15',
     orders_count: 210,
     shifts_count: 38,
+    hourly_rate: 25000,
+    commission_per_order: 1500,
+    permissions: {
+      can_view_revenue: false,
+      can_create_expense: true,
+      can_cancel_order: false,
+      can_edit_price: false
+    },
     branch_id: 'b2222222-2222-2222-2222-222222222222',
     branch_name: 'Chi Nhánh Gà Ủ Muối Quận 3'
   }
 ];
+
+function fontCancelOrderDefault(val: boolean) { return val; }
 
 interface AuthContextType {
   user: UserAccount | null;
