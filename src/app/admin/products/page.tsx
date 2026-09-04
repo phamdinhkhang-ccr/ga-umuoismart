@@ -65,15 +65,23 @@ export default function ProductsPage() {
     setBranches(getBranches());
 
     try {
-      const res = await fetch('/api/products');
+      const res = await fetch('/api/products', {
+        headers: { 'Accept': 'application/json' },
+        cache: 'no-store'
+      });
       if (res.ok) {
-        const data = await res.json();
-        if (data && data.success && Array.isArray(data.products) && data.products.length > 0) {
-          setProducts(data.products);
-          return;
+        const contentType = res.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+          const data = await res.json();
+          if (data && data.success && Array.isArray(data.products) && data.products.length > 0) {
+            setProducts(data.products);
+            return;
+          }
         }
       }
-    } catch (e) {}
+    } catch (e) {
+      console.warn('Products silent fetch bypass:', e);
+    }
 
     setProducts(local);
   };

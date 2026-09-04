@@ -45,91 +45,100 @@ export default function Topbar({ onToggleMobileMenu }: TopbarProps) {
 
   // Load Notifications & Listen to Cross-Tab & Internal Order Events
   useEffect(() => {
+    let isMounted = true;
     syncNotifs();
 
-    // Cloud Polling Engine (Every 2.5 Seconds)
+    // Bulletproof Cloud Polling Engine (Every 3 Seconds)
     const pollCloudOrders = async () => {
       try {
-        const res = await fetch('/api/orders');
+        const res = await fetch('/api/orders?limit=10', {
+          headers: { 'Accept': 'application/json' },
+          cache: 'no-store'
+        });
         if (!res.ok) return;
-        const data = await res.json();
-        if (data && data.success && Array.isArray(data.orders)) {
-          const cloudOrders = data.orders;
-          let hasNewIncomingOrder = false;
-          let latestNewOrder: any = null;
+        const contentType = res.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) return;
 
-          cloudOrders.forEach((o: any) => {
-            const oId = o.id || o.order_code;
-            if (oId) {
-              if (!knownOrderIdsRef.current.has(oId)) {
-                knownOrderIdsRef.current.add(oId);
-                if (!isInitialPollRef.current) {
-                  hasNewIncomingOrder = true;
-                  latestNewOrder = o;
-                }
+        const data = await res.json();
+        if (!isMounted || !data || !data.success || !Array.isArray(data.orders)) return;
+
+        const cloudOrders = data.orders;
+        let hasNewIncomingOrder = false;
+        let latestNewOrder: any = null;
+
+        cloudOrders.forEach((o: any) => {
+          const oId = o.id || o.order_code;
+          if (oId) {
+            if (!knownOrderIdsRef.current.has(oId)) {
+              knownOrderIdsRef.current.add(oId);
+              if (!isInitialPollRef.current) {
+                hasNewIncomingOrder = true;
+                latestNewOrder = o;
               }
             }
-          });
-
-          // If initial load completed, store known order IDs
-          if (isInitialPollRef.current) {
-            isInitialPollRef.current = false;
           }
+        });
 
-          // Sync cloud orders & notifications into localStorage
-          if (data.orders.length > 0) {
-            try {
-              const currentLocal = JSON.parse(localStorage.getItem('pos_orders_data') || '[]');
-              const mergedMap = new Map();
-              data.orders.forEach((o: any) => mergedMap.set(o.id || o.order_code, o));
-              currentLocal.forEach((o: any) => {
-                const idKey = o.id || o.order_code;
-                if (!mergedMap.has(idKey)) mergedMap.set(idKey, o);
-              });
-              const mergedArr = Array.from(mergedMap.values());
-              localStorage.setItem('pos_orders_data', JSON.stringify(mergedArr));
-            } catch (e) {}
-          }
-
-          if (Array.isArray(data.notifications) && data.notifications.length > 0) {
-            try {
-              localStorage.setItem('pos_notifications_data', JSON.stringify(data.notifications));
-              setNotifications(data.notifications);
-            } catch (e) {}
-          }
-
-          // Trigger Alert & Toast if a new order arrived from cloud
-          if (hasNewIncomingOrder && latestNewOrder) {
-            playBeep();
-            setIsShaking(true);
-            setTimeout(() => setIsShaking(false), 1200);
-
-            const custName = latestNewOrder.customerName || latestNewOrder.customer_name || 'Khách Vãng Lai';
-            const code = latestNewOrder.order_code || latestNewOrder.code || latestNewOrder.id || '';
-            const totalStr = Number(latestNewOrder.totalAmount || latestNewOrder.final_amount || 0).toLocaleString('vi-VN');
-
-            const toastNotif: SystemNotification = {
-              id: `toast-${Date.now()}`,
-              type: 'ORDER',
-              title: `🍗 ĐƠN MỚI TỪ WEB! Khách ${custName}`,
-              message: `Đơn #${code} (${totalStr}đ) - Tự động cập nhật vào Bảng Quản Lý Đơn.`,
-              timestamp: 'Vừa xong',
-              read: false,
-              link: '/admin/orders',
-              actionText: 'Xem đơn'
-            };
-            setActiveToast(toastNotif);
-            setTimeout(() => setActiveToast(null), 6000);
-
-            window.dispatchEvent(new Event('gum_store_update'));
-            window.dispatchEvent(new CustomEvent('new_order_event', { detail: latestNewOrder }));
-          }
+        // If initial load completed, store known order IDs
+        if (isInitialPollRef.current) {
+          isInitialPollRef.current = false;
         }
-      } catch (e) {}
+
+        // Sync cloud orders & notifications into localStorage safely
+        if (data.orders.length > 0) {
+          try {
+            const currentLocal = JSON.parse(localStorage.getItem('pos_orders_data') || '[]');
+            const mergedMap = new Map();
+            data.orders.forEach((o: any) => mergedMap.set(o.id || o.order_code, o));
+            currentLocal.forEach((o: any) => {
+              const idKey = o.id || o.order_code;
+              if (!mergedMap.has(idKey)) mergedMap.set(idKey, o);
+            });
+            const mergedArr = Array.from(mergedMap.values());
+            localStorage.setItem('pos_orders_data', JSON.stringify(mergedArr));
+          } catch (e) {}
+        }
+
+        if (Array.isArray(data.notifications) && data.notifications.length > 0) {
+          try {
+            localStorage.setItem('pos_notifications_data', JSON.stringify(data.notifications));
+            if (isMounted) setNotifications(data.notifications);
+          } catch (e) {}
+        }
+
+        // Trigger Alert & Toast if a new order arrived from cloud
+        if (hasNewIncomingOrder && latestNewOrder && isMounted) {
+          playBeep();
+          setIsShaking(true);
+          setTimeout(() => { if (isMounted) setIsShaking(false); }, 1200);
+
+          const custName = latestNewOrder.customerName || latestNewOrder.customer_name || 'Khách Vãng Lai';
+          const code = latestNewOrder.order_code || latestNewOrder.code || latestNewOrder.id || '';
+          const totalStr = Number(latestNewOrder.totalAmount || latestNewOrder.final_amount || 0).toLocaleString('vi-VN');
+
+          const toastNotif: SystemNotification = {
+            id: `toast-${Date.now()}`,
+            type: 'ORDER',
+            title: `🍗 ĐƠN MỚI TỪ WEB! Khách ${custName}`,
+            message: `Đơn #${code} (${totalStr}đ) - Tự động cập nhật vào Bảng Quản Lý Đơn.`,
+            timestamp: 'Vừa xong',
+            read: false,
+            link: '/admin/orders',
+            actionText: 'Xem đơn'
+          };
+          setActiveToast(toastNotif);
+          setTimeout(() => { if (isMounted) setActiveToast(null); }, 6000);
+
+          window.dispatchEvent(new Event('gum_store_update'));
+          window.dispatchEvent(new CustomEvent('new_order_event', { detail: latestNewOrder }));
+        }
+      } catch (err) {
+        console.warn('Polling silent bypass:', err);
+      }
     };
 
     pollCloudOrders();
-    const intervalId = setInterval(pollCloudOrders, 2500);
+    const intervalId = setInterval(pollCloudOrders, 3000);
 
     const handleStorage = (e: StorageEvent) => {
       if (
@@ -201,6 +210,7 @@ export default function Topbar({ onToggleMobileMenu }: TopbarProps) {
     window.addEventListener('gum_store_update', syncNotifs);
 
     return () => {
+      isMounted = false;
       clearInterval(intervalId);
       window.removeEventListener('storage', handleStorage);
       window.removeEventListener('pos_notify_event', handleCustomNotif);

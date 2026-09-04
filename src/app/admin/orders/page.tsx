@@ -158,14 +158,22 @@ export default function CentralizedOrdersPage() {
       let cloudOrders: any[] = [];
 
       try {
-        const cloudRes = await fetch('/api/orders');
+        const cloudRes = await fetch('/api/orders?limit=10', {
+          headers: { 'Accept': 'application/json' },
+          cache: 'no-store'
+        });
         if (cloudRes.ok) {
-          const cloudData = await cloudRes.json();
-          if (cloudData && Array.isArray(cloudData.orders)) {
-            cloudOrders = cloudData.orders;
+          const contentType = cloudRes.headers.get('content-type') || '';
+          if (contentType.includes('application/json')) {
+            const cloudData = await cloudRes.json();
+            if (cloudData && Array.isArray(cloudData.orders)) {
+              cloudOrders = cloudData.orders;
+            }
           }
         }
-      } catch (e) {}
+      } catch (e) {
+        console.warn('Orders silent fetch bypass:', e);
+      }
 
       // Merge Cloud & Local Orders securely by ID / Code
       const mergedMap = new Map();

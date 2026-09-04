@@ -1,40 +1,18 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs';
-import path from 'path';
+import { getCloudNotifs, addCloudNotif, setCloudNotifs } from '@/lib/serverStore';
 
-const DATA_DIR = path.join(process.cwd(), '.cloud_store');
-const NOTIFS_FILE = path.join(DATA_DIR, 'notifications.json');
-
-function ensureStorage() {
-  try {
-    if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR, { recursive: true });
-    }
-  } catch (e) {}
-}
-
-function readNotifs(): any[] {
-  ensureStorage();
-  try {
-    if (fs.existsSync(NOTIFS_FILE)) {
-      const data = fs.readFileSync(NOTIFS_FILE, 'utf-8');
-      return data ? JSON.parse(data) : [];
-    }
-  } catch (e) {}
-  return [];
-}
-
-function writeNotifs(notifs: any[]) {
-  ensureStorage();
-  try {
-    fs.writeFileSync(NOTIFS_FILE, JSON.stringify(notifs, null, 2), 'utf-8');
-  } catch (e) {}
-}
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export async function GET() {
   try {
-    const notifications = readNotifs();
-    return NextResponse.json({ success: true, notifications, timestamp: Date.now() });
+    const notifications = getCloudNotifs();
+    return NextResponse.json({ success: true, notifications, timestamp: Date.now() }, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache',
+        'Content-Type': 'application/json'
+      }
+    });
   } catch (error) {
     return NextResponse.json({ success: false, error: 'Failed to fetch cloud notifications' }, { status: 500 });
   }
@@ -57,11 +35,11 @@ export async function POST(request: Request) {
       link: body.link || '/admin/orders'
     };
 
-    const current = readNotifs();
-    const updated = [newNotif, ...current];
-    writeNotifs(updated);
+    const updated = addCloudNotif(newNotif);
 
-    return NextResponse.json({ success: true, notification: newNotif, notifications: updated });
+    return NextResponse.json({ success: true, notification: newNotif, notifications: updated }, {
+      headers: { 'Content-Type': 'application/json' }
+    });
   } catch (error) {
     return NextResponse.json({ success: false, error: 'Failed to create cloud notification' }, { status: 500 });
   }
@@ -70,7 +48,7 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   try {
     const body = await request.json();
-    const current = readNotifs();
+    const current = getCloudNotifs();
     let updated = current;
 
     if (body.markAllRead) {
@@ -79,8 +57,10 @@ export async function PATCH(request: Request) {
       updated = current.map(n => n.id === body.id ? { ...n, isRead: true, read: true } : n);
     }
 
-    writeNotifs(updated);
-    return NextResponse.json({ success: true, notifications: updated });
+    setCloudNotifs(updated);
+    return NextResponse.json({ success: true, notifications: updated }, {
+      headers: { 'Content-Type': 'application/json' }
+    });
   } catch (error) {
     return NextResponse.json({ success: false, error: 'Failed to update cloud notification' }, { status: 500 });
   }

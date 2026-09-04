@@ -8,6 +8,7 @@ import { AuthProvider, useAuth } from '@/context/AuthContext';
 import Sidebar from '@/components/Sidebar';
 import Topbar from '@/components/Topbar';
 import CustomerChatWidget from '@/components/CustomerChatWidget';
+import { GlobalErrorBoundary } from '@/components/ErrorBoundary';
 
 const inter = Inter({ subsets: ['latin', 'vietnamese'] });
 
@@ -33,11 +34,13 @@ export default function RootLayout({
   return (
     <html lang="vi" className="h-full bg-slate-50 scroll-smooth">
       <body className={`${inter.className} min-h-screen text-slate-900 bg-slate-50 antialiased overflow-x-hidden`}>
-        <AuthProvider>
-          <ClientOnlyWrapper>
-            <AppShell>{children}</AppShell>
-          </ClientOnlyWrapper>
-        </AuthProvider>
+        <GlobalErrorBoundary>
+          <AuthProvider>
+            <ClientOnlyWrapper>
+              <AppShell>{children}</AppShell>
+            </ClientOnlyWrapper>
+          </AuthProvider>
+        </GlobalErrorBoundary>
       </body>
     </html>
   );

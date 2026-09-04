@@ -239,17 +239,34 @@ export function setItem<T>(key: string, value: T): void {
   }
 }
 
+let hasUserInteracted = false;
+if (typeof window !== 'undefined') {
+  const markInteracted = () => {
+    hasUserInteracted = true;
+    try {
+      window.removeEventListener('pointerdown', markInteracted);
+      window.removeEventListener('keydown', markInteracted);
+    } catch (e) {}
+  };
+  window.addEventListener('pointerdown', markInteracted);
+  window.addEventListener('keydown', markInteracted);
+}
+
 export function playBeep(): void {
-  if (typeof window === 'undefined' || !(window.AudioContext || (window as any).webkitAudioContext)) return;
+  if (typeof window === 'undefined' || !hasUserInteracted) return;
   try {
     const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtx) return;
     const ctx = new AudioCtx();
+    if (ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    }
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain);
     gain.connect(ctx.destination);
     osc.type = 'sine';
-    osc.frequency.value = 880;
+    osc.frequency.setValueAtTime(880, ctx.currentTime);
     gain.gain.setValueAtTime(0.15, ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.35);
     osc.start();
