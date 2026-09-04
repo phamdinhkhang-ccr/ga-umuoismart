@@ -20,17 +20,20 @@ export async function POST(req: NextRequest) {
     const branches = await getBranches();
     const menuItemNames = menuItems.map(m => m.name);
 
-    // 2. Process message using LLM AI Structured Output
+    // 2. Process message using LLM AI / Resilient Regex Natural Language Parser
     const parsedData = await parseOrderWithAI(raw_text, menuItemNames);
 
-    // 3. Routing Engine: Auto-match branch based on district/address
-    const matchedBranch = assignBranch(parsedData.district, parsedData.shipping_address, branches);
+    // 3. Routing Engine: Auto-match branch based on district/address/city
+    const matchedBranch = assignBranch(
+      parsedData.district,
+      parsedData.shipping_address,
+      branches,
+      parsedData.city
+    );
 
     // 4. Map extracted items to database menu items & calculate preliminary pricing
     let subtotal = 0;
     let totalCost = 0;
-
-    const itemsMap = new Map(menuItems.map(m => [m.id, m]));
 
     const processedItems = parsedData.items.map(parsedItem => {
       // Find matching menu item by fuzzy name search

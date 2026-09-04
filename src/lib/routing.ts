@@ -17,18 +17,44 @@ export function normalizeText(text: string): string {
 }
 
 /**
- * Assigns the best matching branch based on the customer's district and address.
- * Standard mapping with fallback to default branch.
+ * Assigns the best matching branch based on the customer's district, address, and city.
+ * Resilient multi-attribute routing engine.
  */
 export function assignBranch(
   district: string,
   shippingAddress: string,
-  branches: Branch[]
+  branches: Branch[],
+  city?: string
 ): Branch | null {
   if (!branches || branches.length === 0) return null;
 
   const normDistrict = normalizeText(district);
   const normAddress = normalizeText(shippingAddress);
+  const normCity = normalizeText(city || '');
+
+  // Check if target is Hanoi
+  const isHanoi =
+    normCity.includes('hanoi') ||
+    normCity.includes('hn') ||
+    normAddress.includes('ha noi') ||
+    normAddress.includes('hn') ||
+    normAddress.includes('thanh tri') ||
+    normAddress.includes('dai thanh') ||
+    normAddress.includes('thuong phuc') ||
+    normDistrict.includes('thanh tri') ||
+    normDistrict.includes('cau giay') ||
+    normDistrict.includes('dong da') ||
+    normDistrict.includes('ha dong');
+
+  if (isHanoi) {
+    const hanoiBranch = branches.find((b) => {
+      const normBCity = normalizeText(b.city || '');
+      const normBName = normalizeText(b.name || '');
+      const normBDistrict = normalizeText(b.district || '');
+      return normBCity.includes('hanoi') || normBName.includes('hanoi') || normBDistrict.includes('thanh tri');
+    });
+    if (hanoiBranch) return hanoiBranch;
+  }
 
   // 1. Direct match on district
   let matched = branches.find(b => {

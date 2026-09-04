@@ -97,7 +97,8 @@ const DEFAULT_BRANCHES: Branch[] = [
   { id: 'b1111111-1111-1111-1111-111111111111', name: 'Chi Nhánh Gà Ủ Muối Quận 1', address: '123 Lê Lợi', district: 'Quận 1', city: 'Hồ Chí Minh', phone: '02838111111' },
   { id: 'b2222222-2222-2222-2222-222222222222', name: 'Chi Nhánh Gà Ủ Muối Quận 3', address: '456 Điện Biên Phủ', district: 'Quận 3', city: 'Hồ Chí Minh', phone: '02838222222' },
   { id: 'b3333333-3333-3333-3333-333333333333', name: 'Chi Nhánh Gà Ủ Muối Bình Thạnh', address: '789 Xô Viết Nghệ Tĩnh', district: 'Quận Bình Thạnh', city: 'Hồ Chí Minh', phone: '02838333333' },
-  { id: 'b4444444-4444-4444-4444-444444444444', name: 'Chi Nhánh Gà Ủ Muối Thủ Đức', address: '102 Võ Văn Ngân', district: 'Thành phố Thủ Đức', city: 'Hồ Chí Minh', phone: '02838444444' }
+  { id: 'b4444444-4444-4444-4444-444444444444', name: 'Chi Nhánh Gà Ủ Muối Thủ Đức', address: '102 Võ Văn Ngân', district: 'Thành phố Thủ Đức', city: 'Hồ Chí Minh', phone: '02838444444' },
+  { id: 'b5555555-5555-5555-5555-555555555555', name: 'Chi Nhánh Gà Ủ Muối Hà Nội (Thanh Trì / Cầu Giấy)', address: 'Số 9 Thượng Phúc, Đại Thanh', district: 'Huyện Thanh Trì', city: 'Hà Nội', phone: '02438555555' }
 ];
 
 export async function getBranches(): Promise<Branch[]> {

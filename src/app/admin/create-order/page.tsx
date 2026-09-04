@@ -47,9 +47,9 @@ export default function CreateOrderPage() {
   }, []);
 
   const sampleMessages = useMemo(() => [
-    `Chào Gà Ủ Muối Smart, cho mình lấy 2 Gà Ủ Muối Nguyên Con và 2 Trà Tắc Khổng Lồ giao đến địa chỉ 123 Lê Lợi, Phường Bến Thành, Quận 1. Tên Nam, SĐT: 0901234567. Nhớ cho thêm nước chấm nhé!`,
-    `Lấy 1 Gà Ủ Muối Nửa Con + 1 Chân Gà Rút Xương Sốt Thái giao qua 456 Điện Biên Phủ, Quận 3. SĐT: 0988776655 (Anh Tuấn). Áp dụng mã CHAO2026`,
-    `Đặt 4 Cánh Gà Ủ Muối và 4 Trà Đào Cam Sả giao tới 789 Xô Viết Nghệ Tĩnh, Quận Bình Thạnh. Gọi số 0912345678 khi tới nơi.`
+    `1 con gà ủ muối, 1 chân gà sốt thái, giao qua số 9 thượng phúc, đại thanh, hà nội, sđt 0889018221`,
+    `Chào Gà Ủ Muối Smart, cho mình lấy 2 Gà Ủ Muối Nguyên Con và 2 Trà Tắc Khổng Lồ giao đến địa chỉ 123 Lê Lợi, Phường Bến Thành, Quận 1. Tên Nam, SĐT: 0901234567`,
+    `Lấy 1 Gà Ủ Muối Nửa Con + 1 Chân Gà Rút Xương Sốt Thái giao qua 456 Điện Biên Phủ, Quận 3. SĐT: 0988776655 (Anh Tuấn). Áp dụng mã CHAO2026`
   ], []);
 
   const handleParseOrder = useCallback(async (textToParse?: string) => {
