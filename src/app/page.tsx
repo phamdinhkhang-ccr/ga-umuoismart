@@ -1,5 +1,7 @@
 'use client';
 
+export const dynamic = 'force-dynamic';
+
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
@@ -45,7 +47,7 @@ export default function PublicStorefrontHome() {
 
   const [productsList, setProductsList] = useState<ProductRecord[]>([]);
 
-  // Search Order State
+  // Search & Order Tracking State
   const [searchQuery, setSearchQuery] = useState('');
   const [searchedOrder, setSearchedOrder] = useState<Order | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
@@ -83,16 +85,25 @@ export default function PublicStorefrontHome() {
       const { data } = await supabase
         .from('storefront_settings')
         .select('*')
-        .in('id', ['primary_config', 'default_config']);
+        .eq('id', 'primary_config')
+        .maybeSingle();
 
-      if (Array.isArray(data) && data.length > 0) {
-        const primary = data.find(d => d.id === 'primary_config') || data[0];
-        const configData = primary.data || primary.settings;
-        if (configData) {
-          setCmsSettings(prev => ({ ...prev, ...configData }));
-          try {
-            localStorage.setItem('storefront_settings', JSON.stringify(configData));
-          } catch (e) {}
+      const configData = data?.data || data?.settings;
+      if (configData) {
+        setCmsSettings(prev => ({ ...prev, ...configData }));
+        try {
+          localStorage.setItem('storefront_settings', JSON.stringify(configData));
+        } catch (e) {}
+      } else {
+        const { data: defaultData } = await supabase
+          .from('storefront_settings')
+          .select('*')
+          .eq('id', 'default_config')
+          .maybeSingle();
+
+        const defaultConfigData = defaultData?.data || defaultData?.settings;
+        if (defaultConfigData) {
+          setCmsSettings(prev => ({ ...prev, ...defaultConfigData }));
         }
       }
     } catch (e) {}
