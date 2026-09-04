@@ -1236,6 +1236,7 @@ export interface CmsBranchItem {
 
 export interface StorefrontCmsSettings {
   hero_title: string;
+  heroHighlightTitle?: string;
   hero_slogan: string;
   hero_banner_image?: string;
   hero_hotline: string;

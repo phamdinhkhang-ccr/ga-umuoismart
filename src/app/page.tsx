@@ -590,7 +590,7 @@ export default function PublicStorefrontHome() {
           <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black text-slate-900 tracking-tight leading-tight max-w-4xl mx-auto">
             {cmsSettings.hero_title || 'GÀ Ủ MUỐI SMART'} <br />
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-600 via-amber-600 to-rose-600">
-              Thơm Ngon Đậm Đà • Giao Hỏa Tốc
+              {cmsSettings?.heroHighlightTitle || 'Thơm Ngon Đậm Đà • Giao Hỏa Tốc'}
             </span>
           </h1>
 
