@@ -6,11 +6,26 @@ import { useAuth } from '@/context/AuthContext';
 import { 
   Store, Search, ShoppingBag, Phone, MapPin, Clock, ExternalLink, 
   CheckCircle2, Sparkles, Truck, ShieldCheck, Flame, MessageCircle, 
-  Bot, LogIn, Lock, ArrowRight, UserCheck, Star, Zap, PhoneCall, Headphones
+  Bot, LogIn, Lock, ArrowRight, UserCheck, Star, Zap, PhoneCall, Headphones,
+  X, Check, QrCode, AlertCircle
 } from 'lucide-react';
-import { getAnalyticsData } from '@/actions/orders';
-import { getProducts, getCmsSettings, StorefrontCmsSettings, ProductRecord } from '@/lib/store';
+import { getAnalyticsData, addNewMockOrder } from '@/actions/orders';
+import { 
+  getProducts, getCmsSettings, StorefrontCmsSettings, ProductRecord, 
+  addNotification, addOrUpdateCustomerFromOrder, getItem, setItem 
+} from '@/lib/store';
 import { Order } from '@/types/database';
+
+const PRESET_COMBOS = [
+  { id: 'cb1', name: 'Set nửa ủ muối + 1 hộp chân gà - 230k (Ship nội thành)', price: 230000, isHot: true },
+  { id: 'cb2', name: 'Set 1 Gà Ủ Muối + 1 hộp chân gà - 355k', price: 355000, isHot: true },
+  { id: 'cb3', name: 'Gà ủ muối nửa con - 150k', price: 150000, isHot: false },
+  { id: 'cb4', name: 'Gà ủ muối nguyên con - 270k', price: 270000, isHot: false },
+  { id: 'cb5', name: 'Chân gà rút xương ủ muối - 85k', price: 85000, isHot: false },
+  { id: 'cb6', name: '1 Nem ngựa - 95k / 2 Nem ngựa - 180k', price: 95000, isHot: false },
+  { id: 'cb7', name: 'Set ăn chơi (1/2 Gà & 1 Nem Ngựa) - 240k', price: 240000, isHot: true },
+  { id: 'cb8', name: 'Set ăn nhậu (1 Gà Ủ Muối & 1 Nem Ngựa) - 360k', price: 360000, isHot: true }
+];
 
 export default function PublicStorefrontHome() {
   const { user } = useAuth();
@@ -34,6 +49,22 @@ export default function PublicStorefrontHome() {
   const [searchedOrder, setSearchedOrder] = useState<Order | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
   const [searchError, setSearchError] = useState('');
+
+  // -------------------------------------------------------------
+  // ORDER POPUP MODAL STATE
+  // -------------------------------------------------------------
+  const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
+  const [successOrder, setSuccessOrder] = useState<Order | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const [fullName, setFullName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [address, setAddress] = useState('');
+  const [selectedBranchId, setSelectedBranchId] = useState<string>('');
+  const [selectedComboIds, setSelectedComboIds] = useState<string[]>(['cb1']);
+  const [cutPreference, setCutPreference] = useState<'Chặt sẵn ăn luôn' | 'Không chặt (để nguyên con)'>('Chặt sẵn ăn luôn');
+  const [quantityNote, setQuantityNote] = useState('');
+  const [extraNote, setExtraNote] = useState('');
 
   const loadStorefrontData = () => {
     setCmsSettings(getCmsSettings());
@@ -67,6 +98,222 @@ export default function PublicStorefrontHome() {
       .filter((p) => p.is_storefront_visible !== false)
       .sort((a, b) => (b.is_best_seller ? 1 : 0) - (a.is_best_seller ? 1 : 0));
   }, [productsList]);
+
+  // Combined selectable items array (Presets + Products from store)
+  const allSelectableItems = useMemo(() => {
+    const presets = [...PRESET_COMBOS];
+    productsList.forEach(p => {
+      if (!presets.some(item => item.name.toLowerCase().includes(p.name.toLowerCase()))) {
+        presets.push({
+          id: p.id,
+          name: `${p.name} - ${p.price.toLocaleString('vi-VN')}đ`,
+          price: p.price,
+          isHot: !!p.is_best_seller
+        });
+      }
+    });
+    return presets;
+  }, [productsList]);
+
+  // Auto Nearest Branch Suggestion Logic based on Address
+  const suggestedBranch = useMemo(() => {
+    if (!activeBranches || activeBranches.length === 0) return null;
+    const addr = address.toLowerCase();
+    
+    if (addr.includes('thanh trì') || addr.includes('đại thanh') || addr.includes('hoàng mai') || addr.includes('thượng phúc')) {
+      const b = activeBranches.find(x => x.name.includes('Thanh Trì') || x.address.includes('Thanh Trì'));
+      if (b) return b;
+    }
+    if (addr.includes('cầu giấy') || addr.includes('đống đa') || addr.includes('trần thái tông') || addr.includes('dịch vọng') || addr.includes('tây hồ') || addr.includes('thanh xuân')) {
+      const b = activeBranches.find(x => x.name.includes('Cầu Giấy') || x.address.includes('Cầu Giấy'));
+      if (b) return b;
+    }
+    if (addr.includes('quận 1') || addr.includes('lê lợi') || addr.includes('bến thành') || addr.includes('quận 4')) {
+      const b = activeBranches.find(x => x.name.includes('Quận 1') || x.address.includes('Quận 1'));
+      if (b) return b;
+    }
+    if (addr.includes('quận 3') || addr.includes('điện biên phủ') || addr.includes('phú nhuận') || addr.includes('bình thạnh')) {
+      const b = activeBranches.find(x => x.name.includes('Quận 3') || x.address.includes('Quận 3'));
+      if (b) return b;
+    }
+    if (addr.includes('smart city') || addr.includes('tây mỗ') || addr.includes('nam từ liêm') || addr.includes('hà đông') || addr.includes('hoài đức')) {
+      const b = activeBranches.find(x => x.name.includes('SMART CITY') || x.address.includes('Smart City'));
+      if (b) return b;
+    }
+
+    if (selectedBranchId) {
+      const currentB = activeBranches.find(x => x.id === selectedBranchId);
+      if (currentB) return currentB;
+    }
+
+    return activeBranches[0];
+  }, [address, activeBranches, selectedBranchId]);
+
+  // Sync selectedBranchId when suggestedBranch updates if not explicitly selected
+  useEffect(() => {
+    if (suggestedBranch && !selectedBranchId) {
+      setSelectedBranchId(suggestedBranch.id);
+    }
+  }, [suggestedBranch, selectedBranchId]);
+
+  // Total Order Amount Calculation
+  const totalOrderAmount = useMemo(() => {
+    let total = 0;
+    selectedComboIds.forEach(id => {
+      const item = allSelectableItems.find(c => c.id === id);
+      if (item) total += item.price;
+    });
+    return total;
+  }, [selectedComboIds, allSelectableItems]);
+
+  // Open Order Modal & Pre-check item
+  const handleOpenOrderModal = (product?: ProductRecord | string) => {
+    setFormError(null);
+    setSuccessOrder(null);
+    setIsOrderModalOpen(true);
+
+    if (product) {
+      const pName = typeof product === 'string' ? product : product.name;
+      const matched = allSelectableItems.find(item => item.name.toLowerCase().includes(pName.toLowerCase()));
+      if (matched) {
+        setSelectedComboIds([matched.id]);
+      } else if (typeof product !== 'string') {
+        const customId = `custom-${product.id}`;
+        if (!allSelectableItems.some(i => i.id === customId)) {
+          allSelectableItems.push({
+            id: customId,
+            name: `${product.name} - ${product.price.toLocaleString('vi-VN')}đ`,
+            price: product.price,
+            isHot: !!product.is_best_seller
+          });
+        }
+        setSelectedComboIds([customId]);
+      }
+    }
+  };
+
+  // Toggle Combo Selection Checkbox
+  const handleToggleComboCheckbox = (id: string) => {
+    setSelectedComboIds(prev => {
+      if (prev.includes(id)) {
+        if (prev.length === 1) return prev; // Keep at least one item
+        return prev.filter(x => x !== id);
+      } else {
+        return [...prev, id];
+      }
+    });
+  };
+
+  // Submit Order Pipeline
+  const handleOrderSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormError(null);
+
+    if (!fullName.trim()) {
+      setFormError('Vui lòng nhập Họ và Tên người nhận!');
+      return;
+    }
+    if (!phone.trim() || phone.trim().length < 9) {
+      setFormError('Vui lòng nhập Số điện thoại hợp lệ (10 chữ số)!');
+      return;
+    }
+    if (!address.trim()) {
+      setFormError('Vui lòng nhập Địa chỉ nhận hàng (*)!');
+      return;
+    }
+    if (selectedComboIds.length === 0) {
+      setFormError('Vui lòng chọn ít nhất 1 món ăn hoặc Combo!');
+      return;
+    }
+
+    const chosenBranch = activeBranches.find(b => b.id === selectedBranchId) || suggestedBranch || activeBranches[0];
+    const orderCode = `OD${Math.floor(1000 + Math.random() * 9000)}`;
+
+    const selectedItemsSummary = selectedComboIds.map(id => {
+      const item = allSelectableItems.find(c => c.id === id);
+      return {
+        menu_item_id: item?.id || id,
+        item_name: item?.name ? item.name.split(' - ')[0] : 'Gà Ủ Muối Đặc Sản',
+        quantity: 1,
+        unit_price: item?.price || 0,
+        cost_price: Math.round((item?.price || 0) * 0.55),
+        subtotal: item?.price || 0
+      };
+    });
+
+    const calculatedTotal = selectedItemsSummary.reduce((sum, i) => sum + i.subtotal, 0);
+
+    const newOrderRecord: Order = {
+      id: `ord-web-${Date.now()}`,
+      order_code: orderCode,
+      customer_name: fullName.trim(),
+      customer_phone: phone.trim(),
+      shipping_address: address.trim(),
+      district: (chosenBranch as any).district || 'Hà Nội',
+      city: (chosenBranch as any).city || 'Hà Nội',
+      branch_id: chosenBranch.id,
+      branch: chosenBranch as any,
+      items: selectedItemsSummary,
+      subtotal: calculatedTotal,
+      discount_amount: 0,
+      final_amount: calculatedTotal,
+      estimated_profit: Math.round(calculatedTotal * 0.45),
+      voucher_code: null,
+      note: `Yêu cầu: ${cutPreference} | SL: ${quantityNote || 'Theo checkbox'} | Ghi chú: ${extraNote || 'Không'} | Nguồn: Khách Web Đặt Nhanh`,
+      status: 'RECEIVED',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    // 1. Save to LocalStorage
+    const localOrders = getItem<Order[]>('gum_smart_orders_v3', []);
+    setItem('gum_smart_orders_v3', [newOrderRecord, ...localOrders]);
+
+    // 2. Add to in-memory global orders list
+    addNewMockOrder(newOrderRecord);
+
+    // 3. System Notification for Admin
+    addNotification({
+      type: 'ORDER',
+      title: `🍗 Đơn mới #${orderCode} (Khách Web Đặt Nhanh)`,
+      message: `Khách ${newOrderRecord.customer_name} (${newOrderRecord.customer_phone}) vừa đặt đơn ${calculatedTotal.toLocaleString('vi-VN')}đ tại ${chosenBranch.name}.`,
+      link: '/admin/orders',
+      actionText: 'Duyệt đơn ngay'
+    });
+
+    // 4. Update Customer Profile
+    addOrUpdateCustomerFromOrder({
+      customer_name: newOrderRecord.customer_name,
+      customer_phone: newOrderRecord.customer_phone,
+      shipping_address: newOrderRecord.shipping_address,
+      total_amount: calculatedTotal,
+      order_code: orderCode,
+      items_summary: selectedItemsSummary.map(i => `${i.quantity}x ${i.item_name}`).join(', ')
+    });
+
+    // 5. Play Notification Sound (Web Audio API synth chime)
+    try {
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(587.33, audioCtx.currentTime); // D5
+      osc.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.2); // A5
+      gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.4);
+    } catch (e) {}
+
+    // 6. Notify System Update Events
+    window.dispatchEvent(new Event('gum_store_update'));
+    window.dispatchEvent(new Event('storage'));
+
+    // 7. Show Success View
+    setSuccessOrder(newOrderRecord);
+  };
 
   // Handle Order Tracking Search
   const handleSearchOrder = async (e?: React.FormEvent) => {
@@ -196,13 +443,13 @@ export default function PublicStorefrontHome() {
 
           {/* Hero CTAs */}
           <div className="flex flex-wrap items-center justify-center gap-3 pt-3">
-            <a
-              href="#menu"
+            <button
+              onClick={() => handleOpenOrderModal()}
               className="bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-extrabold px-6 py-3.5 rounded-2xl text-xs sm:text-sm shadow-md hover:shadow-lg transition flex items-center space-x-2 cursor-pointer"
             >
               <span>🍗 Đặt Hàng Ngay</span>
               <ArrowRight className="w-4 h-4" />
-            </a>
+            </button>
 
             <a
               href="#track"
@@ -409,9 +656,7 @@ export default function PublicStorefrontHome() {
                 </div>
 
                 <button
-                  onClick={() => {
-                    alert(`Đã chọn ${p.name}! Bạn hãy bấm vào nút Chat AI ở góc phải dưới màn hình để chốt đơn giao hỏa tốc nhé!`);
-                  }}
+                  onClick={() => handleOpenOrderModal(p)}
                   className="py-2 px-4 bg-orange-600 hover:bg-orange-700 text-white font-extrabold rounded-2xl text-xs shadow-sm transition flex items-center space-x-1 cursor-pointer"
                 >
                   <ShoppingBag className="w-3.5 h-3.5" />
@@ -473,18 +718,10 @@ export default function PublicStorefrontHome() {
                     href={b.maps_url}
                     target="_blank"
                     rel="noreferrer"
-                    className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-[11px] transition text-center flex items-center justify-center space-x-1"
+                    className="flex-1 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 text-[11px] font-bold py-2 rounded-xl text-center transition flex items-center justify-center space-x-1"
                   >
-                    <ExternalLink className="w-3 h-3" />
-                    <span>Chỉ Đường</span>
-                  </a>
-
-                  <a
-                    href={`tel:${b.phone}`}
-                    className="flex-1 py-2 bg-orange-600 hover:bg-orange-700 text-white font-extrabold rounded-xl text-[11px] shadow-2xs transition text-center flex items-center justify-center space-x-1"
-                  >
-                    <PhoneCall className="w-3 h-3" />
-                    <span>Gọi Hotline</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>Xem Chỉ Đường Google Maps</span>
                   </a>
                 </div>
               </div>
@@ -494,95 +731,338 @@ export default function PublicStorefrontHome() {
         </div>
       </section>
 
-      {/* 6. KHỐI KÊNH TRUYỀN THÔNG & MẠNG XÃ HỘI (#contact) */}
-      <section id="contact" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-8 scroll-mt-20">
-        <div className="text-center space-y-2">
-          <span className="bg-sky-100 text-sky-800 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-wider border border-sky-200">
-            Kênh Truyền Thông Official
-          </span>
-          <h2 className="text-2xl sm:text-4xl font-black text-slate-900">Kết Nối Với Gà Ủ Muối Smart</h2>
-          <p className="text-xs sm:text-sm text-slate-600 font-medium">Theo dõi các kênh mạng xã hội chính thức để săn deal &amp; nhận ưu đãi mỗi ngày.</p>
-        </div>
+      {/* 6. FOOTER (#contact) */}
+      <footer id="contact" className="bg-slate-900 text-slate-300 py-12 border-t border-slate-800">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            
+            <div className="space-y-3">
+              <div className="flex items-center space-x-2 text-white font-black text-lg">
+                <Store className="w-6 h-6 text-orange-500" />
+                <span>{cmsSettings.hero_title}</span>
+              </div>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                {cmsSettings.hero_slogan}
+              </p>
+              <p className="text-xs text-orange-400 font-extrabold">
+                📞 Hotline phản ánh chất lượng service: {cmsSettings.hotline_complaints}
+              </p>
+            </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
-          {/* Facebook */}
-          <a
-            href={cmsSettings.social_facebook}
-            target="_blank"
-            rel="noreferrer"
-            className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs hover:border-blue-300 hover:shadow-md transition flex items-center space-x-3 cursor-pointer"
-          >
-            <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-black text-lg shrink-0">
-              📘
+            <div className="space-y-2 text-xs">
+              <h4 className="font-extrabold text-white uppercase tracking-wider text-xs">Liên Kết Nhanh</h4>
+              <ul className="space-y-1.5 text-slate-400 font-medium">
+                <li><a href="#menu" className="hover:text-orange-400 transition">Thực đơn đặc sản gà ủ muối</a></li>
+                <li><a href="#track" className="hover:text-orange-400 transition">Tra cứu tiến độ đơn hàng</a></li>
+                <li><a href="#branches" className="hover:text-orange-400 transition">Hệ thống cơ sở phủ sóng</a></li>
+                <li><Link href="/login" className="hover:text-orange-400 transition">Đăng nhập tài khoản Quản trị nội bộ</Link></li>
+              </ul>
             </div>
-            <div>
-              <h4 className="font-extrabold text-slate-900">Facebook Fanpage</h4>
-              <p className="text-[11px] text-slate-500 font-medium">Gà Ủ Muối Smart Official</p>
-            </div>
-          </a>
 
-          {/* TikTok */}
-          <a
-            href={cmsSettings.social_tiktok}
-            target="_blank"
-            rel="noreferrer"
-            className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs hover:border-slate-400 hover:shadow-md transition flex items-center space-x-3 cursor-pointer"
-          >
-            <div className="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center font-black text-lg shrink-0">
-              🎵
+            <div className="space-y-3 text-xs">
+              <h4 className="font-extrabold text-white uppercase tracking-wider text-xs">Kênh Truyền Thông Official</h4>
+              <div className="flex flex-wrap gap-2 text-xs font-extrabold">
+                <a href={cmsSettings.social_facebook} target="_blank" rel="noreferrer" className="bg-slate-800 hover:bg-orange-600 text-white px-3 py-2 rounded-xl transition">
+                  Facebook Fanpage
+                </a>
+                <a href={cmsSettings.social_tiktok} target="_blank" rel="noreferrer" className="bg-slate-800 hover:bg-orange-600 text-white px-3 py-2 rounded-xl transition">
+                  TikTok Official
+                </a>
+                <a href={cmsSettings.social_zalo} target="_blank" rel="noreferrer" className="bg-slate-800 hover:bg-orange-600 text-white px-3 py-2 rounded-xl transition">
+                  Zalo OA Đặt Hàng
+                </a>
+              </div>
             </div>
-            <div>
-              <h4 className="font-extrabold text-slate-900">TikTok Official</h4>
-              <p className="text-[11px] text-slate-500 font-medium">@gaumuoismart.vn</p>
-            </div>
-          </a>
 
-          {/* Zalo OA */}
-          <a
-            href={cmsSettings.social_zalo}
-            target="_blank"
-            rel="noreferrer"
-            className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs hover:border-sky-300 hover:shadow-md transition flex items-center space-x-3 cursor-pointer"
-          >
-            <div className="w-10 h-10 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center font-black text-lg shrink-0">
-              💬
-            </div>
-            <div>
-              <h4 className="font-extrabold text-slate-900">Zalo OA Đặt Hàng</h4>
-              <p className="text-[11px] text-slate-500 font-medium">Zalo CSKH Gà Ủ Muối</p>
-            </div>
-          </a>
-
-          {/* Hotline */}
-          <a
-            href={`tel:${cmsSettings.hotline_complaints}`}
-            className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs hover:border-orange-300 hover:shadow-md transition flex items-center space-x-3 cursor-pointer"
-          >
-            <div className="w-10 h-10 rounded-xl bg-orange-50 text-orange-600 flex items-center justify-center font-black text-lg shrink-0">
-              📞
-            </div>
-            <div>
-              <h4 className="font-extrabold text-slate-900">Tổng Đài Phản Ánh</h4>
-              <p className="text-[11px] text-orange-600 font-black">{cmsSettings.hotline_complaints} (24/7)</p>
-            </div>
-          </a>
-        </div>
-      </section>
-
-      {/* 7. FOOTER */}
-      <footer className="bg-slate-900 text-white text-xs py-8 border-t border-slate-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-slate-400">
-          <div className="flex items-center space-x-2">
-            <Store className="w-5 h-5 text-orange-500" />
-            <span className="font-extrabold text-white text-sm">{cmsSettings.hero_title}</span>
-            <span>- Thương hiệu Gà Ủ Muối Hoa Tiêu Đa Chi Nhánh</span>
           </div>
 
-          <div className="text-[11px]">
-            © 2026 GaUMuoiSmart Inc. All rights reserved. Powered by AI Smart POS Engine.
+          <div className="pt-6 border-t border-slate-800 text-center text-[11px] text-slate-500 font-medium">
+            © 2026 Gà Ủ Muối Smart • Hệ Thống Quản Trị Đặt Hàng &amp; POS Chuyên Nghiệp. All rights reserved.
           </div>
         </div>
       </footer>
+
+      {/* ------------------------------------------------------------- */}
+      {/* 7. POPUP FORM ĐẶT HÀNG TRỰC TUYẾN MODAL (THEO ĐÚNG THIẾT KẾ MẪU) */}
+      {/* ------------------------------------------------------------- */}
+      {isOrderModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          
+          <div className="relative bg-[#2B1B17] border-2 border-amber-500/50 rounded-3xl p-5 sm:p-7 max-w-xl w-full text-white shadow-2xl space-y-5 my-auto animate-in zoom-in-95 duration-200">
+            
+            {/* Close Button */}
+            <button
+              onClick={() => {
+                setIsOrderModalOpen(false);
+                setSuccessOrder(null);
+              }}
+              className="absolute top-4 right-4 bg-white/10 hover:bg-white/20 text-amber-300 p-1.5 rounded-full transition cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {successOrder ? (
+              /* SUCCESS SCREEN AFTER ORDER SUBMISSION */
+              <div className="text-center space-y-4 py-2 animate-in fade-in duration-300">
+                <div className="w-16 h-16 bg-emerald-500/20 text-emerald-400 border-2 border-emerald-400/50 rounded-full flex items-center justify-center mx-auto shadow-lg">
+                  <CheckCircle2 className="w-10 h-10 animate-bounce" />
+                </div>
+
+                <div className="space-y-1">
+                  <h3 className="text-2xl font-black text-amber-400 uppercase tracking-tight">
+                    🎉 ĐẶT HÀNG THÀNH CÔNG!
+                  </h3>
+                  <span className="bg-amber-500/20 text-amber-300 border border-amber-400/40 text-xs font-black px-3 py-1 rounded-full inline-block">
+                    Mã đơn hàng: #{successOrder.order_code}
+                  </span>
+                </div>
+
+                <div className="bg-slate-950/80 p-4 rounded-2xl border border-amber-500/30 text-xs space-y-2 text-amber-100/90 text-left">
+                  <p><strong>Khách hàng:</strong> {successOrder.customer_name} ({successOrder.customer_phone})</p>
+                  <p><strong>Địa chỉ:</strong> {successOrder.shipping_address}</p>
+                  <p><strong>Cơ sở phụ trách:</strong> <span className="text-amber-300 font-bold">{successOrder.branch?.name}</span> ({successOrder.branch?.phone})</p>
+                  <p className="text-emerald-400 font-extrabold">🚀 Nhân viên tại cơ sở sẽ gọi điện xác nhận và giao hàng cho bạn trong 20-30 phút!</p>
+                </div>
+
+                {/* Dynamic VietQR Payment Code */}
+                <div className="space-y-2 bg-white/5 p-4 rounded-2xl border border-amber-500/30">
+                  <span className="text-xs font-bold text-amber-300 block">Thanh toán chuyển khoản VietQR tự động (Tùy chọn):</span>
+                  <img
+                    src={`https://img.vietqr.io/image/MB-0988123456-compact2.png?amount=${successOrder.final_amount}&addInfo=${successOrder.order_code}&accountName=GA%20U%20MUOI%20SMART`}
+                    alt="VietQR Code"
+                    className="w-44 h-44 object-contain mx-auto rounded-xl border-2 border-amber-400 p-1 bg-white shadow-md"
+                  />
+                  <span className="text-[10px] text-amber-200/70 block">Số tiền: <strong>{successOrder.final_amount.toLocaleString('vi-VN')} VNĐ</strong> • Nội dung: <strong>{successOrder.order_code}</strong></span>
+                </div>
+
+                <button
+                  onClick={() => {
+                    setIsOrderModalOpen(false);
+                    setSuccessOrder(null);
+                    setSearchQuery(successOrder.order_code);
+                    handleSearchOrder();
+                    const trackEl = document.getElementById('track');
+                    if (trackEl) trackEl.scrollIntoView({ behavior: 'smooth' });
+                  }}
+                  className="w-full bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-slate-950 font-black py-3 rounded-full text-xs shadow-lg uppercase tracking-wider transition cursor-pointer"
+                >
+                  🔍 Xác Nhận &amp; Theo Dõi Tiến Độ Đơn Hàng
+                </button>
+              </div>
+            ) : (
+              /* ORDER FORM INTERFACE (MATCHING USER SCREENSHOT) */
+              <form onSubmit={handleOrderSubmit} className="space-y-4">
+                
+                {/* Form Header */}
+                <div className="text-center space-y-1">
+                  <h2 className="text-2xl sm:text-3xl font-black text-amber-400 uppercase tracking-tight drop-shadow-sm">
+                    LIÊN HỆ ĐẶT HÀNG
+                  </h2>
+                  <p className="text-[11px] text-amber-200/80 font-bold">
+                    Giao nóng hỏa tốc 20-30 phút • Nhận hàng kiểm tra rồi thanh toán
+                  </p>
+                </div>
+
+                {/* Error Banner */}
+                {formError && (
+                  <div className="bg-rose-950/80 border border-rose-500/80 text-rose-200 text-xs p-2.5 rounded-2xl flex items-center gap-2 font-bold animate-in fade-in">
+                    <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                    <span>{formError}</span>
+                  </div>
+                )}
+
+                {/* Inputs: Customer Info (Pill-shaped White Inputs) */}
+                <div className="space-y-2">
+                  <div>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Họ và Tên (*)"
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      className="w-full px-4 py-2.5 bg-white rounded-full text-slate-900 font-bold text-xs outline-none focus:ring-2 focus:ring-amber-400 transition placeholder:text-slate-400"
+                    />
+                  </div>
+
+                  <div>
+                    <input
+                      type="tel"
+                      required
+                      placeholder="Số điện thoại giao hàng (*)"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      className="w-full px-4 py-2.5 bg-white rounded-full text-slate-900 font-bold text-xs outline-none focus:ring-2 focus:ring-amber-400 transition placeholder:text-slate-400"
+                    />
+                  </div>
+
+                  <div>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Địa chỉ nhận hàng (*): Số nhà, tên đường, Phường/Xã, Quận/Huyện..."
+                      value={address}
+                      onChange={(e) => setAddress(e.target.value)}
+                      className="w-full px-4 py-2.5 bg-white rounded-full text-slate-900 font-bold text-xs outline-none focus:ring-2 focus:ring-amber-400 transition placeholder:text-slate-400"
+                    />
+                  </div>
+                </div>
+
+                {/* Automatic Nearest Branch Suggestion Box */}
+                {suggestedBranch && (
+                  <div className="bg-amber-950/60 border border-amber-500/50 rounded-2xl p-3 text-xs space-y-1.5">
+                    <div className="font-extrabold text-amber-300 flex items-center justify-between">
+                      <span className="flex items-center gap-1">
+                        <MapPin className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                        📍 Cơ sở phục vụ gần nhất: <strong className="text-white ml-1">{suggestedBranch.name}</strong>
+                      </span>
+                      <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-400/40 px-2 py-0.5 rounded-full shrink-0">
+                        Giao ~20-30p
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 text-[11px] text-amber-200/70 pt-0.5">
+                      <span>Thay đổi cơ sở nhận đơn:</span>
+                      <select
+                        value={selectedBranchId}
+                        onChange={(e) => setSelectedBranchId(e.target.value)}
+                        className="bg-slate-900 border border-amber-500/40 rounded-lg text-amber-200 px-2 py-1 text-xs outline-none font-bold cursor-pointer"
+                      >
+                        {activeBranches.map(b => (
+                          <option key={b.id} value={b.id}>{b.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                )}
+
+                {/* Combos & Items Checkbox List */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-amber-200 block">
+                    Danh sách Combo &amp; Món Ăn chọn mua (Bấm chọn thêm/bớt món):
+                  </label>
+
+                  <div className="bg-white rounded-2xl p-3 text-slate-900 space-y-2 max-h-52 overflow-y-auto text-xs shadow-inner">
+                    {allSelectableItems.map((combo) => {
+                      const isChecked = selectedComboIds.includes(combo.id);
+                      return (
+                        <label
+                          key={combo.id}
+                          onClick={() => handleToggleComboCheckbox(combo.id)}
+                          className={`flex items-center justify-between p-2 rounded-xl border transition cursor-pointer ${
+                            isChecked
+                              ? 'bg-amber-50 border-amber-400 shadow-2xs font-extrabold'
+                              : 'bg-white border-slate-200 opacity-80 hover:opacity-100'
+                          }`}
+                        >
+                          <div className="flex items-center space-x-2.5">
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => {}}
+                              className="w-4 h-4 accent-amber-600 rounded cursor-pointer"
+                            />
+                            <span className="text-slate-900 font-bold">{combo.name}</span>
+                          </div>
+
+                          {combo.isHot && (
+                            <span className="text-[10px] bg-rose-100 text-rose-700 border border-rose-300 font-black px-2 py-0.5 rounded-full shrink-0">
+                              ★ HOT ★
+                            </span>
+                          )}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Processing Requirements (Radio Pill Buttons) */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-amber-200 block">
+                    Yêu cầu chế biến gà:
+                  </label>
+                  <div className="grid grid-cols-2 gap-2 text-xs font-extrabold">
+                    <button
+                      type="button"
+                      onClick={() => setCutPreference('Chặt sẵn ăn luôn')}
+                      className={`py-2 px-3 rounded-full border transition flex items-center justify-center space-x-2 cursor-pointer ${
+                        cutPreference === 'Chặt sẵn ăn luôn'
+                          ? 'bg-amber-500 border-amber-400 text-slate-950 shadow-md'
+                          : 'bg-white/10 border-white/20 text-white hover:bg-white/20'
+                      }`}
+                    >
+                      <span>(•) Chặt sẵn ăn luôn</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setCutPreference('Không chặt (để nguyên con)')}
+                      className={`py-2 px-3 rounded-full border transition flex items-center justify-center space-x-2 cursor-pointer ${
+                        cutPreference === 'Không chặt (để nguyên con)'
+                          ? 'bg-amber-500 border-amber-400 text-slate-950 shadow-md'
+                          : 'bg-white/10 border-white/20 text-white hover:bg-white/20'
+                      }`}
+                    >
+                      <span>( ) Không chặt (để nguyên)</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Extra Notes & Quantity Note */}
+                <div className="space-y-2">
+                  <p className="text-[11px] font-bold text-amber-300 text-center italic border border-amber-500/30 rounded-xl py-1 px-2 bg-amber-500/10">
+                    * Giá trên chưa bao gồm phí Ship *
+                  </p>
+
+                  <textarea
+                    rows={1}
+                    placeholder="Số lượng cần mua Ví dụ: 1 con gà ủ muối, 1 hộp chân gà..."
+                    value={quantityNote}
+                    onChange={(e) => setQuantityNote(e.target.value)}
+                    className="w-full px-4 py-2 bg-white rounded-2xl text-slate-900 font-medium text-xs outline-none focus:ring-2 focus:ring-amber-400 transition placeholder:text-slate-400"
+                  />
+
+                  <input
+                    type="text"
+                    placeholder="Ghi chú thêm Ví dụ: Thời gian nhận, nhiều rau răm, ớt riêng..."
+                    value={extraNote}
+                    onChange={(e) => setExtraNote(e.target.value)}
+                    className="w-full px-4 py-2 bg-white rounded-full text-slate-900 font-medium text-xs outline-none focus:ring-2 focus:ring-amber-400 transition placeholder:text-slate-400"
+                  />
+                </div>
+
+                {/* Total Price Summary Box */}
+                <div className="flex justify-between items-center bg-slate-950/90 p-3.5 rounded-2xl border border-amber-500/40">
+                  <span className="text-xs font-extrabold text-amber-200 uppercase">
+                    TỔNG TIỀN MÓN (TẠM TÍNH):
+                  </span>
+                  <span className="text-xl font-black text-amber-400">
+                    {totalOrderAmount.toLocaleString('vi-VN')} VNĐ
+                  </span>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="space-y-2 pt-1">
+                  <button
+                    type="submit"
+                    className="w-full bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-slate-950 font-black py-3.5 rounded-full text-base shadow-xl uppercase tracking-wider transition transform active:scale-95 cursor-pointer"
+                  >
+                    ⚡ ĐẶT NGAY
+                  </button>
+
+                  <a
+                    href="tel:0396637038"
+                    className="flex items-center justify-center space-x-2 bg-orange-600/90 hover:bg-orange-600 text-white font-extrabold py-2.5 rounded-full text-xs transition border border-orange-400/40"
+                  >
+                    <span>📞 Hotline: 039 663 7038 (Bấm để gọi trực tiếp)</span>
+                  </a>
+                </div>
+
+              </form>
+            )}
+
+          </div>
+        </div>
+      )}
 
     </div>
   );

@@ -136,7 +136,7 @@ const BASE_INVENTORY_ITEMS = [
 ];
 
 // Helper to safely access LocalStorage
-function getItem<T>(key: string, fallback: T): T {
+export function getItem<T>(key: string, fallback: T): T {
   if (typeof window === 'undefined') return fallback;
   try {
     const data = localStorage.getItem(key);
@@ -146,7 +146,7 @@ function getItem<T>(key: string, fallback: T): T {
   }
 }
 
-function setItem<T>(key: string, value: T): void {
+export function setItem<T>(key: string, value: T): void {
   if (typeof window === 'undefined') return;
   try {
     localStorage.setItem(key, JSON.stringify(value));
@@ -1088,6 +1088,8 @@ export interface CmsBranchItem {
   hours: string;
   maps_url: string;
   is_active: boolean;
+  district?: string;
+  city?: string;
 }
 
 export interface StorefrontCmsSettings {

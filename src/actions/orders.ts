@@ -319,8 +319,27 @@ export async function getOrdersByPhone(phone: string): Promise<Order[]> {
     .map(o => ({ ...o, branch: bMap.get(o.branch_id) }));
 }
 
+export async function addNewMockOrder(newOrder: Order) {
+  const existingIdx = globalMockOrders.findIndex(o => o.id === newOrder.id || o.order_code === newOrder.order_code);
+  if (existingIdx === -1) {
+    globalMockOrders.unshift(newOrder);
+  }
+}
+
 export async function getAnalyticsData(period: 'today' | 'week' | 'month' | 'all' = 'today', branchId?: string) {
   let ordersList = [...globalMockOrders];
+
+  if (typeof window !== 'undefined') {
+    try {
+      const local = localStorage.getItem('gum_smart_orders_v3');
+      if (local) {
+        const parsed: Order[] = JSON.parse(local);
+        const existingIds = new Set(ordersList.map(o => o.id));
+        const newLocal = parsed.filter(o => !existingIds.has(o.id));
+        ordersList = [...newLocal, ...ordersList];
+      }
+    } catch (e) {}
+  }
 
   const isRealSupabase = process.env.NEXT_PUBLIC_SUPABASE_URL && !process.env.NEXT_PUBLIC_SUPABASE_URL.includes('placeholder');
   if (isRealSupabase) {
