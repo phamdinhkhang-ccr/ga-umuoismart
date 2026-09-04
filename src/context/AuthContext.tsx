@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { UserAccount, UserRole } from '@/types/auth';
+import { UserAccount } from '@/types/auth';
 
 export const INITIAL_DEMO_ACCOUNTS: (UserAccount & { password: string })[] = [
   {
@@ -136,7 +136,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (user.role === 'SUPER_ADMIN') return true;
 
     if (user.role === 'OPERATOR') {
-      return path === '/' || path.startsWith('/track') || path.startsWith('/admin/create-order') || path.startsWith('/admin/orders');
+      return path === '/' || path.startsWith('/track') || path.startsWith('/admin/');
     }
 
     if (user.role === 'BRANCH_STAFF') {

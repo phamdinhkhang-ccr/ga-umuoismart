@@ -5,16 +5,23 @@ import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { 
   Store, 
-  BarChart3, 
+  TrendingUp, 
+  Clock, 
+  History, 
   ClipboardList, 
-  Kanban, 
+  Wallet, 
+  Building2, 
+  BarChart3, 
+  UtensilsCrossed, 
   Users, 
-  Search, 
+  UserCheck, 
+  ArrowDownLeft, 
+  ArrowUpRight, 
   PlusCircle, 
   LogOut, 
-  Bot,
   ChevronRight,
-  X
+  X,
+  Search
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -34,29 +41,29 @@ export default function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarPr
       ];
     }
 
-    if (user.role === 'SUPER_ADMIN') {
+    if (user.role === 'SUPER_ADMIN' || user.role === 'OPERATOR') {
       return [
-        { href: '/admin/analytics', label: 'Tổng Quan & Báo Cáo', icon: BarChart3 },
-        { href: '/admin/orders', label: 'Quản Lý Đơn Hàng', icon: ClipboardList },
-        { href: '/admin/create-order', label: 'Tạo Đơn AI / Manual', icon: Bot },
-        { href: '/branch/b1111111-1111-1111-1111-111111111111', label: 'Điều Phối Chi Nhánh', icon: Kanban },
-        { href: '/admin/users', label: 'Quản Lý Nhân Sự', icon: Users },
-        { href: '/track', label: 'Tra Cứu Đơn Khách', icon: Search },
-      ];
-    }
-
-    if (user.role === 'OPERATOR') {
-      return [
-        { href: '/admin/orders', label: 'Quản Lý Đơn Hàng', icon: ClipboardList },
-        { href: '/admin/create-order', label: 'Tạo Đơn AI / Manual', icon: Bot },
-        { href: '/track', label: 'Tra Cứu Đơn Khách', icon: Search },
+        { href: '/admin/dashboard', label: 'Dashboard', icon: TrendingUp },
+        { href: '/admin/shifts/active', label: 'Đóng / Mở Ca', icon: Clock },
+        { href: '/admin/shifts', label: 'Quản Lý Các Ca', icon: History },
+        { href: '/admin/orders', label: 'Đơn Hàng', icon: ClipboardList },
+        { href: '/admin/expenses', label: 'Chi Tiêu (Sổ Quỹ)', icon: Wallet },
+        { href: '/admin/branches', label: 'Cửa Hàng', icon: Building2 },
+        { href: '/admin/product-analytics', label: 'Thống Kê Sản Phẩm', icon: BarChart3 },
+        { href: '/admin/products', label: 'Sản Phẩm (Menu)', icon: UtensilsCrossed },
+        { href: '/admin/users', label: 'Nhân Sự', icon: Users },
+        { href: '/admin/customers', label: 'Khách Hàng (CRM)', icon: UserCheck },
+        { href: '/admin/inventory/import', label: 'Nhập Hàng Kho', icon: ArrowDownLeft },
+        { href: '/admin/inventory/export', label: 'Xuất Hàng Kho', icon: ArrowUpRight },
       ];
     }
 
     if (user.role === 'BRANCH_STAFF') {
       const bId = user.branch_id || 'b1111111-1111-1111-1111-111111111111';
       return [
-        { href: `/branch/${bId}`, label: 'Điều Phối Bếp Chi Nhánh', icon: Kanban },
+        { href: `/branch/${bId}`, label: 'Điều Phối Bếp Chi Nhánh', icon: ClipboardList },
+        { href: '/admin/shifts/active', label: 'Đóng / Mở Ca Cửa Hàng', icon: Clock },
+        { href: '/admin/inventory/import', label: 'Phiếu Nhập Kho', icon: ArrowDownLeft },
         { href: '/track', label: 'Tra Cứu Đơn Khách', icon: Search },
       ];
     }
@@ -69,7 +76,7 @@ export default function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarPr
 
   const SidebarContent = (
     <div className="flex flex-col justify-between h-full bg-white text-slate-800">
-      <div className="p-4 space-y-5">
+      <div className="p-4 space-y-4 overflow-y-auto">
         
         {/* Logo & Brand Header */}
         <div className="flex items-center justify-between pt-1">
@@ -115,9 +122,9 @@ export default function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarPr
         )}
 
         {/* Navigation Items List */}
-        <nav className="space-y-1">
-          <span className="text-[10px] uppercase font-bold text-slate-400 px-3 tracking-wider block mb-2">
-            Danh Mục Quản Lý
+        <nav className="space-y-0.5">
+          <span className="text-[10px] uppercase font-bold text-slate-400 px-3 tracking-wider block mb-1.5 pt-1">
+            Danh Mục F&amp;B POS
           </span>
           {navLinks.map((link) => {
             const Icon = link.icon;
@@ -127,7 +134,7 @@ export default function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarPr
                 key={link.href}
                 href={link.href}
                 onClick={onCloseMobile}
-                className={`flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all duration-150 cursor-pointer ${
+                className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-150 cursor-pointer ${
                   isActive
                     ? 'bg-orange-50 text-orange-700 border border-orange-200 font-bold'
                     : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
@@ -145,7 +152,7 @@ export default function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarPr
       </div>
 
       {/* User Profile Footer */}
-      <div className="p-4 border-t border-slate-100 bg-slate-50/50 space-y-3">
+      <div className="p-4 border-t border-slate-100 bg-slate-50/50 space-y-3 shrink-0">
         {user ? (
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2.5 truncate">
