@@ -10,6 +10,7 @@ import {
   Clock,
   Bot,
   Users,
+  UserCheck,
   Building2,
   UtensilsCrossed,
   ArrowDownLeft,
@@ -77,6 +78,9 @@ export default function DashboardPage() {
     grossProfit: 1650000,
     completionRate: 98,
     cancellationRate: 2,
+    activeStaff: 6,
+    todayCustomers: 18,
+    newVsReturning: '12 mới · 6 quay lại',
     statusBreakdown: { RECEIVED: 1, PREPARING: 2, SHIPPING: 3, PAID: 6 }
   };
 
@@ -145,42 +149,78 @@ export default function DashboardPage() {
         </Link>
       </div>
 
-      {/* Top 4 Metrics Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-2">
+      {/* Top 6 Metrics Cards Grid */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        {/* Card 1: Total Orders */}
+        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs space-y-2">
           <div className="flex justify-between items-center text-slate-500">
-            <span className="text-xs font-semibold">Tổng Số Đơn Hàng</span>
-            <ShoppingBag className="w-4 h-4 text-orange-600" />
+            <span className="text-xs font-semibold truncate">Tổng Số Đơn Hàng</span>
+            <ShoppingBag className="w-4 h-4 text-orange-600 shrink-0" />
           </div>
-          <div className="text-2xl font-extrabold text-slate-900">{metrics.totalOrders} <span className="text-xs text-slate-500 font-normal">đơn</span></div>
-          <p className="text-[11px] text-emerald-700 font-medium">100% Đã khớp chi nhánh</p>
+          <div className="text-xl sm:text-2xl font-extrabold text-slate-900">
+            {metrics.totalOrders} <span className="text-xs text-slate-500 font-normal">đơn</span>
+          </div>
+          <p className="text-[11px] text-emerald-700 font-medium truncate">100% Đã khớp chi nhánh</p>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-2">
+        {/* Card 2: GMV */}
+        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs space-y-2">
           <div className="flex justify-between items-center text-slate-500">
-            <span className="text-xs font-semibold">Doanh Thu Gộp (GMV)</span>
-            <DollarSign className="w-4 h-4 text-emerald-600" />
+            <span className="text-xs font-semibold truncate">Doanh Thu Gộp (GMV)</span>
+            <DollarSign className="w-4 h-4 text-emerald-600 shrink-0" />
           </div>
-          <div className="text-2xl font-extrabold text-orange-600">{metrics.gmv.toLocaleString('vi-VN')} <span className="text-xs font-normal text-slate-600">VNĐ</span></div>
-          <p className="text-[11px] text-slate-500 font-medium">Tính từ đơn thanh toán</p>
+          <div className="text-xl sm:text-2xl font-extrabold text-orange-600 truncate">
+            {metrics.gmv.toLocaleString('vi-VN')} <span className="text-xs font-normal text-slate-600">VNĐ</span>
+          </div>
+          <p className="text-[11px] text-slate-500 font-medium truncate">Tính từ đơn thanh toán</p>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-2">
+        {/* Card 3: Expected Profit */}
+        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs space-y-2">
           <div className="flex justify-between items-center text-slate-500">
-            <span className="text-xs font-semibold">Lợi Nhuận Dự Tính</span>
-            <TrendingUp className="w-4 h-4 text-purple-600" />
+            <span className="text-xs font-semibold truncate">Lợi Nhuận Dự Tính</span>
+            <TrendingUp className="w-4 h-4 text-purple-600 shrink-0" />
           </div>
-          <div className="text-2xl font-extrabold text-emerald-700">+{metrics.grossProfit.toLocaleString('vi-VN')} <span className="text-xs font-normal text-slate-600">VNĐ</span></div>
-          <p className="text-[11px] text-slate-500 font-medium">Doanh thu trừ giá vốn</p>
+          <div className="text-xl sm:text-2xl font-extrabold text-emerald-700 truncate">
+            +{metrics.grossProfit.toLocaleString('vi-VN')} <span className="text-xs font-normal text-slate-600">VNĐ</span>
+          </div>
+          <p className="text-[11px] text-slate-500 font-medium truncate">Doanh thu trừ giá vốn</p>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-2">
+        {/* Card 4: Completion Rate */}
+        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs space-y-2">
           <div className="flex justify-between items-center text-slate-500">
-            <span className="text-xs font-semibold">Tỷ Lệ Hoàn Thành</span>
-            <CheckCircle2 className="w-4 h-4 text-blue-600" />
+            <span className="text-xs font-semibold truncate">Tỷ Lệ Hoàn Thành</span>
+            <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0" />
           </div>
-          <div className="text-2xl font-extrabold text-slate-900">{metrics.completionRate}%</div>
-          <p className="text-[11px] text-slate-500 font-medium">Tỷ lệ đơn thành công</p>
+          <div className="text-xl sm:text-2xl font-extrabold text-slate-900">
+            {metrics.completionRate}%
+          </div>
+          <p className="text-[11px] text-slate-500 font-medium truncate">Tỷ lệ đơn thành công</p>
+        </div>
+
+        {/* Card 5: Active Staff */}
+        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs space-y-2">
+          <div className="flex justify-between items-center text-slate-500">
+            <span className="text-xs font-semibold truncate">Nhân Sự Đang Trực</span>
+            <Users className="w-4 h-4 text-indigo-600 shrink-0" />
+          </div>
+          <div className="text-xl sm:text-2xl font-extrabold text-indigo-900">
+            {metrics.activeStaff || 6} <span className="text-xs text-slate-500 font-normal">nhân sự</span>
+          </div>
+          <p className="text-[11px] text-indigo-700 font-medium truncate">Đang mở ca tại các cơ sở</p>
+        </div>
+
+        {/* Card 6: Today Customers */}
+        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs space-y-2">
+          <div className="flex justify-between items-center text-slate-500">
+            <span className="text-xs font-semibold truncate">Khách Hàng Hôm Nay</span>
+            <UserCheck className="w-4 h-4 text-teal-600 shrink-0" />
+          </div>
+          <div className="text-xl sm:text-2xl font-extrabold text-teal-900">
+            {metrics.todayCustomers || 18} <span className="text-xs text-slate-500 font-normal">khách</span>
+          </div>
+          <p className="text-[11px] text-teal-700 font-medium truncate">{metrics.newVsReturning || '12 mới · 6 quay lại'}</p>
         </div>
       </div>
 
