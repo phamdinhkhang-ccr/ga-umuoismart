@@ -1,7 +1,9 @@
 'use client';
 
-import { useState } from 'react';
-import { ArrowDownLeft, Plus, Search, Calendar, Building2, Package, CheckCircle2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { ArrowDownLeft, Plus, Search, Calendar, Building2, Package, CheckCircle2, Calculator, RefreshCw } from 'lucide-react';
+import { calculateInventoryAudit, addInventoryLog, InventoryAuditItem } from '@/lib/store';
+import { getAnalyticsData } from '@/actions/orders';
 
 const MOCK_IMPORTS = [
   {
@@ -43,6 +45,7 @@ export default function InventoryImportPage() {
   const [imports, setImports] = useState(MOCK_IMPORTS);
   const [showModal, setShowModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [auditList, setAuditList] = useState<InventoryAuditItem[]>([]);
 
   const [itemName, setItemName] = useState('');
   const [quantity, setQuantity] = useState('');
@@ -50,6 +53,20 @@ export default function InventoryImportPage() {
   const [importPrice, setImportPrice] = useState('');
   const [supplier, setSupplier] = useState('');
   const [branch, setBranch] = useState('Chi Nhánh Gà Ủ Muối Quận 1');
+
+  useEffect(() => {
+    async function loadAudit() {
+      const analytics = await getAnalyticsData('all', 'all');
+      setAuditList(calculateInventoryAudit(analytics.orders || []));
+    }
+    loadAudit();
+
+    const handleUpdate = () => {
+      loadAudit();
+    };
+    window.addEventListener('gum_store_update', handleUpdate);
+    return () => window.removeEventListener('gum_store_update', handleUpdate);
+  }, []);
 
   const handleAddImport = (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,6 +86,15 @@ export default function InventoryImportPage() {
       branch,
       created_at: new Date().toLocaleString('vi-VN')
     };
+
+    // Log import to central store
+    addInventoryLog({
+      type: 'IMPORT',
+      branchName: branch,
+      itemName: itemName,
+      quantityChange: qtyNum,
+      note: `Nhập kho từ ${supplier || 'Nhà Cung Cấp'}`
+    });
 
     setImports([newImp, ...imports]);
     setShowModal(false);
@@ -106,6 +132,50 @@ export default function InventoryImportPage() {
           <Plus className="w-4 h-4" />
           <span>+ Tạo Phiếu Nhập Kho</span>
         </button>
+      </div>
+
+      {/* Inventory Audit Formula Banner Card */}
+      <div className="bg-gradient-to-r from-slate-900 to-slate-800 text-white rounded-xl p-5 shadow-md space-y-4">
+        <div className="flex items-center justify-between border-b border-slate-700 pb-3">
+          <div className="flex items-center space-x-2">
+            <Calculator className="w-5 h-5 text-emerald-400" />
+            <h2 className="text-sm font-bold text-white">Bảng Kiểm Toán Tồn Kho Thực Tế Cuối Ngày</h2>
+          </div>
+          <div className="bg-slate-800 border border-slate-700 text-[11px] font-mono px-3 py-1 rounded-lg text-emerald-300 font-bold">
+            Tồn Cuối = Đầu Ngày + Nhập Kho - Bán Thành Công + Hoàn Hàng Hủy - Xuất Hao Hụt
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead className="text-slate-400 border-b border-slate-700/80 uppercase text-[10px] tracking-wider font-bold">
+              <tr>
+                <th className="pb-2">Món / Nguyên Liệu</th>
+                <th className="pb-2 text-center">ĐVT</th>
+                <th className="pb-2 text-center">Tồn Đầu Ngày</th>
+                <th className="pb-2 text-center text-emerald-400">+ Nhập Kho</th>
+                <th className="pb-2 text-center text-rose-400">- Bán Thành Công</th>
+                <th className="pb-2 text-center text-blue-400">+ Hoàn Hủy Đơn</th>
+                <th className="pb-2 text-center text-amber-400">- Xuất Hao Hụt</th>
+                <th className="pb-2 text-right text-emerald-300 font-bold">= TỒN CUỐI THỰC TẾ</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800 font-medium">
+              {auditList.map((item) => (
+                <tr key={item.id} className="hover:bg-slate-800/50 transition">
+                  <td className="py-2.5 font-bold text-white">{item.name}</td>
+                  <td className="py-2.5 text-center text-slate-400 font-normal">{item.unit}</td>
+                  <td className="py-2.5 text-center text-slate-300">{item.initialStock}</td>
+                  <td className="py-2.5 text-center font-bold text-emerald-400">+{item.totalImported}</td>
+                  <td className="py-2.5 text-center font-bold text-rose-400">-{item.totalSold}</td>
+                  <td className="py-2.5 text-center font-bold text-blue-400">+{item.totalRestored}</td>
+                  <td className="py-2.5 text-center font-bold text-amber-400">-{item.totalWasted}</td>
+                  <td className="py-2.5 text-right font-extrabold text-emerald-300 text-sm">{item.currentStock} {item.unit}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Search Bar */}
@@ -158,82 +228,98 @@ export default function InventoryImportPage() {
 
       {/* CREATE IMPORT MODAL */}
       {showModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-2xl p-6 max-w-md w-full shadow-xl space-y-4 text-xs">
-            <h2 className="text-sm font-bold text-slate-900 border-b border-slate-100 pb-3 flex items-center gap-2">
-              <Package className="w-4 h-4 text-emerald-600" /> Tạo Phiếu Nhập Hàng Kho
-            </h2>
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-5">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <ArrowDownLeft className="w-5 h-5 text-emerald-600" />
+                Tạo Phiếu Nhập Kho Nguyên Liệu
+              </h3>
+              <button
+                onClick={() => setShowModal(false)}
+                className="text-slate-400 hover:text-slate-600 font-bold text-sm cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
 
-            <form onSubmit={handleAddImport} className="space-y-4">
+            <form onSubmit={handleAddImport} className="space-y-4 text-xs">
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Tên Nguyên Liệu / Mặt Hàng (*)</label>
+                <label className="block font-bold text-slate-700 mb-1">Tên Nguyên Liệu / Sản Phẩm *</label>
                 <input
                   type="text"
+                  placeholder="Ví dụ: Gà Ủ Muối Nguyên Con"
                   value={itemName}
                   onChange={(e) => setItemName(e.target.value)}
                   required
-                  placeholder="Ví dụ: Gà Sống Cấp Đóng Thùng"
-                  className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none font-semibold focus:border-emerald-500"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Số Lượng (*)</label>
+                  <label className="block font-bold text-slate-700 mb-1">Số Lượng Nhập *</label>
                   <input
                     type="number"
+                    placeholder="Ví dụ: 50"
                     value={quantity}
                     onChange={(e) => setQuantity(e.target.value)}
                     required
-                    placeholder="100"
-                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Đơn Vị Tính</label>
-                  <input
-                    type="text"
+                  <label className="block font-bold text-slate-700 mb-1">Đơn Vị Tính</label>
+                  <select
                     value={unit}
                     onChange={(e) => setUnit(e.target.value)}
-                    placeholder="Kg, Túi, Hũ..."
-                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-semibold focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Đơn Giá Nhập (VNĐ) (*)</label>
-                  <input
-                    type="number"
-                    value={importPrice}
-                    onChange={(e) => setImportPrice(e.target.value)}
-                    required
-                    placeholder="68000"
-                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-extrabold focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Nhà Cung Cấp</label>
-                  <input
-                    type="text"
-                    value={supplier}
-                    onChange={(e) => setSupplier(e.target.value)}
-                    placeholder="Trang Trại Đông Anh"
-                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:outline-none"
-                  />
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium outline-none"
+                  >
+                    <option value="Con">Con</option>
+                    <option value="Khay">Khay</option>
+                    <option value="Hộp">Hộp</option>
+                    <option value="Phần">Phần</option>
+                    <option value="Chai">Chai</option>
+                    <option value="Ly">Ly</option>
+                    <option value="Kg">Kg</option>
+                    <option value="Túi">Túi</option>
+                  </select>
                 </div>
               </div>
 
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Nhập Về Chi Nhánh</label>
+                <label className="block font-bold text-slate-700 mb-1">Đơn Giá Nhập (VNĐ) *</label>
+                <input
+                  type="number"
+                  placeholder="Ví dụ: 110000"
+                  value={importPrice}
+                  onChange={(e) => setImportPrice(e.target.value)}
+                  required
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-emerald-700 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Nhà Cung Cấp</label>
+                <input
+                  type="text"
+                  placeholder="Trang trại / Kho gia vị tổng"
+                  value={supplier}
+                  onChange={(e) => setSupplier(e.target.value)}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none font-medium"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Chi Nhánh Nhập</label>
                 <select
                   value={branch}
                   onChange={(e) => setBranch(e.target.value)}
-                  className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-semibold focus:outline-none"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium outline-none"
                 >
                   <option value="Chi Nhánh Gà Ủ Muối Quận 1">Chi Nhánh Gà Ủ Muối Quận 1</option>
                   <option value="Chi Nhánh Gà Ủ Muối Quận 3">Chi Nhánh Gà Ủ Muối Quận 3</option>
+                  <option value="Chi Nhánh Gà Ủ Muối Bình Thạnh">Chi Nhánh Gà Ủ Muối Bình Thạnh</option>
                   <option value="Chi Nhánh Gà Ủ Muối Hà Nội">Chi Nhánh Gà Ủ Muối Hà Nội</option>
                 </select>
               </div>
@@ -242,15 +328,15 @@ export default function InventoryImportPage() {
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg font-semibold hover:bg-slate-200"
+                  className="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl font-bold hover:bg-slate-200 transition cursor-pointer"
                 >
                   Hủy Bỏ
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-emerald-600 text-white rounded-lg font-bold hover:bg-emerald-700 shadow-sm"
+                  className="px-4 py-2 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 shadow-sm transition cursor-pointer"
                 >
-                  Lưu Phiếu Nhập
+                  Lưu &amp; Tăng Tồn Kho
                 </button>
               </div>
             </form>

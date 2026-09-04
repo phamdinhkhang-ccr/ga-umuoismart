@@ -30,6 +30,7 @@ import {
   Cell
 } from 'recharts';
 import { getAnalyticsData } from '@/actions/orders';
+import { getTotalPettyExpenses } from '@/lib/store';
 
 // Custom Tooltip component for Recharts
 const CustomFinancialTooltip = ({ active, payload, label }: any) => {
@@ -59,20 +60,29 @@ const CustomFinancialTooltip = ({ active, payload, label }: any) => {
 
 export default function DashboardPage() {
   const [data, setData] = useState<any>(null);
+  const [pettyExpenses, setPettyExpenses] = useState<number>(0);
   const [isMounted, setIsMounted] = useState(false);
   const [timeRange, setTimeRange] = useState<'today' | 'week' | 'month'>('today');
   const [selectedBranch, setSelectedBranch] = useState<string>('all');
 
+  const loadAllData = async () => {
+    const res = await getAnalyticsData('all', 'all');
+    setData(res);
+    setPettyExpenses(getTotalPettyExpenses());
+  };
+
   useEffect(() => {
     setIsMounted(true);
-    async function load() {
-      const res = await getAnalyticsData('all', 'all');
-      setData(res);
-    }
-    load();
+    loadAllData();
+
+    const handleStoreUpdate = () => {
+      loadAllData();
+    };
+    window.addEventListener('gum_store_update', handleStoreUpdate);
+    return () => window.removeEventListener('gum_store_update', handleStoreUpdate);
   }, []);
 
-  const metrics = data?.metrics || {
+  const rawMetrics = data?.metrics || {
     totalOrders: 12,
     gmv: 3850000,
     grossProfit: 1650000,
@@ -84,45 +94,52 @@ export default function DashboardPage() {
     statusBreakdown: { RECEIVED: 1, PREPARING: 2, SHIPPING: 3, PAID: 6 }
   };
 
-  // Dynamic Chart Data based on timeRange & selectedBranch
+  // Adjusted gross profit deducting petty cash expenses
+  const metrics = {
+    ...rawMetrics,
+    grossProfit: Math.max(0, rawMetrics.grossProfit - (pettyExpenses > 0 ? pettyExpenses : 275000))
+  };
+
+  // Dynamic Chart Data based on timeRange, selectedBranch & pettyExpenses
   const chartData = useMemo(() => {
     const multiplier = selectedBranch === 'all' ? 1 : selectedBranch === 'caugiai' ? 0.45 : 0.3;
-    
+    const extraExpShare = Math.round((pettyExpenses > 0 ? pettyExpenses : 275000) / 8);
+
     if (timeRange === 'today') {
       return [
-        { name: '08:00', gmv: Math.round(250000 * multiplier), expenses: Math.round(110000 * multiplier), profit: Math.round(140000 * multiplier) },
-        { name: '10:00', gmv: Math.round(520000 * multiplier), expenses: Math.round(230000 * multiplier), profit: Math.round(290000 * multiplier) },
-        { name: '12:00', gmv: Math.round(1180000 * multiplier), expenses: Math.round(510000 * multiplier), profit: Math.round(670000 * multiplier) },
-        { name: '14:00', gmv: Math.round(750000 * multiplier), expenses: Math.round(320000 * multiplier), profit: Math.round(430000 * multiplier) },
-        { name: '16:00', gmv: Math.round(610000 * multiplier), expenses: Math.round(270000 * multiplier), profit: Math.round(340000 * multiplier) },
-        { name: '18:00', gmv: Math.round(1650000 * multiplier), expenses: Math.round(710000 * multiplier), profit: Math.round(940000 * multiplier) },
-        { name: '20:00', gmv: Math.round(1980000 * multiplier), expenses: Math.round(840000 * multiplier), profit: Math.round(1140000 * multiplier) },
-        { name: '22:00', gmv: Math.round(920000 * multiplier), expenses: Math.round(400000 * multiplier), profit: Math.round(520000 * multiplier) },
+        { name: '08:00', gmv: Math.round(250000 * multiplier), expenses: Math.round((110000 + extraExpShare) * multiplier), profit: Math.round((140000 - extraExpShare) * multiplier) },
+        { name: '10:00', gmv: Math.round(520000 * multiplier), expenses: Math.round((230000 + extraExpShare) * multiplier), profit: Math.round((290000 - extraExpShare) * multiplier) },
+        { name: '12:00', gmv: Math.round(1180000 * multiplier), expenses: Math.round((510000 + extraExpShare) * multiplier), profit: Math.round((670000 - extraExpShare) * multiplier) },
+        { name: '14:00', gmv: Math.round(750000 * multiplier), expenses: Math.round((320000 + extraExpShare) * multiplier), profit: Math.round((430000 - extraExpShare) * multiplier) },
+        { name: '16:00', gmv: Math.round(610000 * multiplier), expenses: Math.round((270000 + extraExpShare) * multiplier), profit: Math.round((340000 - extraExpShare) * multiplier) },
+        { name: '18:00', gmv: Math.round(1650000 * multiplier), expenses: Math.round((710000 + extraExpShare) * multiplier), profit: Math.round((940000 - extraExpShare) * multiplier) },
+        { name: '20:00', gmv: Math.round(1980000 * multiplier), expenses: Math.round((840000 + extraExpShare) * multiplier), profit: Math.round((1140000 - extraExpShare) * multiplier) },
+        { name: '22:00', gmv: Math.round(920000 * multiplier), expenses: Math.round((400000 + extraExpShare) * multiplier), profit: Math.round((520000 - extraExpShare) * multiplier) },
       ];
     } else if (timeRange === 'week') {
       return [
-        { name: 'Thứ 2', gmv: Math.round(3200000 * multiplier), expenses: Math.round(1400000 * multiplier), profit: Math.round(1800000 * multiplier) },
-        { name: 'Thứ 3', gmv: Math.round(3800000 * multiplier), expenses: Math.round(1650000 * multiplier), profit: Math.round(2150000 * multiplier) },
-        { name: 'Thứ 4', gmv: Math.round(3500000 * multiplier), expenses: Math.round(1500000 * multiplier), profit: Math.round(2000000 * multiplier) },
-        { name: 'Thứ 5', gmv: Math.round(4200000 * multiplier), expenses: Math.round(1800000 * multiplier), profit: Math.round(2400000 * multiplier) },
-        { name: 'Thứ 6', gmv: Math.round(5500000 * multiplier), expenses: Math.round(2350000 * multiplier), profit: Math.round(3150000 * multiplier) },
-        { name: 'Thứ 7', gmv: Math.round(7800000 * multiplier), expenses: Math.round(3300000 * multiplier), profit: Math.round(4500000 * multiplier) },
-        { name: 'Chủ Nhật', gmv: Math.round(8500000 * multiplier), expenses: Math.round(3600000 * multiplier), profit: Math.round(4900000 * multiplier) },
+        { name: 'Thứ 2', gmv: Math.round(3200000 * multiplier), expenses: Math.round((1400000 + extraExpShare * 2) * multiplier), profit: Math.round((1800000 - extraExpShare * 2) * multiplier) },
+        { name: 'Thứ 3', gmv: Math.round(3800000 * multiplier), expenses: Math.round((1650000 + extraExpShare * 2) * multiplier), profit: Math.round((2150000 - extraExpShare * 2) * multiplier) },
+        { name: 'Thứ 4', gmv: Math.round(3500000 * multiplier), expenses: Math.round((1500000 + extraExpShare * 2) * multiplier), profit: Math.round((2000000 - extraExpShare * 2) * multiplier) },
+        { name: 'Thứ 5', gmv: Math.round(4200000 * multiplier), expenses: Math.round((1800000 + extraExpShare * 2) * multiplier), profit: Math.round((2400000 - extraExpShare * 2) * multiplier) },
+        { name: 'Thứ 6', gmv: Math.round(5500000 * multiplier), expenses: Math.round((2350000 + extraExpShare * 2) * multiplier), profit: Math.round((3150000 - extraExpShare * 2) * multiplier) },
+        { name: 'Thứ 7', gmv: Math.round(7800000 * multiplier), expenses: Math.round((3300000 + extraExpShare * 2) * multiplier), profit: Math.round((4500000 - extraExpShare * 2) * multiplier) },
+        { name: 'Chủ Nhật', gmv: Math.round(8500000 * multiplier), expenses: Math.round((3600000 + extraExpShare * 2) * multiplier), profit: Math.round((4900000 - extraExpShare * 2) * multiplier) },
       ];
     } else {
       return [
-        { name: 'Tuần 1', gmv: Math.round(24500000 * multiplier), expenses: Math.round(10500000 * multiplier), profit: Math.round(14000000 * multiplier) },
-        { name: 'Tuần 2', gmv: Math.round(28900000 * multiplier), expenses: Math.round(12400000 * multiplier), profit: Math.round(16500000 * multiplier) },
-        { name: 'Tuần 3', gmv: Math.round(31200000 * multiplier), expenses: Math.round(13300000 * multiplier), profit: Math.round(17900000 * multiplier) },
-        { name: 'Tuần 4', gmv: Math.round(36800000 * multiplier), expenses: Math.round(15700000 * multiplier), profit: Math.round(21100000 * multiplier) },
+        { name: 'Tuần 1', gmv: Math.round(24500000 * multiplier), expenses: Math.round((10500000 + extraExpShare * 5) * multiplier), profit: Math.round((14000000 - extraExpShare * 5) * multiplier) },
+        { name: 'Tuần 2', gmv: Math.round(28900000 * multiplier), expenses: Math.round((12400000 + extraExpShare * 5) * multiplier), profit: Math.round((16500000 - extraExpShare * 5) * multiplier) },
+        { name: 'Tuần 3', gmv: Math.round(31200000 * multiplier), expenses: Math.round((13300000 + extraExpShare * 5) * multiplier), profit: Math.round((17900000 - extraExpShare * 5) * multiplier) },
+        { name: 'Tuần 4', gmv: Math.round(36800000 * multiplier), expenses: Math.round((15700000 + extraExpShare * 5) * multiplier), profit: Math.round((21100000 - extraExpShare * 5) * multiplier) },
       ];
     }
-  }, [timeRange, selectedBranch]);
+  }, [timeRange, selectedBranch, pettyExpenses]);
 
   // Donut Chart Financial Ratio Data
   const donutData = useMemo(() => [
     { name: 'Giá vốn (COGS)', value: 43, color: '#F97316' },
-    { name: 'Chi phí vận hành', value: 15, color: '#EF4444' },
+    { name: 'Chi phí vận hành & sổ quỹ', value: 15, color: '#EF4444' },
     { name: 'Lợi nhuận ròng', value: 42, color: '#3B82F6' },
   ], []);
 
@@ -184,7 +201,7 @@ export default function DashboardPage() {
           <div className="text-xl sm:text-2xl font-extrabold text-emerald-700 truncate">
             +{metrics.grossProfit.toLocaleString('vi-VN')} <span className="text-xs font-normal text-slate-600">VNĐ</span>
           </div>
-          <p className="text-[11px] text-slate-500 font-medium truncate">Doanh thu trừ giá vốn</p>
+          <p className="text-[11px] text-slate-500 font-medium truncate">Doanh thu - Giá vốn - Sổ quỹ</p>
         </div>
 
         {/* Card 4: Completion Rate */}
@@ -231,9 +248,9 @@ export default function DashboardPage() {
           <div>
             <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
               <BarChart3 className="w-5 h-5 text-orange-600" />
-              Phân Tích Biến Động Tài Chính Realtime (Biểu Đồ Cột)
+              Phân Tích Biến Động Tài Chính Realtime (Tự Động Đồng Bộ)
             </h2>
-            <p className="text-xs text-slate-500 mt-0.5">Biểu đồ cột ghép so sánh Doanh Thu Gộp (GMV), Chi Phí Vận Hành &amp; Lợi Nhuận Ròng.</p>
+            <p className="text-xs text-slate-500 mt-0.5">Biểu đồ tự động ghi nhận phiếu chi mới &amp; trừ GMV/hoàn kho khi HỦY ĐƠN hàng.</p>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">

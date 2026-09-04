@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { getAnalyticsData, getBranches, updateOrderStatus } from '@/actions/orders';
 import { Branch, Order, OrderStatus } from '@/types/database';
+import { restoreInventoryForOrder, deductInventoryForOrder } from '@/lib/store';
 import { ClipboardList, Search, Filter, Printer, Eye, ArrowRightLeft, XCircle, Clock, CheckCircle2, Truck, Kanban, Store, MapPin, Phone, User, X } from 'lucide-react';
 
 export default function CentralizedOrdersPage() {
@@ -44,6 +45,15 @@ export default function CentralizedOrdersPage() {
 
   // Handle Quick Status Change
   const handleStatusChange = async (orderId: string, newStatus: OrderStatus) => {
+    const targetOrder = orders.find(o => o.id === orderId);
+    if (targetOrder) {
+      if (newStatus === 'CANCELLED') {
+        restoreInventoryForOrder(targetOrder);
+      } else if (newStatus === 'PAID' || newStatus === 'DELIVERED') {
+        deductInventoryForOrder(targetOrder);
+      }
+    }
+
     setOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, status: newStatus } : o));
     await updateOrderStatus(orderId, newStatus);
     if (selectedOrder && selectedOrder.id === orderId) {
