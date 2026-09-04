@@ -243,89 +243,120 @@ export default function PublicStorefrontHome() {
 
     const calculatedTotal = selectedItemsSummary.reduce((sum, i) => sum + i.subtotal, 0);
 
-    const newOrderData: any = {
-      id: orderCode,
-      order_code: orderCode,
-      customerName: fullName.trim(),
-      customer_name: fullName.trim(),
+    const orderId = `OD${Math.floor(1000 + Math.random() * 9000)}`;
+    const now = new Date().toISOString();
+    const branchName = chosenBranch.name || 'CƠ SỞ VIN SMART CITY';
+    const branchId = chosenBranch.id || 'b1';
+
+    const selectedItemsList = selectedComboIds.map(id => {
+      const item = allSelectableItems.find(c => c.id === id);
+      const nameStr = item?.name ? item.name.split(' - ')[0] : 'Gà Ủ Muối Đặc Sản';
+      return {
+        menu_item_id: item?.id || id,
+        item_name: nameStr,
+        name: nameStr,
+        quantity: 1,
+        unit_price: item?.price || 0,
+        price: item?.price || 0,
+        cost_price: Math.round((item?.price || 0) * 0.55),
+        subtotal: item?.price || 0
+      };
+    });
+
+    const calculatedTotalAmount = selectedItemsList.reduce((sum, i) => sum + i.subtotal, 0);
+
+    const formattedOrder = {
+      id: orderId,
+      code: `#${orderId}`,
+      order_code: orderId,
+      customerName: fullName.trim() || 'Khách Vãng Lai',
+      customer_name: fullName.trim() || 'Khách Vãng Lai',
       phone: phone.trim(),
       customer_phone: phone.trim(),
       address: address.trim(),
       shipping_address: address.trim(),
+      customer_address: address.trim(),
+      branch: branchName,
+      branchName: branchName,
+      branch_id: branchId,
+      branchId: branchId,
       district: (chosenBranch as any).district || 'Hà Nội',
       city: (chosenBranch as any).city || 'Hà Nội',
-      branchId: chosenBranch.id,
-      branch_id: chosenBranch.id,
-      branchName: chosenBranch.name,
-      branch: chosenBranch as any,
-      items: selectedItemsSummary,
-      cutOption: cutPreference,
-      note: `Yêu cầu: ${cutPreference} | SL: ${quantityNote || 'Theo checkbox'} | Ghi chú: ${extraNote || 'Không'}`,
-      totalAmount: calculatedTotal,
-      subtotal: calculatedTotal,
-      final_amount: calculatedTotal,
-      estimated_profit: Math.round(calculatedTotal * 0.45),
-      status: 'RECEIVED',
-      source: 'Website Khách Đặt',
-      createdAt: new Date().toISOString(),
-      created_at: new Date().toISOString(),
+      items: selectedItemsList,
+      order_items: selectedItemsList,
+      totalAmount: calculatedTotalAmount,
+      total_amount: calculatedTotalAmount,
+      subtotal: calculatedTotalAmount,
+      final_amount: calculatedTotalAmount,
+      cutOption: cutPreference || 'Chặt sẵn ăn luôn',
+      note: `${cutPreference ? `[${cutPreference}] ` : ''}${quantityNote ? `SL: ${quantityNote} | ` : ''}${extraNote || ''}`.trim(),
+      status: 'PENDING',
+      source: 'Landing Page Trang Chủ',
+      createdAt: now,
+      created_at: now,
       isRead: false
     };
 
-    // 1. Save to LocalStorage key pos_orders_data & trigger cross-tab signals
-    savePosOrder(newOrderData);
+    // 1. Save directly to pos_orders_data & store helper
+    savePosOrder(formattedOrder);
+    addNewMockOrder(formattedOrder as any);
 
-    // 2. Add to in-memory global orders list
-    addNewMockOrder(newOrderData);
-
-    // 3. Update Customer Profile
-    addOrUpdateCustomerFromOrder({
-      customer_name: newOrderData.customer_name,
-      customer_phone: newOrderData.customer_phone,
-      shipping_address: newOrderData.shipping_address,
-      total_amount: calculatedTotal,
-      order_code: orderCode,
-      items_summary: selectedItemsSummary.map(i => `${i.quantity}x ${i.item_name}`).join(', ')
-    });
-
-    // 4. Create & Save Notification to pos_notifications_data according to spec
     try {
-      const summaryText = selectedItemsSummary.map(i => `${i.quantity}x ${i.item_name}`).join(', ') || 'món';
-      const newNotif = {
-        id: `notif_${Date.now()}`,
-        type: 'order',
-        title: `🍗 Đơn hàng mới #${orderCode}`,
-        content: `Khách ${fullName.trim()} vừa đặt ${summaryText} - ${Number(calculatedTotal).toLocaleString('vi-VN')} đ`,
-        message: `Khách ${fullName.trim()} vừa đặt ${summaryText} - ${Number(calculatedTotal).toLocaleString('vi-VN')} đ`,
-        time: 'Vừa xong',
-        timestamp: 'Vừa xong',
-        createdAt: new Date().toISOString(),
-        isRead: false,
-        read: false,
-        link: '/admin/orders'
-      };
+      const existingOrders = getItem<any[]>('pos_orders_data', []);
+      const newOrders = [formattedOrder, ...(Array.isArray(existingOrders) ? existingOrders.filter(o => o.id !== orderId) : [])];
+      setItem('pos_orders_data', newOrders);
+      setItem('gum_smart_orders_v3', newOrders);
+    } catch (e) {}
 
+    // 2. Save notification to pos_notifications_data
+    const newNotification = {
+      id: `notif_${Date.now()}`,
+      type: 'order',
+      title: `🍗 Đơn hàng mới #${formattedOrder.id}`,
+      content: `Khách ${formattedOrder.customerName} (${formattedOrder.phone}) vừa đặt đơn ${Number(formattedOrder.totalAmount).toLocaleString('vi-VN')} đ qua Web.`,
+      message: `Khách ${formattedOrder.customerName} (${formattedOrder.phone}) vừa đặt đơn ${Number(formattedOrder.totalAmount).toLocaleString('vi-VN')} đ qua Web.`,
+      time: 'Vừa xong',
+      timestamp: 'Vừa xong',
+      createdAt: now,
+      isRead: false,
+      read: false,
+      link: '/admin/orders'
+    };
+
+    try {
       const existingNotifs = getItem<any[]>('pos_notifications_data', []);
-      const updatedNotifs = [newNotif, ...(Array.isArray(existingNotifs) ? existingNotifs : [])];
-      setItem('pos_notifications_data', updatedNotifs);
-      setItem('gum_smart_notifications_v3', updatedNotifs);
+      const newNotifs = [newNotification, ...(Array.isArray(existingNotifs) ? existingNotifs : [])];
+      setItem('pos_notifications_data', newNotifs);
+      setItem('gum_smart_notifications_v3', newNotifs);
+    } catch (e) {}
 
-      // Gửi tín hiệu đồng bộ liên tab & phát âm thanh
+    // 3. Emit triggers & custom events
+    try {
+      localStorage.setItem('pos_order_sync_trigger', Date.now().toString());
       localStorage.setItem('pos_notify_ping', Date.now().toString());
-      window.dispatchEvent(new CustomEvent('pos_notify_event', { detail: newNotif }));
-    } catch (e) {
-      console.error("Storage notification error:", e);
-    }
+      window.dispatchEvent(new CustomEvent('app_order_created', { detail: formattedOrder }));
+      window.dispatchEvent(new CustomEvent('new_order_placed', { detail: formattedOrder }));
+      window.dispatchEvent(new CustomEvent('new_order_event', { detail: formattedOrder }));
+      window.dispatchEvent(new CustomEvent('pos_notify_event', { detail: newNotification }));
+      window.dispatchEvent(new Event('gum_store_update'));
+      window.dispatchEvent(new Event('storage'));
+    } catch (e) {}
 
-    // 5. Play Notification Sound
+    // 4. Play alert sound
     playBeep();
 
-    // 6. Notify System Update Events
-    window.dispatchEvent(new Event('gum_store_update'));
-    window.dispatchEvent(new Event('storage'));
+    // 5. Update Customer Profile
+    addOrUpdateCustomerFromOrder({
+      customer_name: formattedOrder.customer_name,
+      customer_phone: formattedOrder.customer_phone,
+      shipping_address: formattedOrder.shipping_address,
+      total_amount: calculatedTotalAmount,
+      order_code: orderId,
+      items_summary: selectedItemsList.map(i => `${i.quantity}x ${i.item_name}`).join(', ')
+    });
 
-    // 7. Show Success View
-    setSuccessOrder(newOrderData);
+    // 6. Show Success Screen
+    setSuccessOrder(formattedOrder as any);
   };
 
   // Handle Order Tracking Search

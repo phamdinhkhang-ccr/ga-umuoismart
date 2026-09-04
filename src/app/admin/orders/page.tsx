@@ -154,17 +154,57 @@ export default function CentralizedOrdersPage() {
       ]);
       setBranches(bList || []);
 
-      let allOrders: Order[] = analyticsRes?.orders || [];
-      if (typeof window !== 'undefined') {
-        const posOrders = getItem<any[]>('pos_orders_data', []);
-        if (posOrders && posOrders.length > 0) {
-          const existingIds = new Set(allOrders.map(o => o.id || o.order_code));
-          const newLocal = posOrders.filter(o => !existingIds.has(o.id) && !existingIds.has(o.order_code));
-          allOrders = [...newLocal, ...allOrders];
-        }
-      }
+      let localOrders = getItem<any[]>('pos_orders_data', []);
+      let mockOrders = analyticsRes?.orders || [];
 
-      // Sort newest orders to top
+      // Normalize local orders to ensure every single required field exists defensively
+      const normalizedLocal: Order[] = (localOrders || []).map((o: any) => {
+        const orderId = o.id || o.order_code || o.code?.replace('#', '') || `OD${Math.floor(1000 + Math.random() * 9000)}`;
+        const codeStr = o.order_code || o.code?.replace('#', '') || o.id || orderId;
+        const custName = o.customer_name || o.customerName || o.name || 'Khách Vãng Lai';
+        const custPhone = o.customer_phone || o.phone || '';
+        const custAddr = o.shipping_address || o.address || o.customer_address || '';
+        const branchObj = typeof o.branch === 'object' && o.branch !== null ? o.branch : { id: o.branch_id || o.branchId || 'b1', name: o.branchName || o.branch || 'CƠ SỞ VIN SMART CITY' };
+        const bId = o.branch_id || o.branchId || branchObj.id || 'b1';
+        const itemsList = (o.items || o.order_items || []).map((i: any) => ({
+          menu_item_id: i.menu_item_id || i.id || 'm1',
+          item_name: i.item_name || i.name || 'Gà Ủ Muối Nguyên Con',
+          quantity: i.quantity || 1,
+          unit_price: i.unit_price || i.price || 0,
+          cost_price: i.cost_price || Math.round((i.price || i.unit_price || 0) * 0.55),
+          subtotal: i.subtotal || (i.price || i.unit_price || 0) * (i.quantity || 1)
+        }));
+        const totalAmt = typeof o.final_amount === 'number' ? o.final_amount : (o.totalAmount || o.total_amount || o.subtotal || 0);
+
+        return {
+          ...o,
+          id: orderId,
+          order_code: codeStr,
+          code: `#${codeStr}`,
+          customer_name: custName,
+          customerName: custName,
+          customer_phone: custPhone,
+          phone: custPhone,
+          shipping_address: custAddr,
+          address: custAddr,
+          branch_id: bId,
+          branchId: bId,
+          branch: branchObj,
+          branchName: branchObj.name || 'CƠ SỞ VIN SMART CITY',
+          items: itemsList,
+          subtotal: totalAmt,
+          discount_amount: o.discount_amount || 0,
+          final_amount: totalAmt,
+          totalAmount: totalAmt,
+          status: o.status || 'RECEIVED',
+          created_at: o.created_at || o.createdAt || new Date().toISOString()
+        };
+      });
+
+      const localIdSet = new Set(normalizedLocal.map((o: any) => o.id || o.order_code));
+      const extraMocks = mockOrders.filter((o: any) => !localIdSet.has(o.id) && !localIdSet.has(o.order_code));
+
+      let allOrders = [...normalizedLocal, ...extraMocks];
       allOrders.sort((a, b) => new Date(b.created_at || (b as any).createdAt || 0).getTime() - new Date(a.created_at || (a as any).createdAt || 0).getTime());
       setOrders(allOrders);
     } catch (e) {
@@ -177,19 +217,27 @@ export default function CentralizedOrdersPage() {
 
     const handleUpdate = () => loadData();
     const handleStorage = (e: StorageEvent) => {
-      if (e.key === 'pos_orders_data' || e.key === 'pos_new_order_event' || e.key === 'pos_last_order_ping' || e.key === 'gum_smart_orders_v3') {
-        loadData();
+      if (
+        e.key === 'pos_orders_data' || 
+        e.key === 'pos_order_sync_trigger' || 
+        e.key === 'pos_new_order_event' || 
+        e.key === 'pos_last_order_ping' || 
+        e.key === 'gum_smart_orders_v3'
+      ) {
+        handleUpdate();
       }
     };
 
     window.addEventListener('gum_store_update', handleUpdate);
     window.addEventListener('storage', handleStorage);
+    window.addEventListener('app_order_created', handleUpdate);
     window.addEventListener('new_order_placed', handleUpdate);
     window.addEventListener('new_order_event', handleUpdate);
 
     return () => {
       window.removeEventListener('gum_store_update', handleUpdate);
       window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('app_order_created', handleUpdate);
       window.removeEventListener('new_order_placed', handleUpdate);
       window.removeEventListener('new_order_event', handleUpdate);
     };
@@ -266,20 +314,26 @@ export default function CentralizedOrdersPage() {
     return orders.filter((o) => {
       // 1. Search Query (Name, Phone, or #OD code)
       const q = searchQuery.toLowerCase().trim();
+      const codeStr = (o.order_code || o.id || '').toString().toLowerCase();
+      const nameStr = (o.customer_name || (o as any).customerName || '').toString().toLowerCase();
+      const phoneStr = (o.customer_phone || (o as any).phone || '').toString();
+      const addrStr = (o.shipping_address || (o as any).address || '').toString().toLowerCase();
+
       const matchSearch =
         !q ||
-        o.order_code.toLowerCase().includes(q) ||
-        o.customer_name.toLowerCase().includes(q) ||
-        o.customer_phone.includes(q) ||
-        o.shipping_address.toLowerCase().includes(q);
+        codeStr.includes(q) ||
+        nameStr.includes(q) ||
+        phoneStr.includes(q) ||
+        addrStr.includes(q);
 
       // 2. Status Tab
+      const s = (o.status || 'RECEIVED').toString().toUpperCase();
       const matchTab =
         statusTab === 'ALL' ||
-        (statusTab === 'RECEIVED' && o.status === 'RECEIVED') ||
-        (statusTab === 'PAID' && (o.status === 'PAID' || o.status === 'DELIVERED')) ||
-        (statusTab === 'SHIPPING' && o.status === 'SHIPPING') ||
-        (statusTab === 'CANCELLED' && o.status === 'CANCELLED');
+        (statusTab === 'RECEIVED' && (s === 'RECEIVED' || s === 'PENDING')) ||
+        (statusTab === 'PAID' && (s === 'PAID' || s === 'DELIVERED')) ||
+        (statusTab === 'SHIPPING' && s === 'SHIPPING') ||
+        (statusTab === 'CANCELLED' && s === 'CANCELLED');
 
       // 3. Payment Method Filter
       const matchPayment =
