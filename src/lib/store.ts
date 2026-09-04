@@ -494,6 +494,9 @@ export interface ProductRecord {
   ai_keywords: string[];
   is_best_seller?: boolean;
   image_url?: string;
+  original_price?: number;
+  description?: string;
+  is_storefront_visible?: boolean;
   // Expiry & Batch tracking fields
   production_date?: string;
   shelf_life_days?: number;

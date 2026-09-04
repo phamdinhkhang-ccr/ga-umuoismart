@@ -61,6 +61,13 @@ export default function PublicStorefrontHome() {
     return cmsSettings.branches?.filter((b) => b.is_active !== false) || [];
   }, [cmsSettings.branches]);
 
+  // Filter & Sort Storefront Menu Products (Best Seller first, visible only)
+  const visibleStorefrontProducts = useMemo(() => {
+    return productsList
+      .filter((p) => p.is_storefront_visible !== false)
+      .sort((a, b) => (b.is_best_seller ? 1 : 0) - (a.is_best_seller ? 1 : 0));
+  }, [productsList]);
+
   // Handle Order Tracking Search
   const handleSearchOrder = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -350,21 +357,34 @@ export default function PublicStorefrontHome() {
 
         {/* Product Grid Dynamic Sync */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {productsList.map((p) => (
+          {visibleStorefrontProducts.map((p) => (
             <div
               key={p.id}
               className="bg-white border border-slate-200 rounded-3xl p-5 shadow-xs hover:shadow-xl hover:border-orange-300 transition-all duration-300 flex flex-col justify-between group space-y-4"
             >
               <div className="space-y-3">
-                <div className="flex justify-between items-start">
+                <div className="flex justify-between items-start gap-3">
                   {p.image_url ? (
-                    <img src={p.image_url} alt={p.name} className="w-16 h-16 object-cover rounded-2xl border border-slate-200 shadow-xs" />
+                    <img
+                      src={p.image_url}
+                      alt={p.name}
+                      className="w-20 h-20 sm:w-24 sm:h-24 object-cover rounded-2xl border border-slate-200 shadow-2xs shrink-0"
+                    />
                   ) : (
-                    <span className="text-4xl">🍗</span>
+                    <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-amber-100/70 border border-amber-200 flex items-center justify-center text-4xl shrink-0">
+                      🍗
+                    </div>
                   )}
-                  <span className="bg-orange-50 text-orange-700 border border-orange-200 text-[10px] font-black px-2.5 py-1 rounded-full">
-                    {p.is_best_seller ? '🌟 Bán Chạy Nhất' : p.category}
-                  </span>
+                  <div className="flex flex-col items-end gap-1">
+                    {p.is_best_seller && (
+                      <span className="bg-amber-100 text-amber-900 border border-amber-300 font-extrabold text-[10px] px-2.5 py-1 rounded-full flex items-center gap-1 shadow-2xs">
+                        🌟 Bán Chạy Nhất
+                      </span>
+                    )}
+                    <span className="bg-orange-50 text-orange-700 border border-orange-200 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full">
+                      {p.category}
+                    </span>
+                  </div>
                 </div>
 
                 <div>
@@ -372,7 +392,7 @@ export default function PublicStorefrontHome() {
                     {p.name}
                   </h3>
                   <p className="text-xs text-slate-500 font-medium mt-1 leading-relaxed">
-                    {p.ai_keywords ? p.ai_keywords.join(' • ') : 'Gà ủ muối chuẩn vị'}
+                    {p.description || (p.ai_keywords ? p.ai_keywords.join(' • ') : 'Gà ủ muối chuẩn vị da giòn sần sật')}
                   </p>
                 </div>
               </div>
@@ -380,7 +400,12 @@ export default function PublicStorefrontHome() {
               <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
                 <div>
                   <span className="text-[10px] text-slate-400 font-bold block">Giá bán:</span>
-                  <span className="text-lg font-black text-orange-600">{p.price.toLocaleString('vi-VN')}đ</span>
+                  <div className="flex items-baseline space-x-2">
+                    <span className="text-lg font-black text-orange-600">{p.price.toLocaleString('vi-VN')}đ</span>
+                    {p.original_price && (
+                      <span className="line-through text-slate-400 font-semibold text-xs">{p.original_price.toLocaleString('vi-VN')}đ</span>
+                    )}
+                  </div>
                 </div>
 
                 <button
