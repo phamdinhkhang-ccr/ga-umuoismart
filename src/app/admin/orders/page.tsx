@@ -177,7 +177,7 @@ export default function CentralizedOrdersPage() {
 
     const handleUpdate = () => loadData();
     const handleStorage = (e: StorageEvent) => {
-      if (e.key === 'pos_orders_data' || e.key === 'pos_new_order_event' || e.key === 'gum_smart_orders_v3') {
+      if (e.key === 'pos_orders_data' || e.key === 'pos_new_order_event' || e.key === 'pos_last_order_ping' || e.key === 'gum_smart_orders_v3') {
         loadData();
       }
     };
@@ -185,11 +185,13 @@ export default function CentralizedOrdersPage() {
     window.addEventListener('gum_store_update', handleUpdate);
     window.addEventListener('storage', handleStorage);
     window.addEventListener('new_order_placed', handleUpdate);
+    window.addEventListener('new_order_event', handleUpdate);
 
     return () => {
       window.removeEventListener('gum_store_update', handleUpdate);
       window.removeEventListener('storage', handleStorage);
       window.removeEventListener('new_order_placed', handleUpdate);
+      window.removeEventListener('new_order_event', handleUpdate);
     };
   }, [loadData]);
 

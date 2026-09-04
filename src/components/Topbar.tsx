@@ -122,7 +122,7 @@ export default function Topbar({ onToggleMobileMenu }: TopbarProps) {
 
     const handleStorage = (e: StorageEvent) => {
       setNotifications(getNotifications());
-      if (e.key === 'pos_new_order_event' || e.key === 'pos_orders_data' || e.key === 'gum_smart_notifications_v3') {
+      if (e.key === 'pos_new_order_event' || e.key === 'pos_orders_data' || e.key === 'pos_last_order_ping' || e.key === 'gum_smart_notifications_v3') {
         let orderInfo;
         try {
           if (e.key === 'pos_new_order_event' && e.newValue) {
@@ -141,11 +141,13 @@ export default function Topbar({ onToggleMobileMenu }: TopbarProps) {
     window.addEventListener('gum_store_update', handleUpdate);
     window.addEventListener('storage', handleStorage);
     window.addEventListener('new_order_placed', handleCustomOrder);
+    window.addEventListener('new_order_event', handleCustomOrder);
 
     return () => {
       window.removeEventListener('gum_store_update', handleUpdate);
       window.removeEventListener('storage', handleStorage);
       window.removeEventListener('new_order_placed', handleCustomOrder);
+      window.removeEventListener('new_order_event', handleCustomOrder);
     };
   }, []);
 

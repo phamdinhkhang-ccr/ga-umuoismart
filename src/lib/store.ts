@@ -101,6 +101,7 @@ export function savePosOrder(newOrderData: any): any[] {
 
   if (typeof window !== 'undefined') {
     try {
+      localStorage.setItem('pos_last_order_ping', Date.now().toString());
       localStorage.setItem('pos_new_order_event', JSON.stringify({
         orderId: formattedOrder.id,
         orderCode: formattedOrder.order_code,
@@ -108,6 +109,7 @@ export function savePosOrder(newOrderData: any): any[] {
         branchName: formattedOrder.branchName,
         timestamp: Date.now()
       }));
+      window.dispatchEvent(new CustomEvent('new_order_event', { detail: formattedOrder }));
       window.dispatchEvent(new CustomEvent('new_order_placed', { detail: formattedOrder }));
     } catch (e) {}
   }
@@ -222,6 +224,31 @@ export function setItem<T>(key: string, value: T): void {
     window.dispatchEvent(new Event('storage'));
     window.dispatchEvent(new Event('gum_store_update'));
   } catch (e) {}
+}
+
+export function playSoundSafe(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    if (ctx.state === 'suspended') {
+      ctx.resume();
+    }
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+    osc.frequency.setValueAtTime(880, ctx.currentTime + 0.15); // A5
+    gain.gain.setValueAtTime(0.2, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.5);
+  } catch (e) {
+    // Silent fallback if browser blocks autoplay
+  }
 }
 
 // -------------------------------------------------------------
