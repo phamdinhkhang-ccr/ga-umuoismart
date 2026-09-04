@@ -4,13 +4,24 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { useRouter, usePathname } from 'next/navigation';
 import { UserAccount } from '@/types/auth';
 
-export const INITIAL_DEMO_ACCOUNTS: (UserAccount & { password: string })[] = [
+export const INITIAL_DEMO_ACCOUNTS: (UserAccount & { password?: string })[] = [
   {
     id: 'usr-1',
     username: 'admin',
     password: 'admin123',
     name: 'Nguyễn Văn Admin',
     role: 'SUPER_ADMIN',
+    phone: '0988.123.456',
+    status: 'ACTIVE',
+    email: 'admin@gaumuoismart.vn',
+    dob: '08/04/1992',
+    id_card: '001092001234',
+    position: 'Quản Trị Viên Tối Cao',
+    date_joined: '01/01/2025',
+    last_active: '2026-09-04 19:55',
+    orders_count: 1420,
+    shifts_count: 180,
+    branch_name: 'Toàn Chuỗi / Tất Cả'
   },
   {
     id: 'usr-2',
@@ -18,6 +29,17 @@ export const INITIAL_DEMO_ACCOUNTS: (UserAccount & { password: string })[] = [
     password: '123456',
     name: 'Trần Thị Tổng Đài',
     role: 'OPERATOR',
+    phone: '0977.888.999',
+    status: 'ACTIVE',
+    email: 'tongdai@gaumuoismart.vn',
+    dob: '15/09/1998',
+    id_card: '001098005678',
+    position: 'Trưởng Ca Tổng Đài Lên Đơn',
+    date_joined: '15/03/2025',
+    last_active: '2026-09-04 19:40',
+    orders_count: 850,
+    shifts_count: 95,
+    branch_name: 'Trung Tâm Điều Phối'
   },
   {
     id: 'usr-3',
@@ -25,8 +47,18 @@ export const INITIAL_DEMO_ACCOUNTS: (UserAccount & { password: string })[] = [
     password: '123456',
     name: 'Lê Văn Cơ Sở 1',
     role: 'BRANCH_STAFF',
+    phone: '0283.811.1111',
+    status: 'ACTIVE',
+    email: 'quan1@gaumuoismart.vn',
+    dob: '20/11/1995',
+    id_card: '079095009876',
+    position: 'Quản Lý Chi Nhánh Q1',
+    date_joined: '01/04/2025',
+    last_active: '2026-09-04 18:30',
+    orders_count: 320,
+    shifts_count: 42,
     branch_id: 'b1111111-1111-1111-1111-111111111111',
-    branch_name: 'Chi Nhánh Gà Ủ Muối Quận 1',
+    branch_name: 'Chi Nhánh Gà Ủ Muối Quận 1'
   },
   {
     id: 'usr-4',
@@ -34,9 +66,19 @@ export const INITIAL_DEMO_ACCOUNTS: (UserAccount & { password: string })[] = [
     password: '123456',
     name: 'Phạm Thị Cơ Sở 2',
     role: 'BRANCH_STAFF',
+    phone: '0283.822.2222',
+    status: 'ACTIVE',
+    email: 'quan3@gaumuoismart.vn',
+    dob: '12/02/1997',
+    id_card: '079097003456',
+    position: 'Thu Ngân / Bếp Chi Nhánh Q3',
+    date_joined: '10/05/2025',
+    last_active: '2026-09-04 17:15',
+    orders_count: 210,
+    shifts_count: 38,
     branch_id: 'b2222222-2222-2222-2222-222222222222',
-    branch_name: 'Chi Nhánh Gà Ủ Muối Quận 3',
-  },
+    branch_name: 'Chi Nhánh Gà Ủ Muối Quận 3'
+  }
 ];
 
 interface AuthContextType {
@@ -45,6 +87,7 @@ interface AuthContextType {
   login: (username: string, password: string) => { success: boolean; message?: string; redirectUrl?: string };
   logout: () => void;
   addUserAccount: (newAcc: Omit<UserAccount, 'id'> & { password: string }) => void;
+  updateUserAccount: (id: string, updatedFields: Partial<UserAccount & { password?: string }>) => void;
   deleteUserAccount: (id: string) => void;
   isAllowedRoute: (path: string) => boolean;
 }
@@ -107,10 +150,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const accWithId = {
       ...newAcc,
       id: `usr-${Date.now()}`,
+      status: newAcc.status || ('ACTIVE' as const),
       created_at: new Date().toISOString(),
+      last_active: 'Vừa tạo mới'
     };
     setAccounts((prev) => {
       const updated = [accWithId, ...prev];
+      try {
+        localStorage.setItem('gum_accounts', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+  }, []);
+
+  const updateUserAccount = useCallback((id: string, updatedFields: Partial<UserAccount & { password?: string }>) => {
+    setAccounts((prev) => {
+      const updated = prev.map((a) => {
+        if (a.id !== id) return a;
+        const cleanedFields = { ...updatedFields };
+        if (cleanedFields.password === '') delete cleanedFields.password;
+        return { ...a, ...cleanedFields };
+      });
       try {
         localStorage.setItem('gum_accounts', JSON.stringify(updated));
       } catch (e) {}
@@ -175,9 +235,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     login,
     logout,
     addUserAccount,
+    updateUserAccount,
     deleteUserAccount,
     isAllowedRoute,
-  }), [user, accounts, login, logout, addUserAccount, deleteUserAccount, isAllowedRoute]);
+  }), [user, accounts, login, logout, addUserAccount, updateUserAccount, deleteUserAccount, isAllowedRoute]);
 
   return (
     <AuthContext.Provider value={value}>

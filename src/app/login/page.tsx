@@ -111,7 +111,7 @@ export default function LoginPage() {
                 <button
                   key={acc.id}
                   type="button"
-                  onClick={() => handleQuickLogin(acc.username, acc.password)}
+                  onClick={() => handleQuickLogin(acc.username, acc.password || '')}
                   className="bg-slate-50 hover:bg-orange-50 hover:border-orange-200 border border-slate-200 rounded-xl p-2.5 text-left transition cursor-pointer flex flex-col justify-between"
                 >
                   <div className="flex items-center justify-between">
