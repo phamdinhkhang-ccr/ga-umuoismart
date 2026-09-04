@@ -308,6 +308,15 @@ export default function PublicStorefrontHome() {
       setItem('gum_smart_orders_v3', newOrders);
     } catch (e) {}
 
+    // Post to Cloud API for Realtime Multi-Device Sync
+    try {
+      fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formattedOrder)
+      }).catch(() => {});
+    } catch (e) {}
+
     // 2. Save notification to pos_notifications_data
     const newNotification = {
       id: `notif_${Date.now()}`,

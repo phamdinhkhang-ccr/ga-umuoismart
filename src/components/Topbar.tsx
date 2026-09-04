@@ -40,9 +40,96 @@ export default function Topbar({ onToggleMobileMenu }: TopbarProps) {
     }
   }, []);
 
+  const knownOrderIdsRef = useRef<Set<string>>(new Set());
+  const isInitialPollRef = useRef<boolean>(true);
+
   // Load Notifications & Listen to Cross-Tab & Internal Order Events
   useEffect(() => {
     syncNotifs();
+
+    // Cloud Polling Engine (Every 2.5 Seconds)
+    const pollCloudOrders = async () => {
+      try {
+        const res = await fetch('/api/orders');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data && data.success && Array.isArray(data.orders)) {
+          const cloudOrders = data.orders;
+          let hasNewIncomingOrder = false;
+          let latestNewOrder: any = null;
+
+          cloudOrders.forEach((o: any) => {
+            const oId = o.id || o.order_code;
+            if (oId) {
+              if (!knownOrderIdsRef.current.has(oId)) {
+                knownOrderIdsRef.current.add(oId);
+                if (!isInitialPollRef.current) {
+                  hasNewIncomingOrder = true;
+                  latestNewOrder = o;
+                }
+              }
+            }
+          });
+
+          // If initial load completed, store known order IDs
+          if (isInitialPollRef.current) {
+            isInitialPollRef.current = false;
+          }
+
+          // Sync cloud orders & notifications into localStorage
+          if (data.orders.length > 0) {
+            try {
+              const currentLocal = JSON.parse(localStorage.getItem('pos_orders_data') || '[]');
+              const mergedMap = new Map();
+              data.orders.forEach((o: any) => mergedMap.set(o.id || o.order_code, o));
+              currentLocal.forEach((o: any) => {
+                const idKey = o.id || o.order_code;
+                if (!mergedMap.has(idKey)) mergedMap.set(idKey, o);
+              });
+              const mergedArr = Array.from(mergedMap.values());
+              localStorage.setItem('pos_orders_data', JSON.stringify(mergedArr));
+            } catch (e) {}
+          }
+
+          if (Array.isArray(data.notifications) && data.notifications.length > 0) {
+            try {
+              localStorage.setItem('pos_notifications_data', JSON.stringify(data.notifications));
+              setNotifications(data.notifications);
+            } catch (e) {}
+          }
+
+          // Trigger Alert & Toast if a new order arrived from cloud
+          if (hasNewIncomingOrder && latestNewOrder) {
+            playBeep();
+            setIsShaking(true);
+            setTimeout(() => setIsShaking(false), 1200);
+
+            const custName = latestNewOrder.customerName || latestNewOrder.customer_name || 'Khách Vãng Lai';
+            const code = latestNewOrder.order_code || latestNewOrder.code || latestNewOrder.id || '';
+            const totalStr = Number(latestNewOrder.totalAmount || latestNewOrder.final_amount || 0).toLocaleString('vi-VN');
+
+            const toastNotif: SystemNotification = {
+              id: `toast-${Date.now()}`,
+              type: 'ORDER',
+              title: `🍗 ĐƠN MỚI TỪ WEB! Khách ${custName}`,
+              message: `Đơn #${code} (${totalStr}đ) - Tự động cập nhật vào Bảng Quản Lý Đơn.`,
+              timestamp: 'Vừa xong',
+              read: false,
+              link: '/admin/orders',
+              actionText: 'Xem đơn'
+            };
+            setActiveToast(toastNotif);
+            setTimeout(() => setActiveToast(null), 6000);
+
+            window.dispatchEvent(new Event('gum_store_update'));
+            window.dispatchEvent(new CustomEvent('new_order_event', { detail: latestNewOrder }));
+          }
+        }
+      } catch (e) {}
+    };
+
+    pollCloudOrders();
+    const intervalId = setInterval(pollCloudOrders, 2500);
 
     const handleStorage = (e: StorageEvent) => {
       if (
@@ -114,6 +201,7 @@ export default function Topbar({ onToggleMobileMenu }: TopbarProps) {
     window.addEventListener('gum_store_update', syncNotifs);
 
     return () => {
+      clearInterval(intervalId);
       window.removeEventListener('storage', handleStorage);
       window.removeEventListener('pos_notify_event', handleCustomNotif);
       window.removeEventListener('new_order_event', handleCustomNotif);

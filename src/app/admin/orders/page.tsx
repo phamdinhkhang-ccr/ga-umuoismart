@@ -155,10 +155,31 @@ export default function CentralizedOrdersPage() {
       setBranches(bList || []);
 
       let localOrders = getItem<any[]>('pos_orders_data', []);
+      let cloudOrders: any[] = [];
+
+      try {
+        const cloudRes = await fetch('/api/orders');
+        if (cloudRes.ok) {
+          const cloudData = await cloudRes.json();
+          if (cloudData && Array.isArray(cloudData.orders)) {
+            cloudOrders = cloudData.orders;
+          }
+        }
+      } catch (e) {}
+
+      // Merge Cloud & Local Orders securely by ID / Code
+      const mergedMap = new Map();
+      cloudOrders.forEach((o: any) => mergedMap.set(o.id || o.order_code, o));
+      (localOrders || []).forEach((o: any) => {
+        const key = o.id || o.order_code;
+        if (!mergedMap.has(key)) mergedMap.set(key, o);
+      });
+      const combinedRaw = Array.from(mergedMap.values());
+
       let mockOrders = analyticsRes?.orders || [];
 
-      // Normalize local orders to ensure every single required field exists defensively
-      const normalizedLocal: Order[] = (localOrders || []).map((o: any) => {
+      // Normalize local & cloud orders to ensure every single required field exists defensively
+      const normalizedLocal: Order[] = combinedRaw.map((o: any) => {
         const orderId = o.id || o.order_code || o.code?.replace('#', '') || `OD${Math.floor(1000 + Math.random() * 9000)}`;
         const codeStr = o.order_code || o.code?.replace('#', '') || o.id || orderId;
         const custName = o.customer_name || o.customerName || o.name || 'Khách Vãng Lai';
@@ -215,6 +236,10 @@ export default function CentralizedOrdersPage() {
   useEffect(() => {
     loadData();
 
+    const intervalId = setInterval(() => {
+      loadData();
+    }, 2500);
+
     const handleUpdate = () => loadData();
     const handleStorage = (e: StorageEvent) => {
       if (
@@ -235,6 +260,7 @@ export default function CentralizedOrdersPage() {
     window.addEventListener('new_order_event', handleUpdate);
 
     return () => {
+      clearInterval(intervalId);
       window.removeEventListener('gum_store_update', handleUpdate);
       window.removeEventListener('storage', handleStorage);
       window.removeEventListener('app_order_created', handleUpdate);

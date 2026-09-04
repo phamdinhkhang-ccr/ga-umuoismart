@@ -60,9 +60,22 @@ export default function ProductsPage() {
   // Notification Toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  const reloadData = () => {
-    setProducts(getProducts());
+  const reloadData = async () => {
+    const local = getProducts();
     setBranches(getBranches());
+
+    try {
+      const res = await fetch('/api/products');
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.success && Array.isArray(data.products) && data.products.length > 0) {
+          setProducts(data.products);
+          return;
+        }
+      }
+    } catch (e) {}
+
+    setProducts(local);
   };
 
   useEffect(() => {
@@ -152,6 +165,13 @@ export default function ProductsPage() {
       scope === 'BRANCH' ? selectedBranchId : undefined
     );
     setProducts(updated);
+    try {
+      fetch('/api/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated)
+      }).catch(() => {});
+    } catch (e) {}
     setActiveModal(null);
 
     showToast(
@@ -251,6 +271,13 @@ export default function ProductsPage() {
     } as Partial<ProductRecord> & { name: string });
 
     setProducts(updatedList);
+    try {
+      fetch('/api/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedList)
+      }).catch(() => {});
+    } catch (e) {}
     setActiveModal(null);
     showToast(selectedProduct ? `Đã cập nhật món "${formData.name}"` : `Đã thêm món mới "${formData.name}" vào menu`);
   };
