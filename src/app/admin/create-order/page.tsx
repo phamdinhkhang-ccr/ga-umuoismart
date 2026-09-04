@@ -1,13 +1,15 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
-import { Bot, Sparkles, Send, CheckCircle2, AlertCircle, ShoppingBag, Plus, Minus, Trash2, MapPin, User, Ticket, Edit3, ArrowRight } from 'lucide-react';
+import { useState, useEffect, useMemo, useCallback, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Bot, Sparkles, Send, CheckCircle2, AlertCircle, ShoppingBag, Plus, Minus, Trash2, MapPin, User, Ticket, Edit3, ArrowRight, UserCheck, Tag } from 'lucide-react';
 import { getBranches, getMenuItems, createOrder } from '@/actions/orders';
 import { Branch, MenuItem } from '@/types/database';
+import { findCustomerByPhone, addOrUpdateCustomerFromOrder, CustomerRecord } from '@/lib/store';
 
-export default function CreateOrderPage() {
+function CreateOrderContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   // Mode Selection: 'AI' or 'MANUAL'
   const [mode, setMode] = useState<'AI' | 'MANUAL'>('AI');
@@ -32,6 +34,21 @@ export default function CreateOrderPage() {
   const [voucherCode, setVoucherCode] = useState('');
   const [note, setNote] = useState('');
 
+  // Matched CRM Customer
+  const [matchedCustomer, setMatchedCustomer] = useState<CustomerRecord | null>(null);
+
+  // Read URL Search Parameters (from CRM 🛒 action)
+  useEffect(() => {
+    const paramPhone = searchParams.get('phone');
+    const paramName = searchParams.get('name');
+    const paramAddress = searchParams.get('address');
+
+    if (paramPhone) setCustomerPhone(paramPhone);
+    if (paramName) setCustomerName(paramName);
+    if (paramAddress) setShippingAddress(paramAddress);
+  }, [searchParams]);
+
+  // Load branches & menu items
   useEffect(() => {
     let isMounted = true;
     async function loadData() {
@@ -45,6 +62,22 @@ export default function CreateOrderPage() {
     loadData();
     return () => { isMounted = false; };
   }, []);
+
+  // Realtime CRM Customer Lookup
+  useEffect(() => {
+    if (customerPhone && customerPhone.replace(/\D/g, '').length >= 8) {
+      const found = findCustomerByPhone(customerPhone);
+      if (found) {
+        setMatchedCustomer(found);
+        if (!customerName) setCustomerName(found.name);
+        if (!shippingAddress) setShippingAddress(found.address);
+      } else {
+        setMatchedCustomer(null);
+      }
+    } else {
+      setMatchedCustomer(null);
+    }
+  }, [customerPhone, customerName, shippingAddress]);
 
   const sampleMessages = useMemo(() => [
     `lấy 1 con gà ủ muối + 1 chân gà sốt thái giao qua mipec 1, hà đông, hà nội (Anh Tuấn). Sđt 0889018221`,
@@ -96,7 +129,6 @@ export default function CreateOrderPage() {
     }
   }, [rawText]);
 
-  // Quick item adder / adjuster for Manual Mode
   const handleQuickAddMenuItem = useCallback((itemId: string) => {
     setSelectedItems((prev) => {
       const existingIdx = prev.findIndex((i) => i.menu_item_id === itemId);
@@ -210,6 +242,22 @@ export default function CreateOrderPage() {
 
       if (res.success && res.order) {
         setCreatedOrderData(res.order);
+
+        // Auto Sync with CRM Customer Database
+        const summary = selectedItems.map(i => {
+          const m = menuItems.find(item => item.id === i.menu_item_id);
+          return `${i.quantity}x ${m?.name || 'Món ăn'}`;
+        }).join(', ');
+
+        addOrUpdateCustomerFromOrder({
+          customer_name: customerName,
+          customer_phone: customerPhone,
+          shipping_address: shippingAddress,
+          total_amount: totals.finalAmount,
+          order_code: res.order.order_code,
+          items_summary: summary
+        });
+
         // Auto navigate to assigned branch after 2.5s if not clicked
         setTimeout(() => {
           router.push(`/branch/${selectedBranchId}`);
@@ -229,7 +277,7 @@ export default function CreateOrderPage() {
       <div className="max-w-6xl mx-auto space-y-6">
         
         {/* Header Banner */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
           <div className="flex items-center space-x-3">
             <div className="p-3 bg-orange-50 text-orange-600 rounded-xl border border-orange-200">
               <Bot className="w-6 h-6" />
@@ -238,7 +286,7 @@ export default function CreateOrderPage() {
               <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
                 Tạo Đơn Hàng Gà Ủ Muối Smart
                 <span className="bg-orange-50 text-orange-700 border border-orange-200 text-xs px-2.5 py-0.5 rounded-full font-semibold">
-                  Dual Mode
+                  Dual Mode + CRM Sync
                 </span>
               </h1>
               <p className="text-xs text-slate-600 mt-0.5">
@@ -274,7 +322,7 @@ export default function CreateOrderPage() {
 
         {/* MODE 1: AI PARSER TEXTAREA INPUT */}
         {mode === 'AI' && (
-          <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-4">
+          <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs space-y-4">
             <div className="flex items-center justify-between">
               <label className="text-sm font-bold text-slate-900 flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-orange-600" /> Dán Tin Nhắn Đặt Hàng Của Khách (Zalo/SMS):
@@ -315,7 +363,7 @@ export default function CreateOrderPage() {
               <button
                 onClick={() => handleParseOrder()}
                 disabled={isParsing}
-                className="flex items-center justify-center space-x-2 bg-orange-600 hover:bg-orange-700 text-white font-bold px-6 py-2.5 rounded-xl text-sm shadow-sm transition disabled:opacity-50 cursor-pointer"
+                className="flex items-center justify-center space-x-2 bg-orange-600 hover:bg-orange-700 text-white font-bold px-6 py-2.5 rounded-xl text-sm shadow-xs transition disabled:opacity-50 cursor-pointer"
               >
                 {isParsing ? (
                   <>
@@ -335,7 +383,7 @@ export default function CreateOrderPage() {
 
         {/* MODE 2: MANUAL QUICK MENU PICKER GRID */}
         {mode === 'MANUAL' && (
-          <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-4">
+          <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs space-y-4">
             <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-3">
               <ShoppingBag className="w-4 h-4 text-orange-600" /> Chọn Món Nhanh Từ Thực Đơn (Bấm + / - Để Tăng Số Lượng):
             </h2>
@@ -383,6 +431,40 @@ export default function CreateOrderPage() {
           </div>
         )}
 
+        {/* CRM CUSTOMER MATCHED BANNER */}
+        {matchedCustomer && (
+          <div className="bg-sky-50 border border-sky-300 rounded-xl p-4 flex items-center justify-between gap-3 text-xs text-sky-950 shadow-2xs">
+            <div className="flex items-center space-x-3">
+              <div className="p-2 bg-sky-600 text-white rounded-lg font-bold text-xs">
+                CRM
+              </div>
+              <div>
+                <div className="font-extrabold flex items-center gap-2 text-sm text-sky-900">
+                  <span>Khách hàng thành viên: {matchedCustomer.name}</span>
+                  <span className={`px-2 py-0.2 rounded-full text-[10px] ${
+                    matchedCustomer.tier === 'VIP' ? 'bg-amber-100 text-amber-900 font-bold border border-amber-300' : 'bg-purple-100 text-purple-900 font-bold'
+                  }`}>
+                    {matchedCustomer.tier === 'VIP' ? '⭐ VIP' : matchedCustomer.tier}
+                  </span>
+                  <span className="text-slate-500 font-normal">({matchedCustomer.total_orders} đơn đã mua)</span>
+                </div>
+                <div className="flex flex-wrap gap-1 mt-1">
+                  <span className="font-semibold text-slate-600">Khẩu vị:</span>
+                  {(matchedCustomer.taste_tags || []).map((t, idx) => (
+                    <span key={idx} className="bg-white text-sky-900 border border-sky-200 px-1.5 py-0.2 rounded text-[10px] font-bold">
+                      {t}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="text-right text-sky-800 font-medium">
+              <div>Tích lũy: <strong className="text-orange-600 font-extrabold">{matchedCustomer.total_spend.toLocaleString('vi-VN')} VNĐ</strong></div>
+            </div>
+          </div>
+        )}
+
         {/* ERROR ALERTS */}
         {errorMsg && (
           <div className="bg-rose-50 border border-rose-200 text-rose-700 p-4 rounded-xl flex items-center gap-3 text-sm font-medium">
@@ -402,7 +484,7 @@ export default function CreateOrderPage() {
                     TẠO ĐƠN THÀNH CÔNG! MÃ ĐƠN: <span className="text-orange-600">{createdOrderData.order_code}</span>
                   </h3>
                   <p className="text-xs text-emerald-700 font-medium">
-                    Đơn hàng đã được đẩy về bếp ở trạng thái <span className="font-bold">Tiếp Nhận (RECEIVED)</span>. Đang tự chuyển sang trang bếp...
+                    Đơn hàng đã được đồng bộ vào danh bạ CRM &amp; đẩy về bếp ở trạng thái <span className="font-bold">Tiếp Nhận (RECEIVED)</span>. Đang tự chuyển sang trang bếp...
                   </p>
                 </div>
               </div>
@@ -410,7 +492,7 @@ export default function CreateOrderPage() {
               <button
                 type="button"
                 onClick={() => router.push(`/branch/${createdOrderData.branch_id}`)}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-xl text-xs shadow-sm transition flex items-center gap-1.5 cursor-pointer shrink-0"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-xl text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer shrink-0"
               >
                 <span>Xem Đơn Tại Bếp</span>
                 <ArrowRight className="w-4 h-4" />
@@ -424,9 +506,9 @@ export default function CreateOrderPage() {
           <div className="lg:col-span-2 space-y-6">
             
             {/* Customer Details Card */}
-            <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-4">
+            <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs space-y-4">
               <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-3">
-                <User className="w-4 h-4 text-orange-600" /> Thông Tin Khách Hàng & Giao Hàng
+                <User className="w-4 h-4 text-orange-600" /> Thông Tin Khách Hàng &amp; Giao Hàng
               </h2>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -436,7 +518,7 @@ export default function CreateOrderPage() {
                     type="text"
                     value={customerName}
                     onChange={(e) => setCustomerName(e.target.value)}
-                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:ring-2 focus:ring-orange-500 focus:outline-none"
+                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:ring-2 focus:ring-orange-500 focus:outline-none font-bold"
                     placeholder="Nguyễn Văn A"
                   />
                 </div>
@@ -447,7 +529,7 @@ export default function CreateOrderPage() {
                     value={customerPhone}
                     onChange={(e) => setCustomerPhone(e.target.value)}
                     required
-                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:ring-2 focus:ring-orange-500 focus:outline-none font-semibold"
+                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm text-emerald-700 focus:ring-2 focus:ring-orange-500 focus:outline-none font-bold"
                     placeholder="0901234567"
                   />
                 </div>
@@ -459,7 +541,7 @@ export default function CreateOrderPage() {
                   type="text"
                   value={shippingAddress}
                   onChange={(e) => setShippingAddress(e.target.value)}
-                  className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:ring-2 focus:ring-orange-500 focus:outline-none"
+                  className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:ring-2 focus:ring-orange-500 focus:outline-none font-medium"
                   placeholder="123 Nguyễn Trãi, Phường 2"
                 />
               </div>
@@ -506,7 +588,7 @@ export default function CreateOrderPage() {
             </div>
 
             {/* Selected Items List */}
-            <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-4">
+            <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs space-y-4">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                   <ShoppingBag className="w-4 h-4 text-orange-600" /> Danh Sách Món Ăn Đã Chọn ({selectedItems.length})
@@ -605,7 +687,7 @@ export default function CreateOrderPage() {
 
           {/* Summary Sidebar */}
           <div className="space-y-6">
-            <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-5 sticky top-20">
+            <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs space-y-5 sticky top-20">
               <h2 className="text-sm font-bold text-slate-900 border-b border-slate-100 pb-3 flex items-center justify-between">
                 <span>Tổng Kết Đơn Hàng</span>
                 <span className="text-xs text-slate-500 font-normal">Calculated</span>
@@ -643,12 +725,12 @@ export default function CreateOrderPage() {
               <button
                 type="submit"
                 disabled={isSubmitting || selectedItems.length === 0}
-                className="w-full bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-extrabold py-3 px-4 rounded-xl shadow-sm flex items-center justify-center space-x-2 transition disabled:opacity-50 cursor-pointer text-sm"
+                className="w-full bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-extrabold py-3 px-4 rounded-xl shadow-xs flex items-center justify-center space-x-2 transition disabled:opacity-50 cursor-pointer text-sm"
               >
                 {isSubmitting ? (
                   <>
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    <span>Đang Lưu & Đẩy Đơn...</span>
+                    <span>Đang Lưu &amp; Đẩy Đơn...</span>
                   </>
                 ) : (
                   <>
@@ -663,5 +745,17 @@ export default function CreateOrderPage() {
 
       </div>
     </div>
+  );
+}
+
+export default function CreateOrderPage() {
+  return (
+    <Suspense fallback={
+      <div className="p-8 text-center text-slate-500 font-semibold">
+        Đang tải trang tạo đơn hàng...
+      </div>
+    }>
+      <CreateOrderContent />
+    </Suspense>
   );
 }

@@ -47,7 +47,8 @@ const KEYS = {
   WASTED_STOCK: 'gum_smart_wasted_stock_v3',
   IMPORTED_STOCK: 'gum_smart_imported_stock_v3',
   BRANCHES: 'gum_smart_branches_v3',
-  PRODUCTS: 'gum_smart_products_v3'
+  PRODUCTS: 'gum_smart_products_v3',
+  CUSTOMERS: 'gum_smart_customers_v3'
 };
 
 // Rich Pre-Populated Mock Expenses matching user request screenshot
@@ -708,6 +709,279 @@ export function deleteProduct(id: string): ProductRecord[] {
   setItem(KEYS.PRODUCTS, updated);
   return updated;
 }
+
+// -------------------------------------------------------------
+// CUSTOMERS CRM MANAGEMENT FUNCTIONS & DATA
+// -------------------------------------------------------------
+export interface CustomerOrderHistory {
+  id: string;
+  order_code: string;
+  created_at: string;
+  items_summary: string;
+  total_amount: number;
+  status: string;
+}
+
+export interface CustomerRecord {
+  id: string;
+  name: string;
+  phone: string;
+  secondary_phone?: string;
+  address: string;
+  secondary_address?: string;
+  total_orders: number;
+  avg_frequency_days?: number;
+  total_spend: number;
+  points: number;
+  tier: 'VIP' | 'Thân Thiết' | 'Khách Mới';
+  last_order_date: string;
+  days_since_last_order: number;
+  taste_tags: string[];
+  notes?: string;
+  favorite_item?: string;
+  favorite_branch?: string;
+  avg_order_value?: number;
+  order_history?: CustomerOrderHistory[];
+}
+
+const DEFAULT_CUSTOMERS: CustomerRecord[] = [
+  {
+    id: 'c1',
+    name: 'Nguyễn Văn Nam',
+    phone: '0901234567',
+    secondary_phone: '0909888777',
+    address: '123 Lê Lợi, Phường Bến Thành, Quận 1, TP.HCM',
+    secondary_address: 'Số 8 Tôn Đức Thắng, Quận 1',
+    total_orders: 12,
+    avg_frequency_days: 5,
+    total_spend: 4680000,
+    points: 234,
+    tier: 'VIP',
+    last_order_date: '2026-09-04 11:30',
+    days_since_last_order: 0,
+    taste_tags: ['🌶️ Ăn cay', '🥫 Nhiều sốt', '☀️ Ship giờ trưa', '🐓 Thích nguyên con'],
+    notes: 'Gia đình hay ăn cay đậm đà, ship trước 12h trưa. Thường xuyên gọi điện đặt combo gà ủ muối nguyên con.',
+    favorite_item: 'Gà Ủ Muối Nguyên Con (Kèm Nước Chấm)',
+    favorite_branch: 'Chi Nhánh Quận 1 (TP.HCM)',
+    avg_order_value: 390000,
+    order_history: [
+      { id: 'oh-1', order_code: '#OD9672', created_at: '2026-09-04 11:30', items_summary: '2x Gà Ủ Muối Nguyên Con, 2x Trà Tắc', total_amount: 420000, status: 'PAID' },
+      { id: 'oh-2', order_code: '#OD9510', created_at: '2026-08-30 12:15', items_summary: '1x Gà Ủ Muối Nguyên Con, 1x Chân Gà Sốt Thái', total_amount: 255000, status: 'DELIVERED' },
+      { id: 'oh-3', order_code: '#OD9344', created_at: '2026-08-25 11:45', items_summary: '3x Gà Ủ Muối Nguyên Con, 4x Trà Đào', total_amount: 690000, status: 'DELIVERED' }
+    ]
+  },
+  {
+    id: 'c2',
+    name: 'Anh Tuấn',
+    phone: '0988776655',
+    secondary_phone: '0977112233',
+    address: '456 Điện Biên Phủ, Phường 3, Quận 3, TP.HCM',
+    total_orders: 5,
+    avg_frequency_days: 7,
+    total_spend: 1250000,
+    points: 62,
+    tier: 'Thân Thiết',
+    last_order_date: '2026-09-01 14:15',
+    days_since_last_order: 3,
+    taste_tags: ['🍋 Thích chua ngọt', '🥤 Uống trà tắc khổng lồ', '⚡ Ship hỏa tốc'],
+    notes: 'Lấy thêm 2 hũ nước chấm extra mỗi đơn. Thường giao buổi chiều.',
+    favorite_item: 'Chân Gà Rút Xương Sốt Thái',
+    favorite_branch: 'CƠ SỞ VIN SMART CITY',
+    avg_order_value: 250000,
+    order_history: [
+      { id: 'oh-4', order_code: '#OD9488', created_at: '2026-09-01 14:15', items_summary: '2x Chân Gà Sốt Thái, 2x Trà Tắc Khổng Lồ', total_amount: 170000, status: 'DELIVERED' },
+      { id: 'oh-5', order_code: '#OD9210', created_at: '2026-08-24 16:00', items_summary: '1x Gà Ủ Muối Nửa Con, 2x Cánh Gà Ủ Muối', total_amount: 270000, status: 'DELIVERED' }
+    ]
+  },
+  {
+    id: 'c3',
+    name: 'Chị Mai',
+    phone: '0912345678',
+    secondary_phone: '',
+    address: '789 Xô Viết Nghệ Tĩnh, Quận Bình Thạnh, TP.HCM',
+    total_orders: 8,
+    avg_frequency_days: 4,
+    total_spend: 2980000,
+    points: 149,
+    tier: 'VIP',
+    last_order_date: '2026-08-17 18:45',
+    days_since_last_order: 18,
+    taste_tags: ['🚫 Không lấy hành', '🍗 Thích cánh gà', '📦 Bọc giấy bạc giữ nhiệt'],
+    notes: '⚠️ QUÁ 15 NGÀY CHƯA ĐẶT LẠI! Khách có nguy cơ rời bỏ. Cần nhân viên telesale gọi tặng voucher CHAO2026 giảm 30k.',
+    favorite_item: 'Cánh Gà Ủ Muối (Phần 4 Cánh)',
+    favorite_branch: 'Chi Nhánh Cầu Giấy',
+    avg_order_value: 372500,
+    order_history: [
+      { id: 'oh-6', order_code: '#OD8992', created_at: '2026-08-17 18:45', items_summary: '3x Cánh Gà Ủ Muối, 2x Trà Đào Cam Sả', total_amount: 315000, status: 'DELIVERED' },
+      { id: 'oh-7', order_code: '#OD8750', created_at: '2026-08-12 19:10', items_summary: '2x Gà Ủ Muối Nửa Con, 1x Chân Gà Sốt Thái', total_amount: 265000, status: 'DELIVERED' }
+    ]
+  },
+  {
+    id: 'c4',
+    name: 'Anh Hoàng (Hà Nội)',
+    phone: '0889018221',
+    secondary_phone: '',
+    address: 'Mipec 1, Hà Đông, Hà Nội',
+    total_orders: 1,
+    avg_frequency_days: 1,
+    total_spend: 580000,
+    points: 29,
+    tier: 'Khách Mới',
+    last_order_date: '2026-09-04 16:20',
+    days_since_last_order: 0,
+    taste_tags: ['🆕 Đơn đầu tiên', '🏢 Đặt văn phòng', '🥢 Lấy thêm đũa thìa'],
+    notes: 'Khách mới thử nghiệm đơn đầu tiên cho nhóm văn phòng Hà Đông.',
+    favorite_item: 'Gà Ủ Muối Nguyên Con (Kèm Nước Chấm)',
+    favorite_branch: 'CƠ SỞ VIN SMART CITY',
+    avg_order_value: 580000,
+    order_history: [
+      { id: 'oh-8', order_code: '#OD9710', created_at: '2026-09-04 16:20', items_summary: '2x Gà Ủ Muối Nguyên Con, 4x Trà Tắc Khổng Lồ', total_amount: 580000, status: 'RECEIVED' }
+    ]
+  }
+];
+
+export function getCustomers(): CustomerRecord[] {
+  return getItem<CustomerRecord[]>(KEYS.CUSTOMERS, DEFAULT_CUSTOMERS);
+}
+
+export function saveCustomer(custData: Partial<CustomerRecord> & { name: string; phone: string }): CustomerRecord[] {
+  const current = getCustomers();
+  const phoneClean = custData.phone.trim();
+  const existingIdx = current.findIndex(c => c.phone.replace(/\D/g, '') === phoneClean.replace(/\D/g, '') || c.id === custData.id);
+
+  if (existingIdx >= 0) {
+    const existing = current[existingIdx];
+    const totalSpend = (custData.total_spend !== undefined ? custData.total_spend : existing.total_spend);
+    const totalOrders = (custData.total_orders !== undefined ? custData.total_orders : existing.total_orders);
+
+    let tier: 'VIP' | 'Thân Thiết' | 'Khách Mới' = existing.tier;
+    if (totalSpend >= 2000000) tier = 'VIP';
+    else if (totalOrders >= 3) tier = 'Thân Thiết';
+    else tier = 'Khách Mới';
+
+    const updatedCust: CustomerRecord = {
+      ...existing,
+      ...custData,
+      tier,
+      points: Math.floor(totalSpend / 20000)
+    };
+
+    const updated = [...current];
+    updated[existingIdx] = updatedCust;
+    setItem(KEYS.CUSTOMERS, updated);
+    return updated;
+  } else {
+    const totalSpend = custData.total_spend || 0;
+    const totalOrders = custData.total_orders || 1;
+    let tier: 'VIP' | 'Thân Thiết' | 'Khách Mới' = 'Khách Mới';
+    if (totalSpend >= 2000000) tier = 'VIP';
+    else if (totalOrders >= 3) tier = 'Thân Thiết';
+
+    const newCust: CustomerRecord = {
+      id: custData.id || `c-${Date.now()}`,
+      name: custData.name,
+      phone: phoneClean,
+      secondary_phone: custData.secondary_phone || '',
+      address: custData.address || '',
+      secondary_address: custData.secondary_address || '',
+      total_orders: totalOrders,
+      avg_frequency_days: custData.avg_frequency_days || 7,
+      total_spend: totalSpend,
+      points: Math.floor(totalSpend / 20000),
+      tier,
+      last_order_date: custData.last_order_date || new Date().toLocaleString('vi-VN'),
+      days_since_last_order: 0,
+      taste_tags: custData.taste_tags || ['🆕 Khách mới'],
+      notes: custData.notes || 'Hồ sơ tạo mới.',
+      favorite_item: custData.favorite_item || 'Gà Ủ Muối Nguyên Con',
+      favorite_branch: custData.favorite_branch || 'CƠ SỞ VIN SMART CITY',
+      avg_order_value: totalOrders > 0 ? Math.round(totalSpend / totalOrders) : 0,
+      order_history: custData.order_history || []
+    };
+
+    const updated = [newCust, ...current];
+    setItem(KEYS.CUSTOMERS, updated);
+    return updated;
+  }
+}
+
+export function deleteCustomer(id: string): CustomerRecord[] {
+  const current = getCustomers();
+  const updated = current.filter(c => c.id !== id);
+  setItem(KEYS.CUSTOMERS, updated);
+  return updated;
+}
+
+export function findCustomerByPhone(phone: string): CustomerRecord | undefined {
+  if (!phone) return undefined;
+  const clean = phone.replace(/\D/g, '');
+  if (!clean) return undefined;
+  const customers = getCustomers();
+  return customers.find(c => c.phone.replace(/\D/g, '') === clean || (c.secondary_phone && c.secondary_phone.replace(/\D/g, '') === clean));
+}
+
+export function addOrUpdateCustomerFromOrder(order: {
+  customer_name: string;
+  customer_phone: string;
+  shipping_address?: string;
+  total_amount?: number;
+  order_code?: string;
+  items_summary?: string;
+}) {
+  if (!order.customer_phone) return;
+  const existing = findCustomerByPhone(order.customer_phone);
+
+  const amount = order.total_amount || 0;
+  const nowStr = new Date().toLocaleString('vi-VN');
+
+  if (existing) {
+    const newSpend = existing.total_spend + amount;
+    const newOrders = existing.total_orders + 1;
+    const newHistory = existing.order_history || [];
+    if (order.order_code) {
+      newHistory.unshift({
+        id: `oh-${Date.now()}`,
+        order_code: order.order_code,
+        created_at: nowStr,
+        items_summary: order.items_summary || 'Đơn hàng mới',
+        total_amount: amount,
+        status: 'PAID'
+      });
+    }
+
+    saveCustomer({
+      ...existing,
+      name: order.customer_name || existing.name,
+      address: order.shipping_address || existing.address,
+      total_orders: newOrders,
+      total_spend: newSpend,
+      last_order_date: nowStr,
+      days_since_last_order: 0,
+      order_history: newHistory
+    });
+  } else {
+    saveCustomer({
+      name: order.customer_name || 'Khách Hàng Mới',
+      phone: order.customer_phone,
+      address: order.shipping_address || '',
+      total_orders: 1,
+      total_spend: amount,
+      last_order_date: nowStr,
+      days_since_last_order: 0,
+      taste_tags: ['🆕 Đơn tự động từ AI'],
+      notes: 'Tự động lưu từ đơn hàng tạo mới.',
+      order_history: order.order_code ? [{
+        id: `oh-${Date.now()}`,
+        order_code: order.order_code,
+        created_at: nowStr,
+        items_summary: order.items_summary || 'Đơn mới',
+        total_amount: amount,
+        status: 'PAID'
+      }] : []
+    });
+  }
+}
+
 
 
 
