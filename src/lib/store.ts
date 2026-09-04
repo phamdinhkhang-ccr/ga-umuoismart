@@ -29,51 +29,92 @@ export interface InventoryLog {
 
 export interface ExpenseRecord {
   id: string;
-  category: string;
-  amount: number;
-  description: string;
-  payer: string;
-  branch: string;
-  created_at: string;
+  code: string;            // e.g. '#EX1418'
+  category: string;        // e.g. 'Tiền ship', 'Nước & Đá', 'Ăn uống', 'Mua rau', 'Mua giấy'
+  amount: number;          // e.g. 26000
+  payment_method: string;  // 'Tiền mặt' | 'Chuyển khoản'
+  description: string;     // e.g. 'Trả ship', 'Nước', 'Ăn trưa', 'Mua rau'
+  payer: string;           // e.g. 'Đức', 'Admin'
+  branch: string;          // e.g. 'CƠ SỞ VIN SMART CITY'
+  created_at: string;      // e.g. '2026-09-04'
 }
 
 // Key Constants for LocalStorage
 const KEYS = {
-  EXPENSES: 'gum_smart_expenses_v2',
-  LOGS: 'gum_smart_inventory_logs_v2',
-  INITIAL_STOCK: 'gum_smart_initial_stock_v2',
-  WASTED_STOCK: 'gum_smart_wasted_stock_v2',
-  IMPORTED_STOCK: 'gum_smart_imported_stock_v2'
+  EXPENSES: 'gum_smart_expenses_v3',
+  LOGS: 'gum_smart_inventory_logs_v3',
+  INITIAL_STOCK: 'gum_smart_initial_stock_v3',
+  WASTED_STOCK: 'gum_smart_wasted_stock_v3',
+  IMPORTED_STOCK: 'gum_smart_imported_stock_v3'
 };
 
-// Default Mock Expenses
+// Rich Pre-Populated Mock Expenses matching user request screenshot
 const DEFAULT_EXPENSES: ExpenseRecord[] = [
   {
-    id: 'exp-101',
-    category: 'Mua Nguyên Liệu Phụ',
-    amount: 150000,
-    description: 'Mua 3 bao đá bi + 2 bịch túi nilon đóng gà',
-    payer: 'Trần Thị Thu Ngân',
-    branch: 'Chi Nhánh Gà Ủ Muối Quận 1',
-    created_at: new Date(Date.now() - 1000 * 60 * 120).toISOString()
+    id: 'exp-1418',
+    code: '#EX1418',
+    category: 'Tiền ship',
+    amount: 26000,
+    payment_method: 'Tiền mặt',
+    description: 'Trả ship hỏa tốc đơn #OD9672',
+    payer: 'Đức',
+    branch: 'CƠ SỞ VIN SMART CITY',
+    created_at: '2026-09-04'
   },
   {
-    id: 'exp-100',
-    category: 'Tiền Ship Ngoài (Ahamove/Grab)',
+    id: 'exp-1417',
+    code: '#EX1417',
+    category: 'Nước & Đá',
+    amount: 160000,
+    payment_method: 'Chuyển khoản',
+    description: 'Nước uống giải khát bếp',
+    payer: 'Đức',
+    branch: 'CƠ SỞ VIN SMART CITY',
+    created_at: '2026-09-04'
+  },
+  {
+    id: 'exp-1414',
+    code: '#EX1414',
+    category: 'Ăn uống nội bộ',
+    amount: 200000,
+    payment_method: 'Tiền mặt',
+    description: 'Ăn trưa ca làm việc',
+    payer: 'Đức',
+    branch: 'CƠ SỞ VIN SMART CITY',
+    created_at: '2026-09-04'
+  },
+  {
+    id: 'exp-1411',
+    code: '#EX1411',
+    category: 'Nguyên phụ liệu',
     amount: 45000,
-    description: 'Bù ship đơn hỏa tốc giao Thủ Đức',
-    payer: 'Lê Văn Cơ Sở 1',
-    branch: 'Chi Nhánh Gà Ủ Muối Quận 1',
-    created_at: new Date(Date.now() - 1000 * 60 * 360).toISOString()
+    payment_method: 'Tiền mặt',
+    description: 'Mua rau răm + sả tắc tươi',
+    payer: 'Nam',
+    branch: 'Chi Nhánh Cầu Giấy',
+    created_at: '2026-09-04'
   },
   {
-    id: 'exp-99',
-    category: 'Điện Nước & Khác',
-    amount: 80000,
-    description: 'Thay bóng đèn hỏng khu vực bếp',
-    payer: 'Phạm Thị Cơ Sở 2',
-    branch: 'Chi Nhánh Gà Ủ Muối Quận 3',
-    created_at: new Date(Date.now() - 1000 * 60 * 1440).toISOString()
+    id: 'exp-1409',
+    code: '#EX1409',
+    category: 'Nước & Đá',
+    amount: 120000,
+    payment_method: 'Tiền mặt',
+    description: 'mua nc+ đá bi 5 bao',
+    payer: 'Admin',
+    branch: 'Chi Nhánh Đống Đa',
+    created_at: '2026-09-03'
+  },
+  {
+    id: 'exp-1408',
+    code: '#EX1408',
+    category: 'Bao bì & VPP',
+    amount: 85000,
+    payment_method: 'Chuyển khoản',
+    description: 'mua giấy in K80 bill',
+    payer: 'Đức',
+    branch: 'CƠ SỞ VIN SMART CITY',
+    created_at: '2026-09-03'
   }
 ];
 
@@ -115,16 +156,33 @@ export function getExpenses(): ExpenseRecord[] {
   return getItem<ExpenseRecord[]>(KEYS.EXPENSES, DEFAULT_EXPENSES);
 }
 
-export function addExpense(exp: Omit<ExpenseRecord, 'id' | 'created_at'>): ExpenseRecord {
+export function addExpense(exp: Omit<ExpenseRecord, 'id' | 'code'>): ExpenseRecord {
   const current = getExpenses();
+  const nextNum = current.length > 0 ? Math.max(...current.map(e => Number(e.code?.replace('#EX', '')) || 1400)) + 1 : 1419;
+  const code = `#EX${nextNum}`;
   const newRecord: ExpenseRecord = {
     ...exp,
-    id: `exp-${Date.now()}`,
-    created_at: new Date().toISOString()
+    id: `exp-${nextNum}`,
+    code,
+    created_at: exp.created_at || new Date().toISOString().split('T')[0]
   };
   const updated = [newRecord, ...current];
   setItem(KEYS.EXPENSES, updated);
   return newRecord;
+}
+
+export function updateExpense(id: string, updatedExp: Partial<ExpenseRecord>): ExpenseRecord[] {
+  const current = getExpenses();
+  const updated = current.map(e => e.id === id ? { ...e, ...updatedExp } : e);
+  setItem(KEYS.EXPENSES, updated);
+  return updated;
+}
+
+export function deleteExpense(id: string): ExpenseRecord[] {
+  const current = getExpenses();
+  const updated = current.filter(e => e.id !== id);
+  setItem(KEYS.EXPENSES, updated);
+  return updated;
 }
 
 export function getTotalPettyExpenses(): number {
@@ -171,7 +229,6 @@ export function addInventoryLog(log: Omit<InventoryLog, 'id' | 'timestamp'>): In
   return newLog;
 }
 
-// Deduct inventory when order is completed / paid
 export function deductInventoryForOrder(order: Order): void {
   if (!order.items || order.items.length === 0) return;
   order.items.forEach(item => {
@@ -186,7 +243,6 @@ export function deductInventoryForOrder(order: Order): void {
   });
 }
 
-// Restore inventory when order is cancelled
 export function restoreInventoryForOrder(order: Order): void {
   if (!order.items || order.items.length === 0) return;
   order.items.forEach(item => {
@@ -201,13 +257,10 @@ export function restoreInventoryForOrder(order: Order): void {
   });
 }
 
-// Build Audit Table matching formula:
-// Tồn cuối = Tồn đầu ngày + Nhập kho - Bán thành công + Hoàn hàng do hủy - Xuất hao hụt
 export function calculateInventoryAudit(ordersList: Order[]): InventoryAuditItem[] {
   const logs = getInventoryLogs();
 
   return BASE_INVENTORY_ITEMS.map(base => {
-    // 1. Calculate sold & restored from active orders list
     let totalSold = 0;
     let totalRestored = 0;
 
@@ -224,7 +277,6 @@ export function calculateInventoryAudit(ordersList: Order[]): InventoryAuditItem
       }
     });
 
-    // 2. Extra imports & waste from logs
     const extraImports = logs
       .filter(l => l.type === 'IMPORT' && l.itemName.toLowerCase().includes(base.name.toLowerCase()))
       .reduce((sum, l) => sum + Math.abs(l.quantityChange), 0);
@@ -236,7 +288,6 @@ export function calculateInventoryAudit(ordersList: Order[]): InventoryAuditItem
     const totalImported = base.totalImported + extraImports;
     const totalWasted = base.totalWasted + extraWasted;
 
-    // Formula: Tồn cuối = Tồn đầu ngày + Nhập kho - Bán thành công + Hoàn hàng do hủy - Xuất hao hụt
     const currentStock = base.initialStock + totalImported - totalSold + totalRestored - totalWasted;
 
     return {
