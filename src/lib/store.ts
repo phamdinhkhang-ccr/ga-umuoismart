@@ -49,7 +49,8 @@ const KEYS = {
   IMPORTED_STOCK: 'gum_smart_imported_stock_v3',
   BRANCHES: 'gum_smart_branches_v3',
   PRODUCTS: 'gum_smart_products_v3',
-  CUSTOMERS: 'gum_smart_customers_v3'
+  CUSTOMERS: 'gum_smart_customers_v3',
+  NOTIFICATIONS: 'gum_smart_notifications_v3'
 };
 
 // Rich Pre-Populated Mock Expenses matching user request screenshot
@@ -983,6 +984,95 @@ export function addOrUpdateCustomerFromOrder(order: {
     });
   }
 }
+
+// -------------------------------------------------------------
+// NOTIFICATIONS SYSTEM FUNCTIONS & DATA
+// -------------------------------------------------------------
+export interface SystemNotification {
+  id: string;
+  type: 'ORDER' | 'STOCK_EXPIRY' | 'SHIFT' | 'EXPENSE';
+  title: string;
+  message: string;
+  timestamp: string;
+  read: boolean;
+  link: string;
+  actionText?: string;
+}
+
+const DEFAULT_NOTIFICATIONS: SystemNotification[] = [
+  {
+    id: 'n1',
+    type: 'ORDER',
+    title: '🍗 Đơn hàng mới #OD9673',
+    message: 'Khách vừa đặt 2 Gà Ủ Muối Nguyên Con + 2 Trà Tắc qua AI Parser.',
+    timestamp: '2 phút trước',
+    read: false,
+    link: '/admin/orders',
+    actionText: 'Xem đơn'
+  },
+  {
+    id: 'n2',
+    type: 'STOCK_EXPIRY',
+    title: '⚠️ Cảnh báo HSD: Gà Ủ Muối Lô 01',
+    message: 'Còn 3 ngày hết hạn! Cần ưu tiên xuất bán hoặc khuyến mãi.',
+    timestamp: '15 phút trước',
+    read: false,
+    link: '/admin/products',
+    actionText: 'Xem HSD'
+  },
+  {
+    id: 'n3',
+    type: 'SHIFT',
+    title: '🕒 Mở ca làm việc mới',
+    message: 'Nhân viên Đức vừa Mở Ca 1 tại CƠ SỞ VIN SMART CITY.',
+    timestamp: '45 phút trước',
+    read: false,
+    link: '/admin/shifts',
+    actionText: 'Xem ca'
+  },
+  {
+    id: 'n4',
+    type: 'EXPENSE',
+    title: '💸 Phiếu chi mới #EX1419',
+    message: 'Chi 35.000 VNĐ trả tiền ship hỏa tốc đơn #OD9672 (Đức).',
+    timestamp: '1 giờ trước',
+    read: true,
+    link: '/admin/expenses',
+    actionText: 'Xem phiếu'
+  }
+];
+
+export function getNotifications(): SystemNotification[] {
+  return getItem<SystemNotification[]>(KEYS.NOTIFICATIONS, DEFAULT_NOTIFICATIONS);
+}
+
+export function addNotification(notif: Omit<SystemNotification, 'id' | 'timestamp' | 'read'>): SystemNotification {
+  const current = getNotifications();
+  const newNotif: SystemNotification = {
+    ...notif,
+    id: `notif-${Date.now()}`,
+    timestamp: 'Vừa xong',
+    read: false
+  };
+  const updated = [newNotif, ...current];
+  setItem(KEYS.NOTIFICATIONS, updated);
+  return newNotif;
+}
+
+export function markAllNotificationsRead(): SystemNotification[] {
+  const current = getNotifications();
+  const updated = current.map(n => ({ ...n, read: true }));
+  setItem(KEYS.NOTIFICATIONS, updated);
+  return updated;
+}
+
+export function markNotificationRead(id: string): SystemNotification[] {
+  const current = getNotifications();
+  const updated = current.map(n => n.id === id ? { ...n, read: true } : n);
+  setItem(KEYS.NOTIFICATIONS, updated);
+  return updated;
+}
+
 
 
 
