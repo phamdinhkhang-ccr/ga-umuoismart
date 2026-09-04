@@ -95,6 +95,8 @@ export default function AdminCmsPage() {
   const handleSaveAll = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
 
+    console.log('Đang gửi dữ liệu menu lên Supabase...', products);
+
     const fullConfigData = {
       ...settings,
       brandName: settings.brandName || 'Gà Ủ Muối Smart',
@@ -136,14 +138,15 @@ export default function AdminCmsPage() {
         .upsert(payload, { onConflict: 'id' });
 
       if (error) {
-        console.error('Chi tiết lỗi Supabase:', error);
-        alert('Lưu thất bại: ' + error.message);
+        console.error('LỖI SUPABASE TRẢ VỀ:', error);
+        alert('Lỗi lưu: ' + error.message);
         showToast('❌ Lưu thất bại: ' + error.message);
         return;
+      } else {
+        console.log('LƯU SUPABASE THÀNH CÔNG:', data);
+        alert('✅ Đã ghi đè menu mới vào Supabase thành công!');
+        showToast('✅ Đã ghi đè menu mới vào Supabase thành công!');
       }
-
-      alert('✅ Đã lưu cấu hình thành công lên Cloud!');
-      showToast('✅ Đã lưu cấu hình thành công lên Cloud!');
     } catch (err: any) {
       console.error('Lỗi khi lưu:', err);
       alert('Lỗi hệ thống: ' + err.message);
