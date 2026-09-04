@@ -425,8 +425,8 @@ export default function AdminCmsPage() {
               <input
                 type="text"
                 value={settings.hotline ?? settings.hero_hotline ?? ''}
-                onChange={(e) => setSettings({ ...settings, hotline: e.target.value, hero_hotline: e.target.value })}
-                placeholder="Nhập số hotline..."
+                onChange={(e) => setSettings(prev => ({ ...prev, hotline: e.target.value, hero_hotline: e.target.value }))}
+                placeholder="Nhập số hotline (hoặc để trống nếu không muốn hiện)"
                 className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl font-bold text-orange-600 outline-none focus:border-orange-500 transition"
               />
             </div>
