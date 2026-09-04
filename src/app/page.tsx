@@ -150,18 +150,18 @@ export default function PublicStorefrontHome() {
     return cmsSettings.branches?.filter((b) => b.is_active !== false) || [];
   }, [cmsSettings.branches]);
 
-  // Dynamic display products priority: cmsSettings.products -> cmsSettings.menuItems -> productsList
+  // Dynamic display products priority: cmsSettings.menuItems -> cmsSettings.products -> productsList
   const displayProducts = useMemo(() => {
-    const rawList = (cmsSettings as any)?.products?.length > 0 
-      ? (cmsSettings as any).products 
-      : (cmsSettings as any)?.menuItems?.length > 0 
-        ? (cmsSettings as any).menuItems 
+    const rawList = (cmsSettings as any)?.menuItems?.length > 0 
+      ? (cmsSettings as any).menuItems 
+      : (cmsSettings as any)?.products?.length > 0 
+        ? (cmsSettings as any).products 
         : productsList;
 
     if (!Array.isArray(rawList)) return [];
 
     return rawList
-      .filter((p: any) => p && p.is_storefront_visible !== false)
+      .filter((p: any) => p && p.isVisible !== false && p.is_storefront_visible !== false)
       .sort((a: any, b: any) => (b.is_best_seller ? 1 : 0) - (a.is_best_seller ? 1 : 0));
   }, [cmsSettings, productsList]);
 
@@ -780,7 +780,8 @@ export default function PublicStorefrontHome() {
         {/* Product Grid Dynamic Sync */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {displayProducts.map((p: any) => {
-            const productImg = p.image_url || p.image || p.imageUrl || p.avatar;
+            const productImg = p.image || p.imageUrl || p.image_url || p.avatar;
+            const currentPrice = p.price || p.salePrice || 0;
             return (
               <div
                 key={p.id || p.name}
@@ -833,7 +834,7 @@ export default function PublicStorefrontHome() {
                   <div>
                     <span className="text-[10px] text-slate-400 font-bold block">Giá bán:</span>
                     <div className="flex items-baseline space-x-2">
-                      <span className="text-lg font-black text-orange-600">{(p.price || 0).toLocaleString('vi-VN')}đ</span>
+                      <span className="text-lg font-black text-orange-600">{(currentPrice).toLocaleString('vi-VN')}đ</span>
                       {p.original_price && (
                         <span className="line-through text-slate-400 font-semibold text-xs">{(p.original_price).toLocaleString('vi-VN')}đ</span>
                       )}
