@@ -59,10 +59,14 @@ export default function AdminCmsPage() {
       const { data } = await supabase
         .from('storefront_settings')
         .select('*')
-        .eq('id', 'default_config')
-        .single();
-      if (data && data.settings) {
-        setSettings(prev => ({ ...prev, ...data.settings }));
+        .in('id', ['primary_config', 'default_config']);
+      
+      if (Array.isArray(data) && data.length > 0) {
+        const primary = data.find(d => d.id === 'primary_config') || data[0];
+        const configData = primary.data || primary.settings;
+        if (configData) {
+          setSettings(prev => ({ ...prev, ...configData }));
+        }
       }
     } catch (e) {}
   };
@@ -87,9 +91,13 @@ export default function AdminCmsPage() {
     if (e) e.preventDefault();
     const updated = saveCmsSettings({
       ...settings,
-      hotline: settings.hero_hotline
+      hotline: settings.hero_hotline || settings.hotline
     });
     setSettings(updated);
+
+    try {
+      localStorage.setItem('storefront_settings', JSON.stringify(updated));
+    } catch (e) {}
 
     try {
       Promise.resolve(
@@ -97,12 +105,19 @@ export default function AdminCmsPage() {
           .from('storefront_settings')
           .upsert([
             {
+              id: 'primary_config',
+              data: updated,
+              settings: updated,
+              updated_at: new Date().toISOString()
+            },
+            {
               id: 'default_config',
+              data: updated,
               settings: updated,
               updated_at: new Date().toISOString()
             }
           ])
-      ).catch(() => {});
+      ).catch((err) => console.warn('Supabase storefront_settings upsert error:', err));
     } catch (err) {}
 
     notifyUpdate();

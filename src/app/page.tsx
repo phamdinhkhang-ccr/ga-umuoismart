@@ -69,23 +69,57 @@ export default function PublicStorefrontHome() {
 
   const loadStorefrontData = async () => {
     const localCms = getCmsSettings();
-    setCmsSettings(localCms);
+    try {
+      const savedBackup = localStorage.getItem('storefront_settings');
+      if (savedBackup) {
+        const parsed = JSON.parse(savedBackup);
+        if (parsed) setCmsSettings(prev => ({ ...prev, ...parsed }));
+      }
+    } catch (e) {}
+
     setProductsList(getProducts());
 
     try {
       const { data } = await supabase
         .from('storefront_settings')
         .select('*')
-        .eq('id', 'default_config')
-        .single();
-      if (data && data.settings) {
-        setCmsSettings(prev => ({ ...prev, ...data.settings }));
+        .in('id', ['primary_config', 'default_config']);
+
+      if (Array.isArray(data) && data.length > 0) {
+        const primary = data.find(d => d.id === 'primary_config') || data[0];
+        const configData = primary.data || primary.settings;
+        if (configData) {
+          setCmsSettings(prev => ({ ...prev, ...configData }));
+          try {
+            localStorage.setItem('storefront_settings', JSON.stringify(configData));
+          } catch (e) {}
+        }
       }
     } catch (e) {}
   };
 
   useEffect(() => {
     loadStorefrontData();
+
+    // Supabase Realtime Listener for Storefront Settings (Live Cross-Device Update)
+    const storefrontChannel = supabase
+      .channel('realtime_storefront')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'storefront_settings' },
+        (payload: any) => {
+          if (payload.new) {
+            const newConfig = payload.new.data || payload.new.settings;
+            if (newConfig) {
+              setCmsSettings(prev => ({ ...prev, ...newConfig }));
+              try {
+                localStorage.setItem('storefront_settings', JSON.stringify(newConfig));
+              } catch (e) {}
+            }
+          }
+        }
+      )
+      .subscribe();
 
     const handleStoreUpdate = () => {
       loadStorefrontData();
@@ -95,6 +129,9 @@ export default function PublicStorefrontHome() {
     window.addEventListener('storage', handleStoreUpdate);
 
     return () => {
+      try {
+        supabase.removeChannel(storefrontChannel);
+      } catch (e) {}
       window.removeEventListener('gum_store_update', handleStoreUpdate);
       window.removeEventListener('storage', handleStoreUpdate);
     };
@@ -950,7 +987,7 @@ export default function PublicStorefrontHome() {
                 <div className="space-y-2 bg-white/5 p-4 rounded-2xl border border-amber-500/30">
                   <span className="text-xs font-bold text-amber-300 block">Thanh toán chuyển khoản VietQR tự động (Tùy chọn):</span>
                   <img
-                    src={`https://img.vietqr.io/image/MB-0988123456-compact2.png?amount=${successOrder.final_amount}&addInfo=${successOrder.order_code}&accountName=GA%20U%20MUOI%20SMART`}
+                    src={`https://img.vietqr.io/image/${(cmsSettings?.bankInfo?.bankName || 'MB').replace(/\s+/g, '')}-${cmsSettings?.bankInfo?.accountNumber || '0988123456'}-compact2.png?amount=${successOrder.final_amount}&addInfo=${successOrder.order_code}&accountName=${encodeURIComponent(cmsSettings?.bankInfo?.accountHolder || 'GA U MUOI SMART')}`}
                     alt="VietQR Code"
                     className="w-44 h-44 object-contain mx-auto rounded-xl border-2 border-amber-400 p-1 bg-white shadow-md"
                   />
