@@ -70,6 +70,10 @@ export default function AdminCmsPage() {
 
       if (data && data.data) {
         setSettings((prev: any) => ({ ...prev, ...data.data }));
+        const cloudMenu = data.data.menuItems || data.data.products;
+        if (Array.isArray(cloudMenu) && cloudMenu.length > 0) {
+          setProducts(cloudMenu);
+        }
       }
     } catch (err) {
       console.error('Lỗi fetch:', err);
@@ -95,7 +99,32 @@ export default function AdminCmsPage() {
   const handleSaveAll = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
 
-    console.log('Đang gửi dữ liệu menu lên Supabase...', products);
+    const currentMenuList = (products && products.length > 0)
+      ? products
+      : (settings as any)?.menuItems?.length > 0
+        ? (settings as any).menuItems
+        : (settings as any)?.products?.length > 0
+          ? (settings as any).products
+          : getProducts();
+
+    const formattedMenuItems = currentMenuList.map((item: any) => ({
+      id: item.id || `item_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      name: item.name,
+      price: Number(item.price) || 0,
+      originalPrice: Number(item.originalPrice || item.original_price) || 0,
+      original_price: Number(item.originalPrice || item.original_price) || 0,
+      image: item.image || item.imageUrl || item.image_url || '',
+      imageUrl: item.image || item.imageUrl || item.image_url || '',
+      image_url: item.image || item.imageUrl || item.image_url || '',
+      description: item.description || '',
+      category: item.category || 'Món Gà Ủ Muối',
+      isBestSeller: Boolean(item.isBestSeller || item.is_best_seller),
+      is_best_seller: Boolean(item.isBestSeller || item.is_best_seller),
+      isVisible: item.isVisible !== false && item.is_storefront_visible !== false,
+      is_storefront_visible: item.isVisible !== false && item.is_storefront_visible !== false,
+    }));
+
+    console.log('Đang gửi dữ liệu menu lên Supabase...', formattedMenuItems);
 
     const fullConfigData = {
       ...settings,
@@ -115,19 +144,20 @@ export default function AdminCmsPage() {
       hotline_complaints: settings.hotline_complaints,
       bankInfo: settings.bankInfo,
       hero_banner_image: settings.hero_banner_image || '',
-      products: products,
-      menuItems: products
+      products: formattedMenuItems,
+      menuItems: formattedMenuItems
     };
 
     const updated = saveCmsSettings(fullConfigData);
     setSettings(updated);
+    setProducts(formattedMenuItems);
 
     try {
       localStorage.setItem('storefront_settings', JSON.stringify(updated));
     } catch (e) {}
 
     try {
-      const payload = {
+      const payloadToSave = {
         id: 'default_config',
         data: fullConfigData,
         updated_at: new Date().toISOString()
@@ -135,17 +165,17 @@ export default function AdminCmsPage() {
 
       const { data, error } = await supabase
         .from('storefront_settings')
-        .upsert(payload, { onConflict: 'id' });
+        .upsert(payloadToSave, { onConflict: 'id' });
 
       if (error) {
         console.error('LỖI SUPABASE TRẢ VỀ:', error);
-        alert('Lỗi lưu: ' + error.message);
+        alert('Lỗi lưu menu: ' + error.message);
         showToast('❌ Lưu thất bại: ' + error.message);
         return;
       } else {
         console.log('LƯU SUPABASE THÀNH CÔNG:', data);
-        alert('✅ Đã ghi đè menu mới vào Supabase thành công!');
-        showToast('✅ Đã ghi đè menu mới vào Supabase thành công!');
+        alert('✅ Đã lưu toàn bộ Cấu hình + Menu lên Supabase thành công!');
+        showToast('✅ Đã lưu toàn bộ Cấu hình + Menu lên Supabase thành công!');
       }
     } catch (err: any) {
       console.error('Lỗi khi lưu:', err);

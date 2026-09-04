@@ -790,21 +790,21 @@ export default function PublicStorefrontHome() {
                 <div className="space-y-3">
                   <div className="flex justify-between items-start gap-3">
                     {/* Product Image Box with onError Fallback */}
-                    <div className="relative w-20 h-20 sm:w-24 sm:h-24 bg-amber-50/80 rounded-2xl overflow-hidden shrink-0 border border-slate-200 shadow-2xs flex items-center justify-center">
+                    <div className="w-full h-44 bg-amber-50 rounded-2xl overflow-hidden flex items-center justify-center relative border border-slate-200 shadow-2xs">
                       {productImg ? (
                         <img
                           src={productImg}
                           alt={p.name}
-                          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                          className="w-full h-full object-cover rounded-2xl transition-transform duration-300 group-hover:scale-105"
                           onError={(e) => {
                             e.currentTarget.style.display = 'none';
                             e.currentTarget.nextElementSibling?.classList.remove('hidden');
                           }}
                         />
                       ) : null}
-                      <div className={`w-full h-full flex items-center justify-center text-3xl sm:text-4xl ${productImg ? 'hidden' : ''}`}>
-                        <div className="w-14 h-14 bg-amber-100/90 rounded-2xl flex items-center justify-center">
-                          <span className="text-3xl">🍗</span>
+                      <div className={`w-full h-full flex items-center justify-center text-4xl ${productImg ? 'hidden' : ''}`}>
+                        <div className="w-20 h-20 bg-amber-100/90 rounded-2xl flex items-center justify-center">
+                          <span className="text-4xl">🍗</span>
                         </div>
                       </div>
                     </div>
