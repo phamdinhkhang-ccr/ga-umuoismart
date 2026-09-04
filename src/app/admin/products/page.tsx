@@ -12,6 +12,7 @@ import {
   deleteProduct, ProductRecord, getBranches, getExpiryDetails 
 } from '@/lib/store';
 import { Branch } from '@/types/database';
+import { supabase } from '@/lib/supabaseClient';
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<ProductRecord[]>([]);
@@ -252,6 +253,26 @@ export default function ProductsPage() {
     }
   };
 
+  const syncProductsToSupabase = async (updatedList: ProductRecord[]) => {
+    try {
+      const { data: res } = await supabase
+        .from('storefront_settings')
+        .select('data')
+        .eq('id', 'default_config')
+        .maybeSingle();
+
+      const currentData = res?.data || {};
+
+      await supabase
+        .from('storefront_settings')
+        .upsert({
+          id: 'default_config',
+          data: { ...currentData, products: updatedList, menuItems: updatedList },
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'id' });
+    } catch (e) {}
+  };
+
   // Save Product Handler
   const handleSaveProduct = (e: React.FormEvent) => {
     e.preventDefault();
@@ -286,6 +307,9 @@ export default function ProductsPage() {
         body: JSON.stringify(updatedList)
       }).catch(() => {});
     } catch (e) {}
+
+    syncProductsToSupabase(updatedList);
+
     setActiveModal(null);
     showToast(selectedProduct ? `Đã cập nhật món "${formData.name}"` : `Đã thêm món mới "${formData.name}" vào menu`);
   };
@@ -301,6 +325,9 @@ export default function ProductsPage() {
     if (!selectedProduct) return;
     const updated = deleteProduct(selectedProduct.id);
     setProducts(updated);
+
+    syncProductsToSupabase(updated);
+
     setActiveModal(null);
     showToast(`Đã xóa món "${selectedProduct.name}" khỏi thực đơn`);
   };

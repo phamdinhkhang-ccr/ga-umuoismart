@@ -112,7 +112,9 @@ export default function AdminCmsPage() {
       social_zalo: settings.social_zalo,
       hotline_complaints: settings.hotline_complaints,
       bankInfo: settings.bankInfo,
-      hero_banner_image: settings.hero_banner_image || ''
+      hero_banner_image: settings.hero_banner_image || '',
+      products: products,
+      menuItems: products
     };
 
     const updated = saveCmsSettings(fullConfigData);
@@ -156,6 +158,38 @@ export default function AdminCmsPage() {
       newBranches[index] = { ...newBranches[index], [field]: value };
       return { ...prev, branches: newBranches };
     });
+  };
+
+  const syncProductsToSupabase = async (updatedProductList: ProductRecord[]) => {
+    try {
+      const { data: currentRecord } = await supabase
+        .from('storefront_settings')
+        .select('data')
+        .eq('id', 'default_config')
+        .maybeSingle();
+
+      const currentData = currentRecord?.data || {};
+
+      const updatedData = {
+        ...currentData,
+        products: updatedProductList,
+        menuItems: updatedProductList
+      };
+
+      const { error } = await supabase
+        .from('storefront_settings')
+        .upsert({
+          id: 'default_config',
+          data: updatedData,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'id' });
+
+      if (error) {
+        console.error('Lỗi cập nhật Supabase:', error.message);
+      }
+    } catch (err: any) {
+      console.warn('Sync bypass:', err);
+    }
   };
 
   // Image Canvas Auto-Compression Helper (Max 600x600, JPEG/WebP under 100KB)
@@ -208,6 +242,7 @@ export default function AdminCmsPage() {
     const updatedData = { ...target, [field]: value };
     const updatedList = saveProduct(updatedData);
     setProducts(updatedList);
+    syncProductsToSupabase(updatedList);
     notifyUpdate();
   };
 
@@ -224,6 +259,7 @@ export default function AdminCmsPage() {
     if (confirm(`Bạn có chắc chắn muốn xóa món "${name}" khỏi thực đơn trang chủ?`)) {
       const updated = deleteProduct(id);
       setProducts(updated);
+      syncProductsToSupabase(updated);
       notifyUpdate();
       showToast(`🗑️ Đã xóa món "${name}" thành công!`);
     }
@@ -247,6 +283,7 @@ export default function AdminCmsPage() {
     });
 
     setProducts(updated);
+    syncProductsToSupabase(updated);
     notifyUpdate();
     setIsAddModalOpen(false);
     setNewProduct({
