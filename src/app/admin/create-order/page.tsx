@@ -2,10 +2,14 @@
 
 import { useState, useEffect, useMemo, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Bot, Sparkles, Send, CheckCircle2, AlertCircle, ShoppingBag, Plus, Minus, Trash2, MapPin, User, Ticket, Edit3, ArrowRight, UserCheck, Tag } from 'lucide-react';
+import { 
+  Bot, Sparkles, Send, CheckCircle2, AlertCircle, ShoppingBag, Plus, Minus, 
+  Trash2, MapPin, User, Ticket, Edit3, ArrowRight, UserCheck, Tag, QrCode, CreditCard, DollarSign, Printer
+} from 'lucide-react';
 import { getBranches, getMenuItems, createOrder } from '@/actions/orders';
 import { Branch, MenuItem } from '@/types/database';
 import { findCustomerByPhone, addOrUpdateCustomerFromOrder, CustomerRecord } from '@/lib/store';
+import ReceiptModal from '@/components/ReceiptModal';
 
 function CreateOrderContent() {
   const router = useRouter();
@@ -19,6 +23,7 @@ function CreateOrderContent() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [createdOrderData, setCreatedOrderData] = useState<any>(null);
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
 
   const [branches, setBranches] = useState<Branch[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -33,6 +38,7 @@ function CreateOrderContent() {
   const [selectedItems, setSelectedItems] = useState<{ menu_item_id: string; quantity: number }[]>([]);
   const [voucherCode, setVoucherCode] = useState('');
   const [note, setNote] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<'QR' | 'CASH'>('QR');
 
   // Matched CRM Customer
   const [matchedCustomer, setMatchedCustomer] = useState<CustomerRecord | null>(null);
@@ -241,7 +247,14 @@ function CreateOrderContent() {
       });
 
       if (res.success && res.order) {
-        setCreatedOrderData(res.order);
+        const branchObj = branches.find(b => b.id === selectedBranchId);
+        const orderDataWithBranch = {
+          ...res.order,
+          branch: branchObj || { name: 'CƠ SỞ VIN SMART CITY', bank_name: 'MB', bank_account: '0889018221', bank_holder: 'GA U MUOI SMART' }
+        };
+
+        setCreatedOrderData(orderDataWithBranch);
+        setShowReceiptModal(true);
 
         // Auto Sync with CRM Customer Database
         const summary = selectedItems.map(i => {
@@ -257,11 +270,6 @@ function CreateOrderContent() {
           order_code: res.order.order_code,
           items_summary: summary
         });
-
-        // Auto navigate to assigned branch after 2.5s if not clicked
-        setTimeout(() => {
-          router.push(`/branch/${selectedBranchId}`);
-        }, 2500);
       } else {
         throw new Error('Tạo đơn thất bại');
       }
@@ -285,12 +293,12 @@ function CreateOrderContent() {
             <div>
               <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
                 Tạo Đơn Hàng Gà Ủ Muối Smart
-                <span className="bg-orange-50 text-orange-700 border border-orange-200 text-xs px-2.5 py-0.5 rounded-full font-semibold">
-                  Dual Mode + CRM Sync
+                <span className="bg-orange-50 text-orange-700 border border-orange-200 text-xs px-2.5 py-0.5 rounded-full font-semibold flex items-center gap-1">
+                  <QrCode className="w-3.5 h-3.5 text-sky-600" /> VietQR Dynamic POS
                 </span>
               </h1>
               <p className="text-xs text-slate-600 mt-0.5">
-                Hỗ trợ 2 chế độ lên đơn: Bóc tách tự động bằng AI Quick Parser hoặc Lên đơn thủ công từ thực đơn.
+                Hỗ trợ 2 chế độ lên đơn AI Quick Parser / Thủ công &amp; bung Hóa đơn VietQR K80 tự động.
               </p>
             </div>
           </div>
@@ -484,19 +492,29 @@ function CreateOrderContent() {
                     TẠO ĐƠN THÀNH CÔNG! MÃ ĐƠN: <span className="text-orange-600">{createdOrderData.order_code}</span>
                   </h3>
                   <p className="text-xs text-emerald-700 font-medium">
-                    Đơn hàng đã được đồng bộ vào danh bạ CRM &amp; đẩy về bếp ở trạng thái <span className="font-bold">Tiếp Nhận (RECEIVED)</span>. Đang tự chuyển sang trang bếp...
+                    Đã tạo mã VietQR động &amp; đồng bộ vào danh bạ CRM. Đã sẵn sàng in hóa đơn K80!
                   </p>
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={() => router.push(`/branch/${createdOrderData.branch_id}`)}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-xl text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer shrink-0"
-              >
-                <span>Xem Đơn Tại Bếp</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={() => setShowReceiptModal(true)}
+                  className="bg-sky-600 hover:bg-sky-700 text-white font-bold px-3 py-2 rounded-xl text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer shrink-0"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>Xem &amp; In Bill K80</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => router.push(`/branch/${createdOrderData.branch_id}`)}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-2 rounded-xl text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer shrink-0"
+                >
+                  <span>Xem Tại Bếp</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -565,6 +583,40 @@ function CreateOrderContent() {
                     onChange={(e) => setCity(e.target.value)}
                     className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:ring-2 focus:ring-orange-500 focus:outline-none"
                   />
+                </div>
+              </div>
+
+              {/* Payment Method Selection */}
+              <div className="pt-2 border-t border-slate-100 space-y-2">
+                <label className="block text-xs font-bold text-slate-800 flex items-center gap-1">
+                  <CreditCard className="w-3.5 h-3.5 text-orange-600" /> Hình Thức Thanh Toán Kê Khai:
+                </label>
+                <div className="grid grid-cols-2 gap-2 text-xs font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod('QR')}
+                    className={`p-2.5 rounded-xl border transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                      paymentMethod === 'QR'
+                        ? 'bg-sky-50 border-sky-500 text-sky-900 ring-2 ring-sky-500/20 shadow-2xs'
+                        : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    <QrCode className="w-4 h-4 text-sky-600" />
+                    <span>Chuyển Khoản VietQR</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod('CASH')}
+                    className={`p-2.5 rounded-xl border transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                      paymentMethod === 'CASH'
+                        ? 'bg-emerald-50 border-emerald-500 text-emerald-900 ring-2 ring-emerald-500/20 shadow-2xs'
+                        : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    <DollarSign className="w-4 h-4 text-emerald-600" />
+                    <span>Tiền Mặt (POS)</span>
+                  </button>
                 </div>
               </div>
 
@@ -730,12 +782,12 @@ function CreateOrderContent() {
                 {isSubmitting ? (
                   <>
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    <span>Đang Lưu &amp; Đẩy Đơn...</span>
+                    <span>Đang Tạo Mã VietQR &amp; Lưu Đơn...</span>
                   </>
                 ) : (
                   <>
                     <Send className="w-4 h-4" />
-                    <span>LƯU &amp; ĐẨY ĐƠN HÀNG</span>
+                    <span>LƯU &amp; XUẤT BILL VIETQR K80</span>
                   </>
                 )}
               </button>
@@ -744,6 +796,18 @@ function CreateOrderContent() {
         </form>
 
       </div>
+
+      {/* DYNAMIC RECEIPT MODAL */}
+      {showReceiptModal && createdOrderData && (
+        <ReceiptModal
+          order={createdOrderData}
+          onClose={() => setShowReceiptModal(false)}
+          onPaymentConfirmed={() => {
+            setShowReceiptModal(false);
+            router.push(`/branch/${createdOrderData.branch_id}`);
+          }}
+        />
+      )}
     </div>
   );
 }

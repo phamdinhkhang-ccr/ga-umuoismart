@@ -28,6 +28,7 @@ import {
   QrCode,
   RotateCcw
 } from 'lucide-react';
+import ReceiptModal from '@/components/ReceiptModal';
 
 const RICH_MOCK_ORDERS: Order[] = [
   {
@@ -694,52 +695,15 @@ export default function CentralizedOrdersPage() {
         </div>
       )}
 
-      {/* PRINT BILL MODAL K80 */}
+      {/* PRINT BILL & VIETQR MODAL K80 */}
       {printOrder && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl space-y-4">
-            <div className="border-b border-slate-200 pb-3 text-center space-y-1">
-              <h3 className="font-extrabold text-lg text-slate-900">GÀ Ủ MUỐI SMART POS</h3>
-              <p className="text-xs text-slate-500 font-bold">PHIẾU CHẾ BIẾN BẾP (K80)</p>
-              <p className="text-xs font-mono font-bold text-orange-600">#{printOrder.order_code}</p>
-            </div>
-
-            <div className="text-xs space-y-2 font-mono">
-              <div>Khách: {printOrder.customer_name} ({printOrder.customer_phone})</div>
-              <div>Đ/c: {printOrder.shipping_address}</div>
-              <div className="border-t border-dashed border-slate-300 pt-2 space-y-1">
-                {printOrder.items?.map((item, idx) => (
-                  <div key={idx} className="flex justify-between font-bold text-slate-900">
-                    <span>{item.quantity}x {item.item_name}</span>
-                    <span>{item.subtotal.toLocaleString('vi-VN')}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="border-t border-dashed border-slate-300 pt-2 flex justify-between font-extrabold text-sm">
-                <span>TỔNG CỘNG:</span>
-                <span>{printOrder.final_amount.toLocaleString('vi-VN')} đ</span>
-              </div>
-            </div>
-
-            <div className="flex space-x-2 pt-2">
-              <button
-                onClick={() => setPrintOrder(null)}
-                className="flex-1 py-2 bg-slate-100 text-slate-700 rounded-xl font-bold text-xs hover:bg-slate-200 cursor-pointer"
-              >
-                Đóng
-              </button>
-              <button
-                onClick={() => {
-                  alert('Đang gửi lệnh in tới máy in K80...');
-                  setPrintOrder(null);
-                }}
-                className="flex-1 py-2 bg-orange-600 text-white rounded-xl font-bold text-xs hover:bg-orange-700 cursor-pointer shadow-sm"
-              >
-                In Ngay (K80)
-              </button>
-            </div>
-          </div>
-        </div>
+        <ReceiptModal
+          order={printOrder}
+          onClose={() => setPrintOrder(null)}
+          onPaymentConfirmed={() => {
+            handleStatusChange(printOrder.id, 'PAID');
+          }}
+        />
       )}
 
       {/* BRANCH TRANSFER MODAL */}

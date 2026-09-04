@@ -28,3 +28,24 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
+
+/* K80 Thermal Receipt Paper Print Styling */
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  header, sidebar, nav, button, .print-hidden {
+    display: none !important;
+  }
+  .print-receipt-container {
+    width: 80mm !important;
+    max-width: 80mm !important;
+    margin: 0 auto !important;
+    padding: 5px !important;
+    font-size: 11px !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+}
+
