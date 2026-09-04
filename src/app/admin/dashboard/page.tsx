@@ -13,12 +13,13 @@ import {
   Building2,
   UtensilsCrossed,
   ArrowDownLeft,
-  PieChart as PieChartIcon
+  PieChart as PieChartIcon,
+  BarChart3
 } from 'lucide-react';
 import {
   ResponsiveContainer,
-  AreaChart,
-  Area,
+  BarChart,
+  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -183,16 +184,16 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Realtime Financial Charts Section (65% / 35% Grid) */}
+      {/* Realtime Financial Charts Section (Grouped Bar Chart 65% / Donut 35%) */}
       <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs space-y-6">
         {/* Header & Controls */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
           <div>
             <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-orange-600" />
-              Phân Tích Biến Động Tài Chính Realtime
+              <BarChart3 className="w-5 h-5 text-orange-600" />
+              Phân Tích Biến Động Tài Chính Realtime (Biểu Đồ Cột)
             </h2>
-            <p className="text-xs text-slate-500 mt-0.5">Biểu đồ so sánh Doanh Thu Gộp (GMV), Chi Phí Vận Hành &amp; Lợi Nhuận Ròng.</p>
+            <p className="text-xs text-slate-500 mt-0.5">Biểu đồ cột ghép so sánh Doanh Thu Gộp (GMV), Chi Phí Vận Hành &amp; Lợi Nhuận Ròng.</p>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
@@ -236,49 +237,35 @@ export default function DashboardPage() {
 
         {/* Charts Container Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
-          {/* Left Column: Composed Area Chart (65% -> col-span-8) */}
+          {/* Left Column: Grouped Bar Chart (65% -> col-span-8) */}
           <div className="lg:col-span-8 space-y-4">
             <div className="flex items-center justify-between text-xs">
-              <span className="font-bold text-slate-700">Xu Hướng Doanh Thu &amp; Lợi Nhuận</span>
+              <span className="font-bold text-slate-700">So Sánh Theo Cột (Doanh Thu vs Chi Phí vs Lợi Nhuận)</span>
               <div className="flex items-center space-x-4 font-semibold text-[11px]">
                 <span className="flex items-center space-x-1">
-                  <span className="w-2.5 h-2.5 rounded-full bg-orange-500" />
+                  <span className="w-2.5 h-2.5 rounded-xs bg-orange-500" />
                   <span className="text-slate-600">Doanh Thu (GMV)</span>
                 </span>
                 <span className="flex items-center space-x-1">
-                  <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
+                  <span className="w-2.5 h-2.5 rounded-xs bg-rose-500" />
                   <span className="text-slate-600">Tổng Chi Phí</span>
                 </span>
                 <span className="flex items-center space-x-1">
-                  <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+                  <span className="w-2.5 h-2.5 rounded-xs bg-blue-500" />
                   <span className="text-slate-600">Lợi Nhuận Ròng</span>
                 </span>
               </div>
             </div>
 
-            {/* Recharts Area Container with Hydration Safety */}
+            {/* Recharts Bar Container with Hydration Safety */}
             <div className="h-72 w-full">
               {!isMounted ? (
                 <div className="h-full w-full bg-slate-50 animate-pulse rounded-xl flex items-center justify-center text-xs text-slate-400">
-                  Đang tải biểu đồ tài chính...
+                  Đang tải biểu đồ cột tài chính...
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="colorGmv" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#F97316" stopOpacity={0.35} />
-                        <stop offset="95%" stopColor="#F97316" stopOpacity={0.0} />
-                      </linearGradient>
-                      <linearGradient id="colorExpenses" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#EF4444" stopOpacity={0.25} />
-                        <stop offset="95%" stopColor="#EF4444" stopOpacity={0.0} />
-                      </linearGradient>
-                      <linearGradient id="colorProfit" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.25} />
-                        <stop offset="95%" stopColor="#3B82F6" stopOpacity={0.0} />
-                      </linearGradient>
-                    </defs>
+                  <BarChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }} barGap={3} barCategoryGap="20%">
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
                     <XAxis
                       dataKey="name"
@@ -292,37 +279,28 @@ export default function DashboardPage() {
                       fontSize={10}
                       tickLine={false}
                       axisLine={false}
-                      tickFormatter={(v) => `${(v / 1000000).toFixed(1)}M`}
+                      tickFormatter={(v) => v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : `${(v / 1000).toFixed(0)}k`}
                     />
                     <Tooltip content={<CustomFinancialTooltip />} />
-                    <Area
-                      type="monotone"
+                    <Bar
                       dataKey="gmv"
                       name="Doanh Thu Gộp (GMV)"
-                      stroke="#F97316"
-                      strokeWidth={2.5}
-                      fillOpacity={1}
-                      fill="url(#colorGmv)"
+                      fill="#F97316"
+                      radius={[4, 4, 0, 0]}
                     />
-                    <Area
-                      type="monotone"
+                    <Bar
                       dataKey="expenses"
                       name="Tổng Chi Phí"
-                      stroke="#EF4444"
-                      strokeWidth={2}
-                      fillOpacity={1}
-                      fill="url(#colorExpenses)"
+                      fill="#EF4444"
+                      radius={[4, 4, 0, 0]}
                     />
-                    <Area
-                      type="monotone"
+                    <Bar
                       dataKey="profit"
                       name="Lợi Nhuận Ròng"
-                      stroke="#3B82F6"
-                      strokeWidth={2}
-                      fillOpacity={1}
-                      fill="url(#colorProfit)"
+                      fill="#3B82F6"
+                      radius={[4, 4, 0, 0]}
                     />
-                  </AreaChart>
+                  </BarChart>
                 </ResponsiveContainer>
               )}
             </div>
