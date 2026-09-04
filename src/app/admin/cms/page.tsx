@@ -69,7 +69,7 @@ export default function AdminCmsPage() {
       }
 
       if (data && data.data) {
-        setSettings((prev: any) => ({ ...prev, ...data.data }));
+        setSettings(data.data);
         const cloudMenu = data.data.menuItems || data.data.products;
         if (Array.isArray(cloudMenu) && cloudMenu.length > 0) {
           setProducts(cloudMenu);
@@ -128,22 +128,23 @@ export default function AdminCmsPage() {
 
     const fullConfigData = {
       ...settings,
-      brandName: settings.brandName || 'Gà Ủ Muối Smart',
-      hero_title: settings.hero_title,
-      hero_slogan: settings.hero_slogan,
-      hotlineBadgeText: settings.hotlineBadgeText || 'Hotline Đặt Ngay:',
-      hotlinePrefix: settings.hotlinePrefix || settings.hotlineBadgeText || 'Hotline Đặt Ngay:',
-      hero_hotline: settings.hero_hotline || settings.hotline || '0889018221',
-      hotline: settings.hero_hotline || settings.hotline || '0889018221',
-      promoBannerText: settings.promoBannerText || '',
-      heroSubtitle: settings.hero_slogan,
-      branches: settings.branches || [],
-      social_facebook: settings.social_facebook,
-      social_tiktok: settings.social_tiktok,
-      social_zalo: settings.social_zalo,
-      hotline_complaints: settings.hotline_complaints,
-      bankInfo: settings.bankInfo,
-      hero_banner_image: settings.hero_banner_image || '',
+      brandName: settings.brandName ?? '',
+      hero_title: settings.hero_title ?? '',
+      hero_slogan: settings.hero_slogan ?? settings.heroSubtitle ?? '',
+      heroSubtitle: settings.heroSubtitle ?? settings.hero_slogan ?? '',
+      heroHighlightTitle: settings.heroHighlightTitle ?? '',
+      hotlineBadgeText: settings.hotlineBadgeText ?? '',
+      hotlinePrefix: settings.hotlinePrefix ?? settings.hotlineBadgeText ?? '',
+      hero_hotline: settings.hotline ?? settings.hero_hotline ?? '',
+      hotline: settings.hotline ?? settings.hero_hotline ?? '',
+      promoBannerText: settings.promoBannerText ?? '',
+      branches: settings.branches ?? [],
+      social_facebook: settings.social_facebook ?? '',
+      social_tiktok: settings.social_tiktok ?? '',
+      social_zalo: settings.social_zalo ?? '',
+      hotline_complaints: settings.hotline_complaints ?? '',
+      bankInfo: settings.bankInfo ?? { bankName: '', accountNumber: '', accountHolder: '' },
+      hero_banner_image: settings.hero_banner_image ?? '',
       products: formattedMenuItems,
       menuItems: formattedMenuItems
     };

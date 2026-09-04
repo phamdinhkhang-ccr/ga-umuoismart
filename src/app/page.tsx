@@ -77,7 +77,7 @@ export default function PublicStorefrontHome() {
       const savedBackup = localStorage.getItem('storefront_settings');
       if (savedBackup) {
         const parsed = JSON.parse(savedBackup);
-        if (parsed) setCmsSettings(prev => ({ ...prev, ...parsed }));
+        if (parsed) setCmsSettings(parsed);
       }
     } catch (e) {}
 
@@ -96,7 +96,7 @@ export default function PublicStorefrontHome() {
 
       const configData = data?.data;
       if (configData) {
-        setCmsSettings(prev => ({ ...prev, ...configData }));
+        setCmsSettings(configData);
         try {
           localStorage.setItem('storefront_settings', JSON.stringify(configData));
         } catch (e) {}
@@ -119,7 +119,7 @@ export default function PublicStorefrontHome() {
           if (payload.new) {
             const newConfig = payload.new.data || payload.new.settings;
             if (newConfig) {
-              setCmsSettings(prev => ({ ...prev, ...newConfig }));
+              setCmsSettings(newConfig);
               try {
                 localStorage.setItem('storefront_settings', JSON.stringify(newConfig));
               } catch (e) {}
@@ -568,37 +568,52 @@ export default function PublicStorefrontHome() {
       <section className="relative overflow-hidden bg-gradient-to-b from-orange-500/10 via-amber-500/5 to-slate-50 pt-10 pb-16 border-b border-slate-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-6 relative z-10">
           
-          {cmsSettings?.promoBannerText && (
+          {/* Promo Banner: render only when non-empty */}
+          {cmsSettings?.promoBannerText && cmsSettings.promoBannerText.trim() !== '' && (
             <div className="max-w-4xl mx-auto mb-2 px-4 py-2 rounded-2xl bg-gradient-to-r from-orange-600 to-amber-600 text-white font-extrabold text-xs sm:text-sm shadow-md animate-pulse">
               <span>{cmsSettings.promoBannerText}</span>
             </div>
           )}
 
-          {(cmsSettings?.hotline || cmsSettings?.hero_hotline) ? (
+          {/* Hotline Badge: render only when hotline number is non-empty */}
+          {(cmsSettings?.hotline || cmsSettings?.hero_hotline) && (cmsSettings?.hotline || cmsSettings?.hero_hotline)?.trim() !== '' && (
             <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-orange-50 border border-orange-200 text-orange-800 text-xs sm:text-sm font-semibold shadow-2xs">
               <span className="text-base">🔥</span>
-              <span>{cmsSettings?.hotlineBadgeText || (cmsSettings as any)?.hotlinePrefix || 'Hotline Đặt Ngay:'}</span>
+              <span>{cmsSettings?.hotlineBadgeText && cmsSettings.hotlineBadgeText.trim() !== '' ? cmsSettings.hotlineBadgeText : 'Hotline Đặt Ngay:'}</span>
               <a 
-                href={`tel:${(cmsSettings?.hotline || cmsSettings?.hero_hotline).replace(/\s+/g, '').replace(/\./g, '')}`} 
+                href={`tel:${(cmsSettings?.hotline || cmsSettings?.hero_hotline || '').replace(/\s+/g, '').replace(/\./g, '')}`} 
                 className="font-bold text-orange-900 hover:underline"
               >
                 {cmsSettings?.hotline || cmsSettings?.hero_hotline}
               </a>
             </div>
-          ) : null}
+          )}
 
-          <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black text-slate-900 tracking-tight leading-tight max-w-4xl mx-auto">
-            {cmsSettings.hero_title || 'GÀ Ủ MUỐI SMART'} <br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-600 via-amber-600 to-rose-600">
-              {cmsSettings?.heroHighlightTitle || 'Thơm Ngon Đậm Đà • Giao Hỏa Tốc'}
-            </span>
-          </h1>
+          {/* Hero Titles: render main title and highlight title conditionally without fallback defaults */}
+          {((cmsSettings?.hero_title && cmsSettings.hero_title.trim() !== '') || (cmsSettings?.heroHighlightTitle && cmsSettings.heroHighlightTitle.trim() !== '')) && (
+            <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black text-slate-900 tracking-tight leading-tight max-w-4xl mx-auto">
+              {cmsSettings?.hero_title && cmsSettings.hero_title.trim() !== '' ? (
+                <span>{cmsSettings.hero_title}</span>
+              ) : null}
 
-          {((cmsSettings as any)?.heroSubtitle || cmsSettings?.hero_slogan) ? (
+              {cmsSettings?.hero_title && cmsSettings.hero_title.trim() !== '' && cmsSettings?.heroHighlightTitle && cmsSettings.heroHighlightTitle.trim() !== '' ? (
+                <br />
+              ) : null}
+
+              {cmsSettings?.heroHighlightTitle && cmsSettings.heroHighlightTitle.trim() !== '' && (
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-600 via-amber-600 to-rose-600 block">
+                  {cmsSettings.heroHighlightTitle}
+                </span>
+              )}
+            </h1>
+          )}
+
+          {/* Slogan / Subtitle: render only when non-empty */}
+          {((cmsSettings as any)?.heroSubtitle || cmsSettings?.hero_slogan) && ((cmsSettings as any)?.heroSubtitle || cmsSettings?.hero_slogan)?.trim() !== '' && (
             <p className="max-w-2xl mx-auto text-xs sm:text-base text-slate-600 leading-relaxed font-medium">
               {(cmsSettings as any)?.heroSubtitle || cmsSettings.hero_slogan}
             </p>
-          ) : null}
+          )}
 
           {/* Banner Hero Image if Uploaded */}
           {cmsSettings.hero_banner_image && (

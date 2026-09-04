@@ -1238,6 +1238,7 @@ export interface StorefrontCmsSettings {
   hero_title: string;
   heroHighlightTitle?: string;
   hero_slogan: string;
+  heroSubtitle?: string;
   hero_banner_image?: string;
   hero_hotline: string;
   hotline?: string;
