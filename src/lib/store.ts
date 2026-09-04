@@ -240,10 +240,9 @@ export function setItem<T>(key: string, value: T): void {
 }
 
 export function playBeep(): void {
+  if (typeof window === 'undefined' || !(window.AudioContext || (window as any).webkitAudioContext)) return;
   try {
-    if (typeof window === 'undefined') return;
     const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AudioCtx) return;
     const ctx = new AudioCtx();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();

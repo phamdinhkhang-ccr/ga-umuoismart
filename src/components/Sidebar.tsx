@@ -159,12 +159,12 @@ export default function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarPr
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2.5 truncate">
               <div className="w-8 h-8 rounded-full bg-orange-100 border border-orange-200 text-orange-700 font-extrabold flex items-center justify-center text-xs shrink-0">
-                {user.name.charAt(0)}
+                {(user?.name || 'A').charAt(0)}
               </div>
               <div className="truncate">
-                <span className="text-xs font-bold text-slate-900 block truncate">{user.name}</span>
+                <span className="text-xs font-bold text-slate-900 block truncate">{user?.name || 'Nhân viên'}</span>
                 <span className="text-[10px] text-slate-500 block truncate font-medium">
-                  {user.branch_name || user.role}
+                  {user?.branch_name || (user as any)?.branchName || user?.role || 'Toàn hệ thống'}
                 </span>
               </div>
             </div>

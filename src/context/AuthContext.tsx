@@ -119,6 +119,8 @@ function fontCancelOrderDefault(val: boolean) { return val; }
 interface AuthContextType {
   user: UserAccount | null;
   accounts: (UserAccount & { password?: string })[];
+  isLoading: boolean;
+  isLoaded: boolean;
   login: (username: string, password: string) => { success: boolean; message?: string; redirectUrl?: string };
   logout: () => void;
   addUserAccount: (newAcc: Omit<UserAccount, 'id'> & { password: string }) => void;
@@ -135,17 +137,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const [user, setUser] = useState<UserAccount | null>(null);
   const [accounts, setAccounts] = useState<(UserAccount & { password?: string })[]>(INITIAL_DEMO_ACCOUNTS);
+  const [isLoading, setIsLoading] = useState(true);
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
     try {
-      const storedUser = safeGetJSON<UserAccount | null>('gum_auth_user', null);
-      const storedAccounts = safeGetJSON<(UserAccount & { password?: string })[]>('gum_accounts', INITIAL_DEMO_ACCOUNTS);
-      setUser(storedUser);
-      if (storedAccounts && storedAccounts.length > 0) setAccounts(storedAccounts);
+      if (typeof window !== 'undefined') {
+        const stored = safeGetJSON<UserAccount | null>('pos_current_user', null) 
+          || safeGetJSON<UserAccount | null>('gum_auth_user', null)
+          || safeGetJSON<UserAccount | null>('auth_user', null);
+        
+        if (stored && typeof stored === 'object' && (stored as any).id) {
+          setUser(stored);
+        }
+
+        const storedAccounts = safeGetJSON<(UserAccount & { password?: string })[]>('gum_accounts', INITIAL_DEMO_ACCOUNTS);
+        if (storedAccounts && Array.isArray(storedAccounts) && storedAccounts.length > 0) {
+          setAccounts(storedAccounts);
+        }
+      }
     } catch (e) {
-      console.warn('LocalStorage auth read error', e);
+      console.warn('Failed to parse user session on this device:', e);
+      try {
+        localStorage.removeItem('pos_current_user');
+        localStorage.removeItem('gum_auth_user');
+        localStorage.removeItem('auth_user');
+      } catch (err) {}
     } finally {
+      setIsLoading(false);
       setIsLoaded(true);
     }
   }, []);
@@ -162,7 +181,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { password: _, ...userNoPass } = found;
     setUser(userNoPass);
     try {
-      localStorage.setItem('gum_auth_user', JSON.stringify(userNoPass));
+      const userStr = JSON.stringify(userNoPass);
+      localStorage.setItem('pos_current_user', userStr);
+      localStorage.setItem('gum_auth_user', userStr);
+      localStorage.setItem('auth_user', userStr);
     } catch (e) {}
 
     let redirectUrl = '/admin/dashboard';
@@ -176,7 +198,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = useCallback(() => {
     setUser(null);
     try {
+      localStorage.removeItem('pos_current_user');
       localStorage.removeItem('gum_auth_user');
+      localStorage.removeItem('auth_user');
     } catch (e) {}
     router.push('/login');
   }, [router]);
@@ -228,13 +252,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return path === '/' || path.startsWith('/track') || path === '/login';
     }
 
-    if (user.role === 'SUPER_ADMIN') return true;
+    const role = user.role || 'SUPER_ADMIN';
+    if (role === 'SUPER_ADMIN') return true;
 
-    if (user.role === 'OPERATOR') {
+    if (role === 'OPERATOR') {
       return path === '/' || path.startsWith('/track') || path.startsWith('/admin/');
     }
 
-    if (user.role === 'BRANCH_STAFF') {
+    if (role === 'BRANCH_STAFF') {
       if (path === '/' || path.startsWith('/track')) return true;
       if (path.startsWith('/branch/')) {
         const routeBranchId = path.split('/branch/')[1]?.split('/')[0];
@@ -247,7 +272,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [user]);
 
   useEffect(() => {
-    if (!isLoaded) return;
+    if (!isLoaded || isLoading) return;
 
     const isPublic = pathname === '/' || pathname.startsWith('/track') || pathname === '/login';
 
@@ -255,25 +280,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       router.push('/login');
     } else if (user && pathname === '/login') {
       if (user.role === 'OPERATOR') router.push('/admin/create-order');
-      else if (user.role === 'BRANCH_STAFF') router.push(`/branch/${user.branch_id}`);
+      else if (user.role === 'BRANCH_STAFF') router.push(`/branch/${user.branch_id || 'b1111111-1111-1111-1111-111111111111'}`);
       else router.push('/admin/orders');
     } else if (user && !isAllowedRoute(pathname)) {
       if (user.role === 'OPERATOR') router.push('/admin/create-order');
-      else if (user.role === 'BRANCH_STAFF') router.push(`/branch/${user.branch_id}`);
+      else if (user.role === 'BRANCH_STAFF') router.push(`/branch/${user.branch_id || 'b1111111-1111-1111-1111-111111111111'}`);
       else router.push('/admin/orders');
     }
-  }, [pathname, user, isLoaded, isAllowedRoute, router]);
+  }, [pathname, user, isLoaded, isLoading, isAllowedRoute, router]);
 
   const value = useMemo(() => ({
     user,
     accounts,
+    isLoading,
+    isLoaded,
     login,
     logout,
     addUserAccount,
     updateUserAccount,
     deleteUserAccount,
     isAllowedRoute,
-  }), [user, accounts, login, logout, addUserAccount, updateUserAccount, deleteUserAccount, isAllowedRoute]);
+  }), [user, accounts, isLoading, isLoaded, login, logout, addUserAccount, updateUserAccount, deleteUserAccount, isAllowedRoute]);
 
   return (
     <AuthContext.Provider value={value}>
