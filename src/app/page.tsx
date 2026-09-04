@@ -36,15 +36,15 @@ export default function PublicStorefrontHome() {
   // Dynamic Storefront CMS & Products State
   const [cmsSettings, setCmsSettings] = useState<StorefrontCmsSettings>({
     hero_title: 'GÀ Ủ MUỐI SMART',
-    hero_slogan: 'Gà ủ muối da giòn sần sật - Thơm ngon đậm đà giao nóng tận nơi',
-    hero_hotline: '0889018221',
-    hotline: '0889018221',
+    hero_slogan: '',
+    hero_hotline: '',
+    hotline: '',
     hotlineBadgeText: 'Hotline Đặt Ngay:',
     branches: [],
-    social_facebook: 'https://facebook.com',
-    social_tiktok: 'https://tiktok.com',
-    social_zalo: 'https://zalo.me',
-    hotline_complaints: '1900.6868'
+    social_facebook: '',
+    social_tiktok: '',
+    social_zalo: '',
+    hotline_complaints: ''
   });
 
   const [productsList, setProductsList] = useState<ProductRecord[]>([]);
@@ -574,27 +574,31 @@ export default function PublicStorefrontHome() {
             </div>
           )}
 
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-orange-50 border border-orange-200 text-orange-800 text-xs sm:text-sm font-semibold shadow-2xs">
-            <span className="text-base">🔥</span>
-            <span>{cmsSettings?.hotlineBadgeText || (cmsSettings as any)?.hotlinePrefix || 'Hotline Đặt Ngay: 0889018221 - 0866164617'}</span>
-            <a 
-              href={`tel:${(cmsSettings?.hotline || cmsSettings?.hero_hotline || '0889018221').replace(/\s+/g, '').replace(/\./g, '')}`} 
-              className="font-bold text-orange-900 hover:underline"
-            >
-              {cmsSettings?.hotline || cmsSettings?.hero_hotline || '0889018221'}
-            </a>
-          </div>
+          {(cmsSettings?.hotline || cmsSettings?.hero_hotline) ? (
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-orange-50 border border-orange-200 text-orange-800 text-xs sm:text-sm font-semibold shadow-2xs">
+              <span className="text-base">🔥</span>
+              <span>{cmsSettings?.hotlineBadgeText || (cmsSettings as any)?.hotlinePrefix || 'Hotline Đặt Ngay:'}</span>
+              <a 
+                href={`tel:${(cmsSettings?.hotline || cmsSettings?.hero_hotline).replace(/\s+/g, '').replace(/\./g, '')}`} 
+                className="font-bold text-orange-900 hover:underline"
+              >
+                {cmsSettings?.hotline || cmsSettings?.hero_hotline}
+              </a>
+            </div>
+          ) : null}
 
           <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black text-slate-900 tracking-tight leading-tight max-w-4xl mx-auto">
-            {cmsSettings.hero_title} <br />
+            {cmsSettings.hero_title || 'GÀ Ủ MUỐI SMART'} <br />
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-600 via-amber-600 to-rose-600">
               Thơm Ngon Đậm Đà • Giao Hỏa Tốc
             </span>
           </h1>
 
-          <p className="max-w-2xl mx-auto text-xs sm:text-base text-slate-600 leading-relaxed font-medium">
-            {(cmsSettings as any)?.heroSubtitle || cmsSettings.hero_slogan}
-          </p>
+          {((cmsSettings as any)?.heroSubtitle || cmsSettings?.hero_slogan) ? (
+            <p className="max-w-2xl mx-auto text-xs sm:text-base text-slate-600 leading-relaxed font-medium">
+              {(cmsSettings as any)?.heroSubtitle || cmsSettings.hero_slogan}
+            </p>
+          ) : null}
 
           {/* Banner Hero Image if Uploaded */}
           {cmsSettings.hero_banner_image && (
@@ -778,81 +782,87 @@ export default function PublicStorefrontHome() {
         </div>
 
         {/* Product Grid Dynamic Sync */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {displayProducts.map((p: any) => {
-            const productImg = p.image || p.imageUrl || p.image_url || p.avatar;
-            const currentPrice = p.price || p.salePrice || 0;
-            return (
-              <div
-                key={p.id || p.name}
-                className="bg-white border border-slate-200 rounded-3xl p-5 shadow-xs hover:shadow-xl hover:border-orange-300 transition-all duration-300 flex flex-col justify-between group space-y-4"
-              >
-                <div className="space-y-3">
-                  <div className="flex justify-between items-start gap-3">
-                    {/* Product Image Box with onError Fallback */}
-                    <div className="w-full h-44 bg-amber-50 rounded-2xl overflow-hidden flex items-center justify-center relative border border-slate-200 shadow-2xs">
-                      {productImg ? (
-                        <img
-                          src={productImg}
-                          alt={p.name}
-                          className="w-full h-full object-cover rounded-2xl transition-transform duration-300 group-hover:scale-105"
-                          onError={(e) => {
-                            e.currentTarget.style.display = 'none';
-                            e.currentTarget.nextElementSibling?.classList.remove('hidden');
-                          }}
-                        />
-                      ) : null}
-                      <div className={`w-full h-full flex items-center justify-center text-4xl ${productImg ? 'hidden' : ''}`}>
-                        <div className="w-20 h-20 bg-amber-100/90 rounded-2xl flex items-center justify-center">
-                          <span className="text-4xl">🍗</span>
+        {displayProducts.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {displayProducts.map((p: any) => {
+              const productImg = p.image || p.imageUrl || p.image_url || p.avatar;
+              const currentPrice = Number(p.price || p.salePrice || 0);
+              return (
+                <div
+                  key={p.id || p.name}
+                  className="bg-white border border-slate-200 rounded-3xl p-5 shadow-xs hover:shadow-xl hover:border-orange-300 transition-all duration-300 flex flex-col justify-between group space-y-4"
+                >
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-start gap-3">
+                      {/* Product Image Box with onError Fallback */}
+                      <div className="w-full h-44 bg-amber-50 rounded-2xl overflow-hidden flex items-center justify-center relative border border-slate-200 shadow-2xs">
+                        {productImg ? (
+                          <img
+                            src={productImg}
+                            alt={p.name}
+                            className="w-full h-full object-cover rounded-2xl transition-transform duration-300 group-hover:scale-105"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                              e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                            }}
+                          />
+                        ) : null}
+                        <div className={`w-full h-full flex items-center justify-center text-4xl ${productImg ? 'hidden' : ''}`}>
+                          <div className="w-20 h-20 bg-amber-100/90 rounded-2xl flex items-center justify-center">
+                            <span className="text-4xl">🍗</span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    <div className="flex flex-col items-end gap-1">
-                      {p.is_best_seller && (
-                        <span className="bg-amber-100 text-amber-900 border border-amber-300 font-extrabold text-[10px] px-2.5 py-1 rounded-full flex items-center gap-1 shadow-2xs">
-                          🌟 Bán Chạy Nhất
+                      <div className="flex flex-col items-end gap-1">
+                        {(p.is_best_seller || p.isBestSeller) && (
+                          <span className="bg-amber-100 text-amber-900 border border-amber-300 font-extrabold text-[10px] px-2.5 py-1 rounded-full flex items-center gap-1 shadow-2xs">
+                            🌟 Bán Chạy Nhất
+                          </span>
+                        )}
+                        <span className="bg-orange-50 text-orange-700 border border-orange-200 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full">
+                          {p.category || 'Món Gà Ủ Muối'}
                         </span>
-                      )}
-                      <span className="bg-orange-50 text-orange-700 border border-orange-200 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full">
-                        {p.category || 'Món Gà Ủ Muối'}
-                      </span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <h3 className="font-extrabold text-slate-900 text-base group-hover:text-orange-600 transition">
+                        {p.name}
+                      </h3>
+                      <p className="text-xs text-slate-500 font-medium mt-1 leading-relaxed">
+                        {p.description || (p.ai_keywords ? p.ai_keywords.join(' • ') : '')}
+                      </p>
                     </div>
                   </div>
 
-                  <div>
-                    <h3 className="font-extrabold text-slate-900 text-base group-hover:text-orange-600 transition">
-                      {p.name}
-                    </h3>
-                    <p className="text-xs text-slate-500 font-medium mt-1 leading-relaxed">
-                      {p.description || (p.ai_keywords ? p.ai_keywords.join(' • ') : 'Gà ủ muối chuẩn vị da giòn sần sật')}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
-                  <div>
-                    <span className="text-[10px] text-slate-400 font-bold block">Giá bán:</span>
-                    <div className="flex items-baseline space-x-2">
-                      <span className="text-lg font-black text-orange-600">{(currentPrice).toLocaleString('vi-VN')}đ</span>
-                      {p.original_price && (
-                        <span className="line-through text-slate-400 font-semibold text-xs">{(p.original_price).toLocaleString('vi-VN')}đ</span>
-                      )}
+                  <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] text-slate-400 font-bold block">Giá bán:</span>
+                      <div className="flex items-baseline space-x-2">
+                        <span className="text-lg font-black text-orange-600">{(currentPrice).toLocaleString('vi-VN')}đ</span>
+                        {p.original_price && (
+                          <span className="line-through text-slate-400 font-semibold text-xs">{(p.original_price).toLocaleString('vi-VN')}đ</span>
+                        )}
+                      </div>
                     </div>
-                  </div>
 
-                  <button
-                    onClick={() => handleOpenOrderModal(p)}
-                    className="py-2 px-4 bg-orange-600 hover:bg-orange-700 text-white font-extrabold rounded-2xl text-xs shadow-sm transition flex items-center space-x-1 cursor-pointer"
-                  >
-                    <ShoppingBag className="w-3.5 h-3.5" />
-                    <span>Đặt Món Ngay</span>
-                  </button>
+                    <button
+                      onClick={() => handleOpenOrderModal(p)}
+                      className="py-2 px-4 bg-orange-600 hover:bg-orange-700 text-white font-extrabold rounded-2xl text-xs shadow-sm transition flex items-center space-x-1 cursor-pointer"
+                    >
+                      <ShoppingBag className="w-3.5 h-3.5" />
+                      <span>Đặt Món Ngay</span>
+                    </button>
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="text-center py-12 bg-white border border-slate-200 rounded-3xl p-8 shadow-xs">
+            <p className="text-slate-500 font-bold text-sm">Đang cập nhật thực đơn món...</p>
+          </div>
+        )}
       </section>
 
       {/* 5. KHỐI HỆ THỐNG CƠ SỞ PHỦ SÓNG (#branches) */}

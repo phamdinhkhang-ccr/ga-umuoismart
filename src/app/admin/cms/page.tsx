@@ -15,22 +15,22 @@ import { supabase } from '@/lib/supabaseClient';
 export default function AdminCmsPage() {
   const [settings, setSettings] = useState<StorefrontCmsSettings>({
     hero_title: 'GÀ Ủ MUỐI SMART',
-    hero_slogan: 'Gà ủ muối da giòn sần sật - Thơm ngon đậm đà giao nóng tận nơi',
-    hero_hotline: '0889018221',
-    hotline: '0889018221',
+    hero_slogan: '',
+    hero_hotline: '',
+    hotline: '',
     hotlineBadgeText: 'Hotline Đặt Ngay:',
     hotlinePrefix: 'Hotline Đặt Ngay:',
-    promoBannerText: '🔥 Khuyến mãi đặc biệt: Đồng giá Gà Ủ Muối Nguyên Con 190.000đ - Giao hỏa tốc 20 phút!',
+    promoBannerText: '',
     brandName: 'Gà Ủ Muối Smart',
     branches: [],
-    social_facebook: 'https://facebook.com',
-    social_tiktok: 'https://tiktok.com',
-    social_zalo: 'https://zalo.me',
-    hotline_complaints: '1900.6868',
+    social_facebook: '',
+    social_tiktok: '',
+    social_zalo: '',
+    hotline_complaints: '',
     bankInfo: {
-      bankName: 'MB Bank',
-      accountNumber: '0988123456',
-      accountHolder: 'CHI NHANH VIN SMART CITY'
+      bankName: '',
+      accountNumber: '',
+      accountHolder: ''
     }
   });
 

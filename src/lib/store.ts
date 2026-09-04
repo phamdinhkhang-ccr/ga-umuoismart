@@ -1258,67 +1258,21 @@ export interface StorefrontCmsSettings {
 
 const DEFAULT_CMS_SETTINGS: StorefrontCmsSettings = {
   hero_title: 'GÀ Ủ MUỐI SMART',
-  hero_slogan: 'Gà ủ muối da giòn sần sật - Thơm ngon đậm đà giao nóng tận nơi',
-  hero_hotline: '0889018221',
-  hotline: '0889018221',
+  hero_slogan: '',
+  hero_hotline: '',
+  hotline: '',
   hotlineBadgeText: 'Hotline Đặt Ngay:',
-  promoBannerText: '🔥 Khuyến mãi đặc biệt: Đồng giá Gà Ủ Muối Nguyên Con 190.000đ - Giao hỏa tốc 20 phút!',
+  promoBannerText: '',
   brandName: 'Gà Ủ Muối Smart',
-  branches: [
-    {
-      id: 'b-vinsmart',
-      name: 'CƠ SỞ VIN SMART CITY',
-      address: 'Tòa S2.02 Vinhomes Smart City, Tây Mỗ, Nam Từ Liêm, Hà Nội',
-      phone: '0988.123.456',
-      hours: '08:00 - 22:30',
-      maps_url: 'https://maps.google.com/?q=Vin+Smart+City+Hanoi',
-      is_active: true
-    },
-    {
-      id: 'b-caugiay',
-      name: 'Chi Nhánh Cầu Giấy',
-      address: '102 Trần Thái Tông, Dịch Vọng, Cầu Giấy, Hà Nội',
-      phone: '0977.888.999',
-      hours: '08:00 - 22:30',
-      maps_url: 'https://maps.google.com/?q=Tran+Thai+Tong+Cau+Giay',
-      is_active: true
-    },
-    {
-      id: 'b-thanhtri',
-      name: 'Chi Nhánh Thanh Trì',
-      address: 'Số 9 Thượng Phúc, Đại Thanh, Huyện Thanh Trì, Hà Nội',
-      phone: '0243.855.5555',
-      hours: '08:00 - 22:30',
-      maps_url: 'https://maps.google.com/?q=Dai+Thanh+Thanh+Tri',
-      is_active: true
-    },
-    {
-      id: 'b-quan1',
-      name: 'Chi Nhánh Quận 1 (TP.HCM)',
-      address: '123 Lê Lợi, Phường Bến Thành, Quận 1, TP.HCM',
-      phone: '0283.811.1111',
-      hours: '08:00 - 22:30',
-      maps_url: 'https://maps.google.com/?q=Le+Loi+Quan+1',
-      is_active: true
-    },
-    {
-      id: 'b-quan3',
-      name: 'Chi Nhánh Quận 3 (TP.HCM)',
-      address: '456 Điện Biên Phủ, Phường 3, Quận 3, TP.HCM',
-      phone: '0283.822.2222',
-      hours: '08:00 - 22:30',
-      maps_url: 'https://maps.google.com/?q=Dien+Bien+Phu+Quan+3',
-      is_active: true
-    }
-  ],
-  social_facebook: 'https://facebook.com',
-  social_tiktok: 'https://tiktok.com',
-  social_zalo: 'https://zalo.me',
-  hotline_complaints: '1900.6868',
+  branches: [],
+  social_facebook: '',
+  social_tiktok: '',
+  social_zalo: '',
+  hotline_complaints: '',
   bankInfo: {
-    bankName: 'MB Bank',
-    accountNumber: '0988123456',
-    accountHolder: 'CHI NHANH VIN SMART CITY'
+    bankName: '',
+    accountNumber: '',
+    accountHolder: ''
   }
 };
 
@@ -1327,7 +1281,7 @@ export function getCmsSettings(): StorefrontCmsSettings {
   return {
     ...DEFAULT_CMS_SETTINGS,
     ...loaded,
-    branches: loaded?.branches && loaded.branches.length > 0 ? loaded.branches : DEFAULT_CMS_SETTINGS.branches,
+    branches: Array.isArray(loaded?.branches) ? loaded.branches : [],
     bankInfo: loaded?.bankInfo || DEFAULT_CMS_SETTINGS.bankInfo
   };
 }
