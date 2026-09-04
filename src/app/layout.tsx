@@ -6,6 +6,7 @@ import './globals.css';
 import { AuthProvider } from '@/context/AuthContext';
 import Sidebar from '@/components/Sidebar';
 import Topbar from '@/components/Topbar';
+import CustomerChatWidget from '@/components/CustomerChatWidget';
 
 const inter = Inter({ subsets: ['latin', 'vietnamese'] });
 
@@ -29,7 +30,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
-    <div className="flex min-h-screen bg-slate-50 w-full overflow-x-hidden">
+    <div className="flex min-h-screen bg-slate-50 w-full overflow-x-hidden relative">
       {/* Sidebar Component (Desktop Fixed + Mobile Drawer Overlay) */}
       <Sidebar
         mobileOpen={mobileMenuOpen}
@@ -43,6 +44,9 @@ function AppShell({ children }: { children: React.ReactNode }) {
           {children}
         </main>
       </div>
+
+      {/* AI Customer Support Floating Chatbot Widget (Bottom-Right) */}
+      <CustomerChatWidget />
     </div>
   );
 }
