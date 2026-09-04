@@ -67,9 +67,21 @@ export default function PublicStorefrontHome() {
   const [quantityNote, setQuantityNote] = useState('');
   const [extraNote, setExtraNote] = useState('');
 
-  const loadStorefrontData = () => {
-    setCmsSettings(getCmsSettings());
+  const loadStorefrontData = async () => {
+    const localCms = getCmsSettings();
+    setCmsSettings(localCms);
     setProductsList(getProducts());
+
+    try {
+      const { data } = await supabase
+        .from('storefront_settings')
+        .select('*')
+        .eq('id', 'default_config')
+        .single();
+      if (data && data.settings) {
+        setCmsSettings(prev => ({ ...prev, ...data.settings }));
+      }
+    } catch (e) {}
   };
 
   useEffect(() => {
@@ -503,9 +515,21 @@ export default function PublicStorefrontHome() {
       <section className="relative overflow-hidden bg-gradient-to-b from-orange-500/10 via-amber-500/5 to-slate-50 pt-10 pb-16 border-b border-slate-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-6 relative z-10">
           
-          <div className="inline-flex items-center space-x-2 px-4 py-1.5 rounded-full bg-orange-100 border border-orange-200 text-orange-800 text-xs font-extrabold shadow-2xs">
-            <Flame className="w-4 h-4 text-orange-600 animate-bounce" />
-            <span>Hotline Đặt Ngay: {cmsSettings.hero_hotline}</span>
+          {cmsSettings?.promoBannerText && (
+            <div className="max-w-4xl mx-auto mb-2 px-4 py-2 rounded-2xl bg-gradient-to-r from-orange-600 to-amber-600 text-white font-extrabold text-xs sm:text-sm shadow-md animate-pulse">
+              <span>{cmsSettings.promoBannerText}</span>
+            </div>
+          )}
+
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-orange-50 border border-orange-200 text-orange-800 text-xs sm:text-sm font-semibold shadow-2xs">
+            <span className="text-base">🔥</span>
+            <span>{cmsSettings?.hotlineBadgeText || 'Hotline Đặt Ngay:'}</span>
+            <a 
+              href={`tel:${(cmsSettings?.hero_hotline || cmsSettings?.hotline || '0988123456').replace(/\s+/g, '').replace(/\./g, '')}`} 
+              className="font-bold text-orange-900 hover:underline"
+            >
+              {cmsSettings?.hero_hotline || cmsSettings?.hotline || '0988.123.456'}
+            </a>
           </div>
 
           <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black text-slate-900 tracking-tight leading-tight max-w-4xl mx-auto">

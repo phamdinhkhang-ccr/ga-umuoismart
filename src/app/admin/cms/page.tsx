@@ -10,17 +10,27 @@ import {
   getCmsSettings, saveCmsSettings, StorefrontCmsSettings, CmsBranchItem,
   getProducts, saveProduct, deleteProduct, ProductRecord 
 } from '@/lib/store';
+import { supabase } from '@/lib/supabaseClient';
 
 export default function AdminCmsPage() {
   const [settings, setSettings] = useState<StorefrontCmsSettings>({
     hero_title: 'GÀ Ủ MUỐI SMART',
     hero_slogan: 'Gà ủ muối da giòn sần sật - Thơm ngon đậm đà giao nóng tận nơi',
     hero_hotline: '0988.123.456',
+    hotline: '0988.123.456',
+    hotlineBadgeText: 'Hotline Đặt Ngay:',
+    promoBannerText: '🔥 Khuyến mãi đặc biệt: Đồng giá Gà Ủ Muối Nguyên Con 190.000đ - Giao hỏa tốc 20 phút!',
+    brandName: 'Gà Ủ Muối Smart',
     branches: [],
     social_facebook: 'https://facebook.com',
     social_tiktok: 'https://tiktok.com',
     social_zalo: 'https://zalo.me',
-    hotline_complaints: '1900.6868'
+    hotline_complaints: '1900.6868',
+    bankInfo: {
+      bankName: 'MB Bank',
+      accountNumber: '0988123456',
+      accountHolder: 'CHI NHANH VIN SMART CITY'
+    }
   });
 
   const [products, setProducts] = useState<ProductRecord[]>([]);
@@ -40,9 +50,21 @@ export default function AdminCmsPage() {
     image_url: ''
   });
 
-  const reloadData = () => {
-    setSettings(getCmsSettings());
+  const reloadData = async () => {
+    const localSettings = getCmsSettings();
+    setSettings(localSettings);
     setProducts(getProducts());
+
+    try {
+      const { data } = await supabase
+        .from('storefront_settings')
+        .select('*')
+        .eq('id', 'default_config')
+        .single();
+      if (data && data.settings) {
+        setSettings(prev => ({ ...prev, ...data.settings }));
+      }
+    } catch (e) {}
   };
 
   useEffect(() => {
@@ -63,10 +85,28 @@ export default function AdminCmsPage() {
 
   const handleSaveAll = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    const updated = saveCmsSettings(settings);
+    const updated = saveCmsSettings({
+      ...settings,
+      hotline: settings.hero_hotline
+    });
     setSettings(updated);
+
+    try {
+      Promise.resolve(
+        supabase
+          .from('storefront_settings')
+          .upsert([
+            {
+              id: 'default_config',
+              settings: updated,
+              updated_at: new Date().toISOString()
+            }
+          ])
+      ).catch(() => {});
+    } catch (err) {}
+
     notifyUpdate();
-    showToast('🎉 Đã cập nhật cấu hình trang chủ thành công!');
+    showToast('✅ Đã lưu và cập nhật giao diện trang chủ thành công!');
   };
 
   const handleBranchChange = (index: number, field: keyof CmsBranchItem, value: any) => {
@@ -200,13 +240,34 @@ export default function AdminCmsPage() {
             </div>
 
             <div className="space-y-1">
+              <label className="font-bold text-slate-700">Tiền tố Badge Hotline (VD: Hotline Đặt Ngay:)</label>
+              <input
+                type="text"
+                value={settings.hotlineBadgeText || 'Hotline Đặt Ngay:'}
+                onChange={(e) => setSettings({ ...settings, hotlineBadgeText: e.target.value })}
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 outline-none focus:border-orange-500 focus:bg-white transition"
+              />
+            </div>
+
+            <div className="space-y-1">
               <label className="font-bold text-slate-700">Số điện thoại Hotline gọi nhanh (*)</label>
               <input
                 type="text"
                 required
                 value={settings.hero_hotline}
-                onChange={(e) => setSettings({ ...settings, hero_hotline: e.target.value })}
+                onChange={(e) => setSettings({ ...settings, hero_hotline: e.target.value, hotline: e.target.value })}
                 className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-orange-600 outline-none focus:border-orange-500 focus:bg-white transition"
+              />
+            </div>
+
+            <div className="sm:col-span-2 space-y-1">
+              <label className="font-bold text-slate-700">Thông báo ưu đãi nổi bật (Chạy thanh Banner)</label>
+              <input
+                type="text"
+                value={settings.promoBannerText || ''}
+                onChange={(e) => setSettings({ ...settings, promoBannerText: e.target.value })}
+                placeholder="VD: 🔥 Khuyến mãi đặc biệt: Đồng giá Gà Ủ Muối Nguyên Con 190.000đ!"
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-orange-700 outline-none focus:border-orange-500 focus:bg-white transition"
               />
             </div>
 
@@ -266,12 +327,61 @@ export default function AdminCmsPage() {
           </div>
         </div>
 
+        {/* 1.5. KHỐI CẤU HÌNH NGÂN HÀNG THANH TOÁN (VIETQR) */}
+        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
+          <div className="flex items-center space-x-2 border-b border-slate-100 pb-3">
+            <Sparkles className="w-5 h-5 text-orange-600" />
+            <h2 className="font-extrabold text-slate-900 text-sm">B. Cấu Hình Tài Khoản Ngân Hàng Thanh Toán (Chuyển Khoản / VietQR)</h2>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+            <div className="space-y-1">
+              <label className="font-bold text-slate-700">Tên Ngân hàng (VD: MB Bank, Vietcombank)</label>
+              <input
+                type="text"
+                value={settings.bankInfo?.bankName || 'MB Bank'}
+                onChange={(e) => setSettings({
+                  ...settings,
+                  bankInfo: { ...(settings.bankInfo || { accountNumber: '', accountHolder: '' }), bankName: e.target.value }
+                })}
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 outline-none focus:border-orange-500 focus:bg-white transition"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="font-bold text-slate-700">Số tài khoản nhận tiền (*)</label>
+              <input
+                type="text"
+                value={settings.bankInfo?.accountNumber || '0988123456'}
+                onChange={(e) => setSettings({
+                  ...settings,
+                  bankInfo: { ...(settings.bankInfo || { bankName: 'MB Bank', accountHolder: '' }), accountNumber: e.target.value }
+                })}
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-orange-600 outline-none focus:border-orange-500 focus:bg-white transition"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="font-bold text-slate-700">Tên chủ tài khoản (*)</label>
+              <input
+                type="text"
+                value={settings.bankInfo?.accountHolder || 'CHI NHANH VIN SMART CITY'}
+                onChange={(e) => setSettings({
+                  ...settings,
+                  bankInfo: { ...(settings.bankInfo || { bankName: 'MB Bank', accountNumber: '' }), accountHolder: e.target.value }
+                })}
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 outline-none focus:border-orange-500 focus:bg-white transition"
+              />
+            </div>
+          </div>
+        </div>
+
         {/* 2. KHỐI QUẢN LÝ 5 CƠ SỞ HIỂN THỊ TRANG CHỦ */}
         <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
           <div className="flex items-center space-x-2 border-b border-slate-100 pb-3 justify-between">
             <div className="flex items-center space-x-2">
               <Store className="w-5 h-5 text-orange-600" />
-              <h2 className="font-extrabold text-slate-900 text-sm">B. Quản Lý Danh Sách 5 Cơ Sở Hiển Thị Ngoài Trang Chủ</h2>
+              <h2 className="font-extrabold text-slate-900 text-sm">C. Quản Lý Danh Sách 5 Cơ Sở Hiển Thị Ngoài Trang Chủ</h2>
             </div>
             <span className="text-[11px] font-bold text-slate-500">Cơ sở bật/tắt sẽ tự động cập nhật ngoài trang chủ</span>
           </div>

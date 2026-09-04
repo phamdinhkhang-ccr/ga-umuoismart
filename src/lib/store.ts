@@ -1239,17 +1239,30 @@ export interface StorefrontCmsSettings {
   hero_slogan: string;
   hero_banner_image?: string;
   hero_hotline: string;
+  hotline?: string;
+  hotlineBadgeText?: string;
+  promoBannerText?: string;
+  brandName?: string;
   branches: CmsBranchItem[];
   social_facebook: string;
   social_tiktok: string;
   social_zalo: string;
   hotline_complaints: string;
+  bankInfo?: {
+    bankName: string;
+    accountNumber: string;
+    accountHolder: string;
+  };
 }
 
 const DEFAULT_CMS_SETTINGS: StorefrontCmsSettings = {
   hero_title: 'GÀ Ủ MUỐI SMART',
   hero_slogan: 'Gà ủ muối da giòn sần sật - Thơm ngon đậm đà giao nóng tận nơi',
   hero_hotline: '0988.123.456',
+  hotline: '0988.123.456',
+  hotlineBadgeText: 'Hotline Đặt Ngay:',
+  promoBannerText: '🔥 Khuyến mãi đặc biệt: Đồng giá Gà Ủ Muối Nguyên Con 190.000đ - Giao hỏa tốc 20 phút!',
+  brandName: 'Gà Ủ Muối Smart',
   branches: [
     {
       id: 'b-vinsmart',
@@ -1300,11 +1313,22 @@ const DEFAULT_CMS_SETTINGS: StorefrontCmsSettings = {
   social_facebook: 'https://facebook.com',
   social_tiktok: 'https://tiktok.com',
   social_zalo: 'https://zalo.me',
-  hotline_complaints: '1900.6868'
+  hotline_complaints: '1900.6868',
+  bankInfo: {
+    bankName: 'MB Bank',
+    accountNumber: '0988123456',
+    accountHolder: 'CHI NHANH VIN SMART CITY'
+  }
 };
 
 export function getCmsSettings(): StorefrontCmsSettings {
-  return getItem<StorefrontCmsSettings>(KEYS.CMS, DEFAULT_CMS_SETTINGS);
+  const loaded = getItem<StorefrontCmsSettings>(KEYS.CMS, DEFAULT_CMS_SETTINGS);
+  return {
+    ...DEFAULT_CMS_SETTINGS,
+    ...loaded,
+    branches: loaded?.branches && loaded.branches.length > 0 ? loaded.branches : DEFAULT_CMS_SETTINGS.branches,
+    bankInfo: loaded?.bankInfo || DEFAULT_CMS_SETTINGS.bankInfo
+  };
 }
 
 export function saveCmsSettings(newSettings: Partial<StorefrontCmsSettings>): StorefrontCmsSettings {
