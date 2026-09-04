@@ -287,6 +287,27 @@ export default function InventoryImportPage() {
                 </div>
               </div>
 
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Mã Số Lô Hàng</label>
+                  <input
+                    type="text"
+                    placeholder="LÔ-GUM-0409"
+                    value={supplier ? `LÔ-${supplier.substring(0, 3).toUpperCase()}-0409` : 'LÔ-GUM-0409'}
+                    onChange={() => {}}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none font-mono font-bold text-slate-800"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Hạn Sử Dụng (HSD)</label>
+                  <input
+                    type="date"
+                    defaultValue="2026-09-18"
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none font-semibold text-slate-800"
+                  />
+                </div>
+              </div>
+
               <div>
                 <label className="block font-bold text-slate-700 mb-1">Đơn Giá Nhập (VNĐ) *</label>
                 <input

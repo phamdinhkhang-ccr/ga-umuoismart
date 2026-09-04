@@ -489,6 +489,11 @@ export interface ProductRecord {
   ai_keywords: string[];
   is_best_seller?: boolean;
   image_url?: string;
+  // Expiry & Batch tracking fields
+  production_date?: string;
+  shelf_life_days?: number;
+  expiry_date?: string;
+  batch_code?: string;
 }
 
 const DEFAULT_PRODUCTS: ProductRecord[] = [
@@ -502,7 +507,11 @@ const DEFAULT_PRODUCTS: ProductRecord[] = [
     is_available: true,
     unavailable_branches: [],
     ai_keywords: ['1 con', 'nguyên con', 'gà ủ cả con', 'ga nguyen con', 'gà ủ muối'],
-    is_best_seller: true
+    is_best_seller: true,
+    production_date: '2026-09-02',
+    shelf_life_days: 14,
+    expiry_date: '2026-09-16',
+    batch_code: 'LÔ-GUM-0409'
   },
   {
     id: 'm2',
@@ -514,7 +523,11 @@ const DEFAULT_PRODUCTS: ProductRecord[] = [
     is_available: true,
     unavailable_branches: [],
     ai_keywords: ['nửa con', '1/2 con', 'ga nua con', 'nửa con gà'],
-    is_best_seller: false
+    is_best_seller: false,
+    production_date: '2026-09-03',
+    shelf_life_days: 14,
+    expiry_date: '2026-09-17',
+    batch_code: 'LÔ-GUM-0409B'
   },
   {
     id: 'm3',
@@ -526,7 +539,11 @@ const DEFAULT_PRODUCTS: ProductRecord[] = [
     is_available: true,
     unavailable_branches: [],
     ai_keywords: ['chân gà', 'sốt thái', 'chân gà rút xương', 'chan ga'],
-    is_best_seller: true
+    is_best_seller: true,
+    production_date: '2026-08-31',
+    shelf_life_days: 6,
+    expiry_date: '2026-09-06', // ⚠️Còn 2 ngày!
+    batch_code: 'LÔ-CG-0409'
   },
   {
     id: 'm4',
@@ -538,7 +555,11 @@ const DEFAULT_PRODUCTS: ProductRecord[] = [
     is_available: true,
     unavailable_branches: [],
     ai_keywords: ['cánh gà', '4 cánh', 'canh ga u muoi'],
-    is_best_seller: false
+    is_best_seller: false,
+    production_date: '2026-08-30',
+    shelf_life_days: 8,
+    expiry_date: '2026-09-07', // ⚠️Còn 3 ngày!
+    batch_code: 'LÔ-CGU-0209'
   },
   {
     id: 'm5',
@@ -550,7 +571,11 @@ const DEFAULT_PRODUCTS: ProductRecord[] = [
     is_available: true,
     unavailable_branches: [],
     ai_keywords: ['nước chấm', 'hũ nước chấm', 'nuoc cham extra', 'sốt chấm'],
-    is_best_seller: false
+    is_best_seller: false,
+    production_date: '2026-09-01',
+    shelf_life_days: 30,
+    expiry_date: '2026-10-01',
+    batch_code: 'LÔ-NC-0109'
   },
   {
     id: 'm6',
@@ -562,7 +587,11 @@ const DEFAULT_PRODUCTS: ProductRecord[] = [
     is_available: true,
     unavailable_branches: [],
     ai_keywords: ['trà tắc', 'ly trà tắc', 'tra tac khong lo', 'trà tắc 1 lít'],
-    is_best_seller: true
+    is_best_seller: true,
+    production_date: '2026-09-04',
+    shelf_life_days: 5,
+    expiry_date: '2026-09-09',
+    batch_code: 'LÔ-TT-0409'
   },
   {
     id: 'm7',
@@ -574,12 +603,50 @@ const DEFAULT_PRODUCTS: ProductRecord[] = [
     is_available: true,
     unavailable_branches: [],
     ai_keywords: ['trà đào', 'trà đào cam sả', 'tra dao'],
-    is_best_seller: false
+    is_best_seller: false,
+    production_date: '2026-09-04',
+    shelf_life_days: 5,
+    expiry_date: '2026-09-09',
+    batch_code: 'LÔ-TD-0409'
+  },
+  {
+    id: 'm8',
+    name: 'Nộm Gà Xé Phay Chua Ngọt',
+    price: 60000,
+    cost_price: 36000,
+    category: 'Món Ăn Kèm',
+    unit: 'Hộp',
+    is_available: false,
+    unavailable_branches: [],
+    ai_keywords: ['nộm gà', 'gà xé phay', 'nom ga'],
+    is_best_seller: false,
+    production_date: '2026-08-25',
+    shelf_life_days: 7,
+    expiry_date: '2026-09-01', // ⛔ Đã hết hạn!
+    batch_code: 'LÔ-NGX-2808'
   }
 ];
 
 export function getProducts(): ProductRecord[] {
   return getItem<ProductRecord[]>(KEYS.PRODUCTS, DEFAULT_PRODUCTS);
+}
+
+export function getExpiryDetails(expiryDateStr?: string) {
+  if (!expiryDateStr) {
+    return { status: 'SAFE' as const, daysLeft: 999, label: '✓ Hạn dài' };
+  }
+  const today = new Date('2026-09-04');
+  const exp = new Date(expiryDateStr);
+  const diffTime = exp.getTime() - today.getTime();
+  const daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+  if (daysLeft < 0) {
+    return { status: 'EXPIRED' as const, daysLeft, label: `⛔ Đã hết hạn (${Math.abs(daysLeft)} ngày)` };
+  } else if (daysLeft <= 5) {
+    return { status: 'WARNING' as const, daysLeft, label: `⚠️ Còn ${daysLeft} ngày` };
+  } else {
+    return { status: 'SAFE' as const, daysLeft, label: `✓ Còn ${daysLeft} ngày` };
+  }
 }
 
 export function saveProduct(productData: Partial<ProductRecord> & { name: string }): ProductRecord[] {
@@ -600,7 +667,11 @@ export function saveProduct(productData: Partial<ProductRecord> & { name: string
       unavailable_branches: productData.unavailable_branches || [],
       ai_keywords: productData.ai_keywords || [productData.name.toLowerCase()],
       is_best_seller: productData.is_best_seller || false,
-      image_url: productData.image_url
+      image_url: productData.image_url,
+      production_date: productData.production_date || '2026-09-04',
+      shelf_life_days: productData.shelf_life_days || 7,
+      expiry_date: productData.expiry_date || '2026-09-11',
+      batch_code: productData.batch_code || `LÔ-${Date.now().toString().slice(-4)}`
     };
     const updated = [...current, newP];
     setItem(KEYS.PRODUCTS, updated);
@@ -637,5 +708,6 @@ export function deleteProduct(id: string): ProductRecord[] {
   setItem(KEYS.PRODUCTS, updated);
   return updated;
 }
+
 
 

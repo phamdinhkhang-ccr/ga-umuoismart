@@ -4,11 +4,12 @@ import { useState, useEffect, useMemo } from 'react';
 import { 
   UtensilsCrossed, Plus, Search, CheckCircle2, XCircle, 
   Edit3, Trash2, Sparkles, Filter, Building2, Flame, 
-  Bot, Check, X, ShieldAlert, Tag, Package, Coffee, Salad, Drumstick
+  Bot, Check, X, ShieldAlert, Tag, Package, Coffee, Salad, Drumstick,
+  Calendar, AlertTriangle, AlertOctagon, Hourglass, Layers
 } from 'lucide-react';
 import { 
   getProducts, saveProduct, toggleProductAvailability, 
-  deleteProduct, ProductRecord, getBranches 
+  deleteProduct, ProductRecord, getBranches, getExpiryDetails 
 } from '@/lib/store';
 import { Branch } from '@/types/database';
 
@@ -19,6 +20,7 @@ export default function ProductsPage() {
   // Filter States
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryTab, setCategoryTab] = useState<string>('ALL');
+  const [expiryTab, setExpiryTab] = useState<'ALL' | 'WARNING' | 'EXPIRED' | 'SAFE'>('ALL');
   const [selectedBranchId, setSelectedBranchId] = useState<string>('ALL');
 
   // Modal States
@@ -35,6 +37,10 @@ export default function ProductsPage() {
     cost_price: number | '';
     ai_keywords: string;
     is_best_seller: boolean;
+    batch_code: string;
+    production_date: string;
+    shelf_life_days: number | '';
+    expiry_date: string;
   }>({
     name: '',
     category: 'Món Gà Ủ Muối',
@@ -42,7 +48,11 @@ export default function ProductsPage() {
     price: 190000,
     cost_price: 110000,
     ai_keywords: '1 con, nguyên con, gà ủ cả con',
-    is_best_seller: true
+    is_best_seller: true,
+    batch_code: 'LÔ-GUM-0409',
+    production_date: '2026-09-04',
+    shelf_life_days: 14,
+    expiry_date: '2026-09-18'
   });
 
   // Notification Toast
@@ -65,6 +75,22 @@ export default function ProductsPage() {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
+  // Expiry Statistics Calculation
+  const expiryStats = useMemo(() => {
+    let warningCount = 0;
+    let expiredCount = 0;
+    let safeCount = 0;
+
+    products.forEach(p => {
+      const exp = getExpiryDetails(p.expiry_date);
+      if (exp.status === 'EXPIRED') expiredCount++;
+      else if (exp.status === 'WARNING') warningCount++;
+      else safeCount++;
+    });
+
+    return { warningCount, expiredCount, safeCount, total: products.length };
+  }, [products]);
+
   // Category counts
   const categoryCounts = useMemo(() => {
     return {
@@ -83,26 +109,30 @@ export default function ProductsPage() {
       if (categoryTab !== 'ALL' && p.category !== categoryTab) {
         return false;
       }
-      // Search query filter (Name, Category, or AI Keywords)
+      // Expiry Tab filter
+      if (expiryTab !== 'ALL') {
+        const exp = getExpiryDetails(p.expiry_date);
+        if (exp.status !== expiryTab) return false;
+      }
+      // Search query filter (Name, Category, Batch, or AI Keywords)
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
         const nameMatch = p.name.toLowerCase().includes(q);
         const catMatch = p.category.toLowerCase().includes(q);
+        const batchMatch = p.batch_code && p.batch_code.toLowerCase().includes(q);
         const tagMatch = p.ai_keywords && p.ai_keywords.some(k => k.toLowerCase().includes(q));
-        if (!nameMatch && !catMatch && !tagMatch) return false;
+        if (!nameMatch && !catMatch && !batchMatch && !tagMatch) return false;
       }
       return true;
     });
-  }, [products, categoryTab, searchQuery]);
+  }, [products, categoryTab, expiryTab, searchQuery]);
 
   // Handle Toggle Availability Switch
   const handleToggleSwitch = (product: ProductRecord) => {
     if (selectedBranchId && selectedBranchId !== 'ALL') {
-      // Prompt stock scope options modal
       setSelectedProduct(product);
       setActiveModal('STOCK_SCOPE');
     } else {
-      // Global toggle
       const updated = toggleProductAvailability(product.id);
       setProducts(updated);
       const isAvail = updated.find(p => p.id === product.id)?.is_available;
@@ -141,10 +171,16 @@ export default function ProductsPage() {
         price: product.price,
         cost_price: product.cost_price,
         ai_keywords: product.ai_keywords ? product.ai_keywords.join(', ') : '',
-        is_best_seller: !!product.is_best_seller
+        is_best_seller: !!product.is_best_seller,
+        batch_code: product.batch_code || 'LÔ-GUM-0409',
+        production_date: product.production_date || '2026-09-04',
+        shelf_life_days: product.shelf_life_days || 7,
+        expiry_date: product.expiry_date || '2026-09-11'
       });
     } else {
       setSelectedProduct(null);
+      const todayStr = '2026-09-04';
+      const defaultExpStr = '2026-09-18';
       setFormData({
         name: '',
         category: 'Món Gà Ủ Muối',
@@ -152,10 +188,36 @@ export default function ProductsPage() {
         price: 190000,
         cost_price: 110000,
         ai_keywords: 'gà nguyên con, 1 con, gà ủ muối',
-        is_best_seller: false
+        is_best_seller: false,
+        batch_code: `LÔ-GUM-${Date.now().toString().slice(-4)}`,
+        production_date: todayStr,
+        shelf_life_days: 14,
+        expiry_date: defaultExpStr
       });
     }
     setActiveModal('CREATE_EDIT');
+  };
+
+  // Auto-calculate Expiry Date when Production Date or Shelf Life Days Change
+  const handleProductionOrShelfLifeChange = (prodDate: string, days: number | '') => {
+    const daysNum = Number(days) || 0;
+    if (prodDate && daysNum > 0) {
+      const pDate = new Date(prodDate);
+      pDate.setDate(pDate.getDate() + daysNum);
+      const calcExpiry = pDate.toISOString().split('T')[0];
+      setFormData(prev => ({
+        ...prev,
+        production_date: prodDate,
+        shelf_life_days: days,
+        expiry_date: calcExpiry
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        production_date: prodDate,
+        shelf_life_days: days
+      }));
+    }
   };
 
   // Save Product Handler
@@ -176,7 +238,11 @@ export default function ProductsPage() {
       price: Number(formData.price),
       cost_price: Number(formData.cost_price || 0),
       ai_keywords: keywordsArray.length > 0 ? keywordsArray : [formData.name.toLowerCase()],
-      is_best_seller: formData.is_best_seller
+      is_best_seller: formData.is_best_seller,
+      batch_code: formData.batch_code || `LÔ-${Date.now().toString().slice(-4)}`,
+      production_date: formData.production_date,
+      shelf_life_days: Number(formData.shelf_life_days || 7),
+      expiry_date: formData.expiry_date
     } as Partial<ProductRecord> & { name: string });
 
     setProducts(updatedList);
@@ -205,7 +271,7 @@ export default function ProductsPage() {
   const liveProfit = livePrice - liveCost;
   const liveMargin = livePrice > 0 ? ((liveProfit / livePrice) * 100).toFixed(1) : '0';
 
-  // Category Icon Component Helper
+  // Category Icon Helper
   const renderCategoryIcon = (category: string) => {
     switch (category) {
       case 'Món Gà Ủ Muối':
@@ -237,13 +303,13 @@ export default function ProductsPage() {
           </div>
           <div>
             <h1 className="text-xl font-extrabold text-slate-900 flex items-center gap-2">
-              Quản Lý Menu Món Ăn
+              Quản Lý Menu Món Ăn &amp; Hạn Sử Dụng
               <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-800">
                 {products.length} Món
               </span>
             </h1>
             <p className="text-xs text-slate-500 mt-0.5">
-              Cấu hình thực đơn, giá bán lẻ, giá vốn, từ khóa nhận diện AI &amp; bật/tắt kho theo từng chi nhánh.
+              Cấu hình thực đơn, theo dõi Hạn Sử Dụng (HSD), từ khóa AI nhận diện &amp; cảnh báo sớm 5 ngày.
             </p>
           </div>
         </div>
@@ -258,9 +324,39 @@ export default function ProductsPage() {
       </div>
 
       {/* ------------------------------------------------------------- */}
-      {/* 1. BỘ LỌC TÌM KIẾM, ĐIỂM BÁN & TABS DANH MỤC */}
+      {/* 2. TOP EXPIRY ALERT BANNER (THANH CẢNH BÁO TỔNG HỢP) */}
       {/* ------------------------------------------------------------- */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs space-y-3 text-xs">
+      {(expiryStats.warningCount > 0 || expiryStats.expiredCount > 0) && (
+        <div className="bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-2xl p-4 shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in border border-amber-400">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-white/20 rounded-xl shrink-0">
+              <AlertTriangle className="w-6 h-6 text-white animate-bounce" />
+            </div>
+            <div>
+              <h3 className="font-extrabold text-sm flex items-center gap-2">
+                ⚠️ Chú Ý: Cảnh Báo Hạn Sử Dụng Thực Đơn F&amp;B
+              </h3>
+              <p className="text-xs text-amber-50 font-medium mt-0.5">
+                Có <strong className="text-white underline font-black">{expiryStats.warningCount} món sắp hết hạn (≤ 5 ngày)</strong> 
+                {expiryStats.expiredCount > 0 && <span> và <strong className="text-rose-200 font-black">{expiryStats.expiredCount} món đã hết hạn</strong></span>}! Hãy ưu tiên xuất bán hoặc chạy combo xả kho.
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => setExpiryTab('WARNING')}
+            className="bg-white hover:bg-amber-50 active:scale-98 text-amber-900 font-extrabold text-xs px-4 py-2 rounded-xl transition shadow-xs flex items-center justify-center gap-1.5 shrink-0 cursor-pointer"
+          >
+            <Hourglass className="w-4 h-4 text-amber-600" />
+            <span>Xem Ngay ({expiryStats.warningCount})</span>
+          </button>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------- */}
+      {/* 1. BỘ LỌC TÌM KIẾM, ĐIỂM BÁN & TABS HSD / DANH MỤC */}
+      {/* ------------------------------------------------------------- */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs space-y-3.5 text-xs">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
           {/* Search Input */}
           <div className="relative flex-1 w-full max-w-md">
@@ -269,7 +365,7 @@ export default function ProductsPage() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Tìm tên món, từ khóa AI (1 con, sốt thái, trà tắc)..."
+              placeholder="Tìm tên món, mã lô (LÔ-GUM-0409), từ khóa AI..."
               className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-slate-900 font-semibold focus:outline-none focus:ring-2 focus:ring-purple-500 focus:bg-white"
             />
           </div>
@@ -294,33 +390,93 @@ export default function ProductsPage() {
           </div>
         </div>
 
+        {/* Expiry Quick Filter Tabs */}
+        <div className="flex flex-wrap items-center gap-2 p-2 bg-slate-50 rounded-xl border border-slate-100">
+          <span className="font-bold text-slate-700 flex items-center gap-1 text-[11px] mr-1">
+            <Hourglass className="w-3.5 h-3.5 text-amber-600" /> Lọc Theo Hạn Sử Dụng:
+          </span>
+
+          <button
+            onClick={() => setExpiryTab('ALL')}
+            className={`px-3 py-1 rounded-lg font-bold transition cursor-pointer ${
+              expiryTab === 'ALL'
+                ? 'bg-slate-900 text-white shadow-2xs'
+                : 'bg-white text-slate-600 hover:bg-slate-200 border border-slate-200'
+            }`}
+          >
+            Tất cả ({expiryStats.total})
+          </button>
+
+          <button
+            onClick={() => setExpiryTab('WARNING')}
+            className={`px-3 py-1 rounded-lg font-bold transition cursor-pointer flex items-center gap-1.5 ${
+              expiryTab === 'WARNING'
+                ? 'bg-amber-600 text-white shadow-2xs'
+                : 'bg-amber-50 text-amber-900 border border-amber-200 hover:bg-amber-100'
+            }`}
+          >
+            ⚠️ Sắp hết hạn (≤ 5 ngày)
+            <span className="px-1.5 py-0.2 text-[10px] bg-amber-200 text-amber-900 rounded-full font-black">
+              {expiryStats.warningCount}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setExpiryTab('EXPIRED')}
+            className={`px-3 py-1 rounded-lg font-bold transition cursor-pointer flex items-center gap-1.5 ${
+              expiryTab === 'EXPIRED'
+                ? 'bg-rose-600 text-white shadow-2xs'
+                : 'bg-rose-50 text-rose-800 border border-rose-200 hover:bg-rose-100'
+            }`}
+          >
+            ⛔ Đã hết hạn
+            <span className="px-1.5 py-0.2 text-[10px] bg-rose-200 text-rose-900 rounded-full font-black">
+              {expiryStats.expiredCount}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setExpiryTab('SAFE')}
+            className={`px-3 py-1 rounded-lg font-bold transition cursor-pointer flex items-center gap-1.5 ${
+              expiryTab === 'SAFE'
+                ? 'bg-emerald-600 text-white shadow-2xs'
+                : 'bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100'
+            }`}
+          >
+            🟢 Còn hạn tốt
+            <span className="px-1.5 py-0.2 text-[10px] bg-emerald-200 text-emerald-900 rounded-full font-black">
+              {expiryStats.safeCount}
+            </span>
+          </button>
+        </div>
+
         {/* Category Tabs */}
-        <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-100">
+        <div className="flex flex-wrap items-center gap-1.5 pt-1">
           <button
             onClick={() => setCategoryTab('ALL')}
-            className={`px-3.5 py-1.5 rounded-xl font-extrabold transition cursor-pointer ${
+            className={`px-3 py-1 rounded-xl font-bold transition cursor-pointer ${
               categoryTab === 'ALL'
-                ? 'bg-slate-900 text-white shadow-xs'
+                ? 'bg-purple-900 text-white'
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             }`}
           >
-            Tất cả ({categoryCounts.ALL})
+            Tất cả món ({categoryCounts.ALL})
           </button>
           <button
             onClick={() => setCategoryTab('Món Gà Ủ Muối')}
-            className={`px-3.5 py-1.5 rounded-xl font-extrabold transition cursor-pointer ${
+            className={`px-3 py-1 rounded-xl font-bold transition cursor-pointer ${
               categoryTab === 'Món Gà Ủ Muối'
-                ? 'bg-amber-600 text-white shadow-xs'
+                ? 'bg-amber-600 text-white'
                 : 'bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200/60'
             }`}
           >
-            🍗 Món Gà Ủ Muối ({categoryCounts['Món Gà Ủ Muối']})
+            🍗 Gà Ủ Muối ({categoryCounts['Món Gà Ủ Muối']})
           </button>
           <button
             onClick={() => setCategoryTab('Món Ăn Kèm')}
-            className={`px-3.5 py-1.5 rounded-xl font-extrabold transition cursor-pointer ${
+            className={`px-3 py-1 rounded-xl font-bold transition cursor-pointer ${
               categoryTab === 'Món Ăn Kèm'
-                ? 'bg-emerald-600 text-white shadow-xs'
+                ? 'bg-emerald-600 text-white'
                 : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200/60'
             }`}
           >
@@ -328,9 +484,9 @@ export default function ProductsPage() {
           </button>
           <button
             onClick={() => setCategoryTab('Nước Uống')}
-            className={`px-3.5 py-1.5 rounded-xl font-extrabold transition cursor-pointer ${
+            className={`px-3 py-1 rounded-xl font-bold transition cursor-pointer ${
               categoryTab === 'Nước Uống'
-                ? 'bg-sky-600 text-white shadow-xs'
+                ? 'bg-sky-600 text-white'
                 : 'bg-sky-50 text-sky-800 hover:bg-sky-100 border border-sky-200/60'
             }`}
           >
@@ -338,9 +494,9 @@ export default function ProductsPage() {
           </button>
           <button
             onClick={() => setCategoryTab('Gia Vị & Extra')}
-            className={`px-3.5 py-1.5 rounded-xl font-extrabold transition cursor-pointer ${
+            className={`px-3 py-1 rounded-xl font-bold transition cursor-pointer ${
               categoryTab === 'Gia Vị & Extra'
-                ? 'bg-purple-600 text-white shadow-xs'
+                ? 'bg-purple-600 text-white'
                 : 'bg-purple-50 text-purple-800 hover:bg-purple-100 border border-purple-200/60'
             }`}
           >
@@ -350,7 +506,7 @@ export default function ProductsPage() {
       </div>
 
       {/* ------------------------------------------------------------- */}
-      {/* 2. RICH PRODUCT TABLE (7 CỘT CHUYÊN NGHIỆP) */}
+      {/* 3. RICH PRODUCT TABLE WITH EXPIRY & BATCH COLUMNS */}
       {/* ------------------------------------------------------------- */}
       <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
         <div className="overflow-x-auto">
@@ -358,20 +514,22 @@ export default function ProductsPage() {
             <thead className="bg-slate-50 text-slate-600 uppercase text-[10px] tracking-wider border-b border-slate-200 font-bold">
               <tr>
                 <th className="px-4 py-3">Hình Ảnh &amp; Món Ăn</th>
-                <th className="px-4 py-3">Danh Mục</th>
-                <th className="px-4 py-3 text-right">Giá Bán Lẻ</th>
-                <th className="px-4 py-3 text-right">Giá Vốn (Cost)</th>
-                <th className="px-4 py-3 text-right">Lợi Nhuận / Đơn Vị</th>
-                <th className="px-4 py-3 text-center">Trạng Thái Kho</th>
-                <th className="px-4 py-3 text-center">Hành Động</th>
+                <th className="px-3 py-3">Danh Mục</th>
+                <th className="px-4 py-3 text-center">Hạn Sử Dụng / Lô</th>
+                <th className="px-3 py-3 text-right">Giá Bán Lẻ</th>
+                <th className="px-3 py-3 text-right">Giá Vốn</th>
+                <th className="px-3 py-3 text-right">Lợi Nhuận</th>
+                <th className="px-3 py-3 text-center">Trạng Thái Kho</th>
+                <th className="px-3 py-3 text-center">Hành Động</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredProducts.map((p) => {
                 const profit = p.price - p.cost_price;
                 const margin = p.price > 0 ? ((profit / p.price) * 100).toFixed(1) : '0';
+                const expInfo = getExpiryDetails(p.expiry_date);
 
-                // Check availability based on selected branch
+                // Availability check based on branch selection
                 const isBranchUnavailable = selectedBranchId && selectedBranchId !== 'ALL'
                   ? (p.unavailable_branches || []).includes(selectedBranchId)
                   : !p.is_available;
@@ -409,7 +567,7 @@ export default function ProductsPage() {
                     </td>
 
                     {/* Column 2: Category Badge */}
-                    <td className="px-4 py-3.5">
+                    <td className="px-3 py-3.5">
                       <span
                         className={`px-2.5 py-1 rounded-xl text-[11px] font-bold border ${
                           p.category === 'Món Gà Ủ Muối'
@@ -425,32 +583,62 @@ export default function ProductsPage() {
                       </span>
                     </td>
 
-                    {/* Column 3: Retail Price */}
-                    <td className="px-4 py-3.5 text-right font-extrabold text-orange-600 text-sm">
-                      {p.price.toLocaleString('vi-VN')} VNĐ
+                    {/* Column 3: Expiry Date & Batch Code Column */}
+                    <td className="px-4 py-3.5 text-center">
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-center gap-1 text-slate-800 font-bold">
+                          <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                          <span>{p.expiry_date || 'N/A'}</span>
+                          {p.batch_code && (
+                            <span className="px-1.5 py-0.2 rounded text-[10px] bg-slate-100 text-slate-600 border border-slate-200 font-mono">
+                              {p.batch_code}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Expiry Countdown Badge */}
+                        <div className="flex justify-center">
+                          <span
+                            className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border ${
+                              expInfo.status === 'EXPIRED'
+                                ? 'bg-rose-50 text-rose-700 border-rose-300 font-bold'
+                                : expInfo.status === 'WARNING'
+                                ? 'bg-amber-50 text-amber-800 border-amber-300 font-black animate-pulse'
+                                : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            }`}
+                          >
+                            {expInfo.label}
+                          </span>
+                        </div>
+                      </div>
                     </td>
 
-                    {/* Column 4: Cost Price */}
-                    <td className="px-4 py-3.5 text-right font-semibold text-slate-500">
-                      {p.cost_price.toLocaleString('vi-VN')} VNĐ
+                    {/* Column 4: Retail Price */}
+                    <td className="px-3 py-3.5 text-right font-extrabold text-orange-600 text-xs">
+                      {p.price.toLocaleString('vi-VN')}đ
                     </td>
 
-                    {/* Column 5: Unit Profit & Margin % */}
-                    <td className="px-4 py-3.5 text-right">
+                    {/* Column 5: Cost Price */}
+                    <td className="px-3 py-3.5 text-right font-semibold text-slate-500">
+                      {p.cost_price.toLocaleString('vi-VN')}đ
+                    </td>
+
+                    {/* Column 6: Unit Profit & Margin % */}
+                    <td className="px-3 py-3.5 text-right">
                       <p className="font-extrabold text-emerald-700 text-xs">
-                        +{profit.toLocaleString('vi-VN')} VNĐ
+                        +{profit.toLocaleString('vi-VN')}đ
                       </p>
                       <span className="inline-block mt-0.5 px-2 py-0.2 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                        {margin}% margin
+                        {margin}%
                       </span>
                     </td>
 
-                    {/* Column 6: Stock Availability Toggle Switch */}
-                    <td className="px-4 py-3.5 text-center">
+                    {/* Column 7: Stock Availability Toggle Switch */}
+                    <td className="px-3 py-3.5 text-center">
                       <div className="inline-flex items-center gap-2">
                         <button
                           onClick={() => handleToggleSwitch(p)}
-                          className={`w-12 h-6 flex items-center rounded-full p-1 cursor-pointer transition-colors duration-200 ${
+                          className={`w-11 h-5 flex items-center rounded-full p-0.5 cursor-pointer transition-colors duration-200 ${
                             isAvailable ? 'bg-emerald-500' : 'bg-slate-300'
                           }`}
                         >
@@ -460,15 +648,15 @@ export default function ProductsPage() {
                             }`}
                           />
                         </button>
-                        <span className={`text-[11px] font-bold ${isAvailable ? 'text-emerald-700' : 'text-rose-600'}`}>
-                          {isAvailable ? 'Còn hàng' : 'Hết hàng'}
+                        <span className={`text-[10px] font-bold ${isAvailable ? 'text-emerald-700' : 'text-rose-600'}`}>
+                          {isAvailable ? 'Còn' : 'Hết'}
                         </span>
                       </div>
                     </td>
 
-                    {/* Column 7: Actions */}
-                    <td className="px-4 py-3.5 text-center">
-                      <div className="flex items-center justify-center gap-1.5">
+                    {/* Column 8: Actions */}
+                    <td className="px-3 py-3.5 text-center">
+                      <div className="flex items-center justify-center gap-1">
                         <button
                           onClick={() => openCreateEditModal(p)}
                           title="Chỉnh sửa món"
@@ -494,10 +682,10 @@ export default function ProductsPage() {
       </div>
 
       {/* ------------------------------------------------------------- */}
-      {/* MODAL 1: THÊM / CHỈNH SỬA MÓN ĂN */}
+      {/* MODAL 1: THÊM / CHỈNH SỬA MÓN ĂN & CẤU HÌNH HSD */}
       {/* ------------------------------------------------------------- */}
       {activeModal === 'CREATE_EDIT' && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 space-y-4 border border-slate-100 animate-in fade-in zoom-in-95 my-8">
             <div className="flex justify-between items-center pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2.5">
@@ -508,7 +696,7 @@ export default function ProductsPage() {
                   <h3 className="font-extrabold text-base text-slate-900">
                     {selectedProduct ? `Chỉnh Sửa Món: ${selectedProduct.name}` : 'Thêm Món Ăn Mới'}
                   </h3>
-                  <p className="text-xs text-slate-500">Cấu hình thông tin thực đơn &amp; từ khóa AI nhận diện tin nhắn.</p>
+                  <p className="text-xs text-slate-500">Cấu hình thông tin món, hạn sử dụng (HSD) &amp; mã lô hàng.</p>
                 </div>
               </div>
               <button onClick={() => setActiveModal(null)} className="p-1 text-slate-400 hover:text-slate-600">
@@ -559,6 +747,59 @@ export default function ProductsPage() {
                     <option value="Chai">Chai</option>
                     <option value="Hũ">Hũ</option>
                   </select>
+                </div>
+              </div>
+
+              {/* Expiry Tracking Fields (Mã Lô, Ngày SX, HSD Days, Ngày Hết Hạn) */}
+              <div className="p-3 bg-amber-50/50 rounded-xl border border-amber-200/60 space-y-2.5">
+                <label className="font-bold text-amber-900 flex items-center gap-1.5">
+                  <Hourglass className="w-3.5 h-3.5 text-amber-600" /> Quản Lý Mã Lô &amp; Hạn Sử Dụng (HSD)
+                </label>
+
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <label className="text-[11px] text-slate-600 font-medium">Mã số lô hàng</label>
+                    <input
+                      type="text"
+                      placeholder="LÔ-GUM-0409"
+                      value={formData.batch_code}
+                      onChange={(e) => setFormData({ ...formData, batch_code: e.target.value })}
+                      className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg font-mono font-bold text-slate-800 outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] text-slate-600 font-medium">Ngày sản xuất</label>
+                    <input
+                      type="date"
+                      value={formData.production_date}
+                      onChange={(e) => handleProductionOrShelfLifeChange(e.target.value, formData.shelf_life_days)}
+                      className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg font-semibold text-slate-800 outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] text-slate-600 font-medium">Hạn dùng (Số ngày)</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={365}
+                      placeholder="14"
+                      value={formData.shelf_life_days}
+                      onChange={(e) => handleProductionOrShelfLifeChange(formData.production_date, Number(e.target.value))}
+                      className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg font-bold text-amber-800 outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-1 font-bold text-slate-800">
+                  <span className="text-[11px]">Hạn Sử Dụng Cụ Thể (Expiry Date):</span>
+                  <input
+                    type="date"
+                    value={formData.expiry_date}
+                    onChange={(e) => setFormData({ ...formData, expiry_date: e.target.value })}
+                    className="px-2.5 py-1 bg-white border border-amber-300 rounded-lg text-amber-900 font-extrabold outline-none text-xs"
+                  />
                 </div>
               </div>
 
@@ -617,9 +858,6 @@ export default function ProductsPage() {
                   onChange={(e) => setFormData({ ...formData, ai_keywords: e.target.value })}
                   className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none text-slate-800 font-medium"
                 />
-                <span className="text-[10px] text-slate-500 block mt-0.5">
-                  AI sẽ tự động nhận diện tin nhắn chứa các từ khóa này để bóc tách món chính xác.
-                </span>
               </div>
 
               {/* Best Seller Checkbox */}
@@ -658,7 +896,7 @@ export default function ProductsPage() {
       )}
 
       {/* ------------------------------------------------------------- */}
-      {/* MODAL 2: XÁC NHẬN CHỌN PHẠM VI HẾT HÀNG (KHI ĐANG CHỌN CHI NHÁNH) */}
+      {/* MODAL 2: XÁC NHẬN CHỌN PHẠM VI HẾT HÀNG */}
       {/* ------------------------------------------------------------- */}
       {activeModal === 'STOCK_SCOPE' && selectedProduct && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
