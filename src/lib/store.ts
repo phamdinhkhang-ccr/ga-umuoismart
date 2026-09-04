@@ -50,12 +50,13 @@ const KEYS = {
   BRANCHES: 'gum_smart_branches_v3',
   PRODUCTS: 'gum_smart_products_v3',
   CUSTOMERS: 'gum_smart_customers_v3',
-  NOTIFICATIONS: 'gum_smart_notifications_v3',
+  NOTIFICATIONS: 'pos_notifications_data',
   CMS: 'gum_smart_storefront_cms_v1',
   ORDERS: 'pos_orders_data'
 };
 
 export const ORDER_STORAGE_KEY = 'pos_orders_data';
+export const NOTIFICATION_STORAGE_KEY = 'pos_notifications_data';
 
 export function getPosOrders(): any[] {
   return getItem<any[]>(ORDER_STORAGE_KEY, []);
@@ -226,29 +227,29 @@ export function setItem<T>(key: string, value: T): void {
   } catch (e) {}
 }
 
-export function playSoundSafe(): void {
-  if (typeof window === 'undefined') return;
+export function playBeep(): void {
   try {
+    if (typeof window === 'undefined') return;
     const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
     if (!AudioCtx) return;
     const ctx = new AudioCtx();
-    if (ctx.state === 'suspended') {
-      ctx.resume();
-    }
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
-    osc.frequency.setValueAtTime(880, ctx.currentTime + 0.15); // A5
-    gain.gain.setValueAtTime(0.2, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
     osc.connect(gain);
     gain.connect(ctx.destination);
+    osc.type = 'sine';
+    osc.frequency.value = 880;
+    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.35);
     osc.start();
-    osc.stop(ctx.currentTime + 0.5);
-  } catch (e) {
-    // Silent fallback if browser blocks autoplay
+    osc.stop(ctx.currentTime + 0.35);
+  } catch (err) {
+    // Bỏ qua nếu user chưa tương tác với trang, tuyệt đối không throw lỗi crash React
   }
+}
+
+export function playSoundSafe(): void {
+  playBeep();
 }
 
 // -------------------------------------------------------------
@@ -1143,33 +1144,50 @@ const DEFAULT_NOTIFICATIONS: SystemNotification[] = [
 ];
 
 export function getNotifications(): SystemNotification[] {
-  return getItem<SystemNotification[]>(KEYS.NOTIFICATIONS, DEFAULT_NOTIFICATIONS);
+  const notifs = getItem<SystemNotification[]>('pos_notifications_data', []);
+  if (notifs && notifs.length > 0) return notifs;
+  return getItem<SystemNotification[]>('gum_smart_notifications_v3', DEFAULT_NOTIFICATIONS);
 }
 
-export function addNotification(notif: Omit<SystemNotification, 'id' | 'timestamp' | 'read'>): SystemNotification {
+export function addNotification(notif: Partial<SystemNotification> & { title: string }): SystemNotification {
   const current = getNotifications();
   const newNotif: SystemNotification = {
-    ...notif,
-    id: `notif-${Date.now()}`,
-    timestamp: 'Vừa xong',
-    read: false
+    id: notif.id || `notif_${Date.now()}`,
+    type: (notif.type || 'ORDER').toUpperCase() as any,
+    title: notif.title,
+    message: notif.message || (notif as any).content || '',
+    timestamp: notif.timestamp || (notif as any).time || 'Vừa xong',
+    read: notif.read ?? (notif as any).isRead ?? false,
+    link: notif.link || '/admin/orders',
+    actionText: notif.actionText || 'Xem chi tiết'
   };
-  const updated = [newNotif, ...current];
-  setItem(KEYS.NOTIFICATIONS, updated);
+  const updated = [newNotif, ...(Array.isArray(current) ? current : [])];
+  setItem('pos_notifications_data', updated);
+  setItem('gum_smart_notifications_v3', updated);
+
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem('pos_notify_ping', Date.now().toString());
+      window.dispatchEvent(new CustomEvent('pos_notify_event', { detail: newNotif }));
+    } catch (e) {}
+  }
+
   return newNotif;
 }
 
 export function markAllNotificationsRead(): SystemNotification[] {
   const current = getNotifications();
-  const updated = current.map(n => ({ ...n, read: true }));
-  setItem(KEYS.NOTIFICATIONS, updated);
+  const updated = current.map(n => ({ ...n, read: true, isRead: true }));
+  setItem('pos_notifications_data', updated);
+  setItem('gum_smart_notifications_v3', updated);
   return updated;
 }
 
 export function markNotificationRead(id: string): SystemNotification[] {
   const current = getNotifications();
-  const updated = current.map(n => n.id === id ? { ...n, read: true } : n);
-  setItem(KEYS.NOTIFICATIONS, updated);
+  const updated = current.map(n => n.id === id ? { ...n, read: true, isRead: true } : n);
+  setItem('pos_notifications_data', updated);
+  setItem('gum_smart_notifications_v3', updated);
   return updated;
 }
 

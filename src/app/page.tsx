@@ -12,7 +12,7 @@ import {
 import { getAnalyticsData, addNewMockOrder } from '@/actions/orders';
 import { 
   getProducts, getCmsSettings, StorefrontCmsSettings, ProductRecord, 
-  addNotification, addOrUpdateCustomerFromOrder, getItem, setItem, savePosOrder 
+  addNotification, addOrUpdateCustomerFromOrder, getItem, setItem, savePosOrder, playBeep 
 } from '@/lib/store';
 import { Order } from '@/types/database';
 
@@ -288,21 +288,37 @@ export default function PublicStorefrontHome() {
       items_summary: selectedItemsSummary.map(i => `${i.quantity}x ${i.item_name}`).join(', ')
     });
 
-    // 5. Play Notification Sound (Web Audio API synth chime)
+    // 4. Create & Save Notification to pos_notifications_data according to spec
     try {
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(587.33, audioCtx.currentTime); // D5
-      osc.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.2); // A5
-      gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      osc.start();
-      osc.stop(audioCtx.currentTime + 0.4);
-    } catch (e) {}
+      const summaryText = selectedItemsSummary.map(i => `${i.quantity}x ${i.item_name}`).join(', ') || 'món';
+      const newNotif = {
+        id: `notif_${Date.now()}`,
+        type: 'order',
+        title: `🍗 Đơn hàng mới #${orderCode}`,
+        content: `Khách ${fullName.trim()} vừa đặt ${summaryText} - ${Number(calculatedTotal).toLocaleString('vi-VN')} đ`,
+        message: `Khách ${fullName.trim()} vừa đặt ${summaryText} - ${Number(calculatedTotal).toLocaleString('vi-VN')} đ`,
+        time: 'Vừa xong',
+        timestamp: 'Vừa xong',
+        createdAt: new Date().toISOString(),
+        isRead: false,
+        read: false,
+        link: '/admin/orders'
+      };
+
+      const existingNotifs = getItem<any[]>('pos_notifications_data', []);
+      const updatedNotifs = [newNotif, ...(Array.isArray(existingNotifs) ? existingNotifs : [])];
+      setItem('pos_notifications_data', updatedNotifs);
+      setItem('gum_smart_notifications_v3', updatedNotifs);
+
+      // Gửi tín hiệu đồng bộ liên tab & phát âm thanh
+      localStorage.setItem('pos_notify_ping', Date.now().toString());
+      window.dispatchEvent(new CustomEvent('pos_notify_event', { detail: newNotif }));
+    } catch (e) {
+      console.error("Storage notification error:", e);
+    }
+
+    // 5. Play Notification Sound
+    playBeep();
 
     // 6. Notify System Update Events
     window.dispatchEvent(new Event('gum_store_update'));

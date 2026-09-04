@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { 
   Store, Calendar, Menu, Bell, Check, X, ArrowRight, ShoppingBag, 
@@ -8,46 +8,11 @@ import {
 } from 'lucide-react';
 import { 
   getNotifications, addNotification, markAllNotificationsRead, 
-  markNotificationRead, SystemNotification 
+  markNotificationRead, playBeep, SystemNotification 
 } from '@/lib/store';
 
 interface TopbarProps {
   onToggleMobileMenu?: () => void;
-}
-
-// Synthesize pleasant dual-tone chime ("ting-ting") using Web Audio API
-function playChimeSound() {
-  try {
-    const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AudioContext) return;
-    const ctx = new AudioContext();
-
-    // High Note 1: E6 (1318.51 Hz)
-    const osc1 = ctx.createOscillator();
-    const gain1 = ctx.createGain();
-    osc1.type = 'sine';
-    osc1.frequency.setValueAtTime(1318.51, ctx.currentTime);
-    gain1.gain.setValueAtTime(0.15, ctx.currentTime);
-    gain1.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
-    osc1.connect(gain1);
-    gain1.connect(ctx.destination);
-    osc1.start(ctx.currentTime);
-    osc1.stop(ctx.currentTime + 0.3);
-
-    // High Note 2: A6 (1760 Hz) delayed by 120ms
-    const osc2 = ctx.createOscillator();
-    const gain2 = ctx.createGain();
-    osc2.type = 'sine';
-    osc2.frequency.setValueAtTime(1760, ctx.currentTime + 0.12);
-    gain2.gain.setValueAtTime(0.2, ctx.currentTime + 0.12);
-    gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
-    osc2.connect(gain2);
-    gain2.connect(ctx.destination);
-    osc2.start(ctx.currentTime + 0.12);
-    osc2.stop(ctx.currentTime + 0.5);
-  } catch (e) {
-    console.error('Audio chime playback error:', e);
-  }
 }
 
 export default function Topbar({ onToggleMobileMenu }: TopbarProps) {
@@ -65,91 +30,97 @@ export default function Topbar({ onToggleMobileMenu }: TopbarProps) {
 
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Audio Alert Trigger (Web Audio API synth chime: D5 -> A5)
-  const playAlertSound = () => {
+  // Sync Notifications from store wrapped in useCallback
+  const syncNotifs = useCallback(() => {
     try {
-      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioContext) return;
-      const audioCtx = new AudioContext();
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(587.33, audioCtx.currentTime); // D5
-      osc.frequency.setValueAtTime(880, audioCtx.currentTime + 0.15); // A5
-      gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.6);
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      osc.start();
-      osc.stop(audioCtx.currentTime + 0.6);
+      const notifs = getNotifications();
+      setNotifications(Array.isArray(notifs) ? notifs : []);
     } catch (e) {
-      console.log('Audio autoplay blocked or not supported', e);
+      setNotifications([]);
     }
-  };
+  }, []);
 
   // Load Notifications & Listen to Cross-Tab & Internal Order Events
   useEffect(() => {
-    setNotifications(getNotifications());
-
-    const handleUpdate = () => {
-      setNotifications(getNotifications());
-    };
-
-    const triggerNewOrderAlert = (orderInfo?: any) => {
-      setNotifications(getNotifications());
-      setIsShaking(true);
-      setTimeout(() => setIsShaking(false), 1200);
-
-      playAlertSound();
-
-      const custName = orderInfo?.customerName || orderInfo?.customer_name || 'Khách';
-      const branchName = orderInfo?.branchName || orderInfo?.branch?.name || 'Cơ sở';
-      const code = orderInfo?.orderCode || orderInfo?.order_code || orderInfo?.id || '';
-
-      const toastNotif: SystemNotification = {
-        id: `toast-${Date.now()}`,
-        type: 'ORDER',
-        title: `🔔 ĐƠN HÀNG MỚI! Khách ${custName} vừa đặt món`,
-        message: `Đơn #${code} - ${branchName} - Tự động cập nhật vào Quản lý đơn.`,
-        timestamp: 'Vừa xong',
-        read: false,
-        link: '/admin/orders',
-        actionText: 'Xem đơn'
-      };
-      setActiveToast(toastNotif);
-      setTimeout(() => setActiveToast(null), 6000);
-    };
+    syncNotifs();
 
     const handleStorage = (e: StorageEvent) => {
-      setNotifications(getNotifications());
-      if (e.key === 'pos_new_order_event' || e.key === 'pos_orders_data' || e.key === 'pos_last_order_ping' || e.key === 'gum_smart_notifications_v3') {
+      if (
+        e.key === 'pos_notify_ping' ||
+        e.key === 'pos_notifications_data' ||
+        e.key === 'pos_new_order_event' ||
+        e.key === 'pos_orders_data' ||
+        e.key === 'gum_smart_notifications_v3'
+      ) {
+        syncNotifs();
+        playBeep();
+        setIsShaking(true);
+        setTimeout(() => setIsShaking(false), 1200);
+
         let orderInfo;
         try {
           if (e.key === 'pos_new_order_event' && e.newValue) {
             orderInfo = JSON.parse(e.newValue);
           }
         } catch (err) {}
-        triggerNewOrderAlert(orderInfo);
+
+        const custName = orderInfo?.customerName || orderInfo?.customer_name || 'Khách';
+        const code = orderInfo?.orderCode || orderInfo?.order_code || orderInfo?.id || '';
+
+        const toastNotif: SystemNotification = {
+          id: `toast-${Date.now()}`,
+          type: 'ORDER',
+          title: `🔔 ĐƠN HÀNG MỚI! Khách ${custName} vừa đặt món`,
+          message: `Đơn #${code} - Tự động cập nhật vào Quản lý đơn.`,
+          timestamp: 'Vừa xong',
+          read: false,
+          link: '/admin/orders',
+          actionText: 'Xem đơn'
+        };
+        setActiveToast(toastNotif);
+        setTimeout(() => setActiveToast(null), 6000);
       }
     };
 
-    const handleCustomOrder = (e: Event) => {
+    const handleCustomNotif = (e: Event) => {
+      syncNotifs();
+      playBeep();
+      setIsShaking(true);
+      setTimeout(() => setIsShaking(false), 1200);
+
       const detail = (e as CustomEvent).detail;
-      triggerNewOrderAlert(detail);
+      if (detail) {
+        const custName = detail.customerName || detail.customer_name || 'Khách';
+        const code = detail.orderCode || detail.order_code || detail.id || '';
+        const toastNotif: SystemNotification = {
+          id: `toast-${Date.now()}`,
+          type: 'ORDER',
+          title: `🔔 ĐƠN HÀNG MỚI! Khách ${custName} vừa đặt món`,
+          message: detail.message || (detail as any).content || `Đơn #${code} - Tự động cập nhật vào Quản lý đơn.`,
+          timestamp: 'Vừa xong',
+          read: false,
+          link: '/admin/orders',
+          actionText: 'Xem đơn'
+        };
+        setActiveToast(toastNotif);
+        setTimeout(() => setActiveToast(null), 6000);
+      }
     };
 
-    window.addEventListener('gum_store_update', handleUpdate);
     window.addEventListener('storage', handleStorage);
-    window.addEventListener('new_order_placed', handleCustomOrder);
-    window.addEventListener('new_order_event', handleCustomOrder);
+    window.addEventListener('pos_notify_event', handleCustomNotif);
+    window.addEventListener('new_order_event', handleCustomNotif);
+    window.addEventListener('new_order_placed', handleCustomNotif);
+    window.addEventListener('gum_store_update', syncNotifs);
 
     return () => {
-      window.removeEventListener('gum_store_update', handleUpdate);
       window.removeEventListener('storage', handleStorage);
-      window.removeEventListener('new_order_placed', handleCustomOrder);
-      window.removeEventListener('new_order_event', handleCustomOrder);
+      window.removeEventListener('pos_notify_event', handleCustomNotif);
+      window.removeEventListener('new_order_event', handleCustomNotif);
+      window.removeEventListener('new_order_placed', handleCustomNotif);
+      window.removeEventListener('gum_store_update', syncNotifs);
     };
-  }, []);
+  }, [syncNotifs]);
 
   // Backdrop click to close dropdown
   useEffect(() => {
@@ -163,14 +134,15 @@ export default function Topbar({ onToggleMobileMenu }: TopbarProps) {
   }, []);
 
   const unreadCount = useMemo(() => {
-    return notifications.filter(n => !n.read).length;
+    return (notifications || []).filter(n => !(n.read || (n as any).isRead)).length;
   }, [notifications]);
 
   const filteredNotifications = useMemo(() => {
-    return notifications.filter(n => {
-      if (activeNotifTab === 'ORDER') return n.type === 'ORDER';
-      if (activeNotifTab === 'STOCK_EXPIRY') return n.type === 'STOCK_EXPIRY';
-      if (activeNotifTab === 'SHIFT') return n.type === 'SHIFT';
+    return (notifications || []).filter(n => {
+      const t = (n.type || '').toString().toUpperCase();
+      if (activeNotifTab === 'ORDER') return t === 'ORDER';
+      if (activeNotifTab === 'STOCK_EXPIRY') return t === 'STOCK_EXPIRY' || t === 'INVENTORY';
+      if (activeNotifTab === 'SHIFT') return t === 'SHIFT';
       return true;
     });
   }, [notifications, activeNotifTab]);
@@ -191,57 +163,34 @@ export default function Topbar({ onToggleMobileMenu }: TopbarProps) {
     }
   };
 
-  // Trigger Test Notification (User simulation button)
+  // Fast Trigger Test Notification ("Thử chuông" button)
   const handleTriggerTestNotification = () => {
-    // Generate random test event
-    const sampleEvents = [
-      {
-        type: 'ORDER' as const,
-        title: '🍗 Đơn hàng mới #OD9715',
-        message: 'Khách hàng vừa đặt 2 Gà Ủ Muối Nguyên Con + 3 Trà Tắc Khổng Lồ qua AI Parser.',
-        link: '/admin/orders',
-        actionText: 'Xem đơn'
-      },
-      {
-        type: 'STOCK_EXPIRY' as const,
-        title: '⚠️ Cảnh báo HSD: Chân Gà Sốt Thái',
-        message: 'Lô CG-0409 còn 2 ngày hết hạn! Cần xả hàng hoặc chạy combo ưu đãi.',
-        link: '/admin/products',
-        actionText: 'Xem HSD'
-      },
-      {
-        type: 'SHIFT' as const,
-        title: '🕒 Nhân viên Đóng Ca 1',
-        message: 'Quản lý Đức vừa Đóng Ca 1 tại CƠ SỞ VIN SMART CITY. Quỹ khớp 100%.',
-        link: '/admin/shifts',
-        actionText: 'Xem ca'
-      },
-      {
-        type: 'EXPENSE' as const,
-        title: '💸 Phiếu chi mới #EX1420',
-        message: 'Chi 45.000 VNĐ mua rau răm & sả tắc tươi cho bếp.',
-        link: '/admin/expenses',
-        actionText: 'Xem phiếu'
-      }
+    playBeep();
+
+    const sampleOrders = [
+      { id: 'OD9718', customerName: 'Anh Đức (Hà Nội)', summaryText: '2 Gà Ủ Muối Nguyên Con + 3 Trà Tắc', totalAmount: 440000 },
+      { id: 'OD9719', customerName: 'Chị Mai (Cầu Giấy)', summaryText: '1 Chân Gà Sốt Thái + 2 Trà Đào', totalAmount: 115000 },
+      { id: 'OD9720', customerName: 'Anh Tuấn (TP.HCM)', summaryText: '3 Cánh Gà Ủ Muối + 1 Nước Chấm', totalAmount: 270000 }
     ];
 
-    const randomSample = sampleEvents[Math.floor(Math.random() * sampleEvents.length)];
+    const sample = sampleOrders[Math.floor(Math.random() * sampleOrders.length)];
 
-    const created = addNotification(randomSample);
-    setNotifications(getNotifications());
+    const created = addNotification({
+      type: 'ORDER',
+      title: `🍗 Đơn hàng mới #${sample.id}`,
+      message: `Khách ${sample.customerName} vừa đặt ${sample.summaryText} - ${Number(sample.totalAmount).toLocaleString('vi-VN')} đ`,
+      link: '/admin/orders',
+      actionText: 'Xem đơn'
+    });
 
-    // Play Chime Audio Sound
-    playChimeSound();
+    syncNotifs();
+    setDropdownOpen(true);
 
-    // Trigger Bell Shake Effect
     setIsShaking(true);
     setTimeout(() => setIsShaking(false), 1200);
 
-    // Trigger Floating Toast Alert
     setActiveToast(created);
-    setTimeout(() => {
-      setActiveToast(null);
-    }, 4500);
+    setTimeout(() => setActiveToast(null), 5000);
   };
 
   const getBreadcrumbTitle = () => {
