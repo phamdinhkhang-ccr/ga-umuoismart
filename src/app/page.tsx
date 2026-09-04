@@ -150,28 +150,36 @@ export default function PublicStorefrontHome() {
     return cmsSettings.branches?.filter((b) => b.is_active !== false) || [];
   }, [cmsSettings.branches]);
 
-  // Filter & Sort Storefront Menu Products (Best Seller first, visible only)
-  const visibleStorefrontProducts = useMemo(() => {
-    return productsList
-      .filter((p) => p.is_storefront_visible !== false)
-      .sort((a, b) => (b.is_best_seller ? 1 : 0) - (a.is_best_seller ? 1 : 0));
-  }, [productsList]);
+  // Dynamic display products priority: cmsSettings.products -> cmsSettings.menuItems -> productsList
+  const displayProducts = useMemo(() => {
+    const rawList = (cmsSettings as any)?.products?.length > 0 
+      ? (cmsSettings as any).products 
+      : (cmsSettings as any)?.menuItems?.length > 0 
+        ? (cmsSettings as any).menuItems 
+        : productsList;
+
+    if (!Array.isArray(rawList)) return [];
+
+    return rawList
+      .filter((p: any) => p && p.is_storefront_visible !== false)
+      .sort((a: any, b: any) => (b.is_best_seller ? 1 : 0) - (a.is_best_seller ? 1 : 0));
+  }, [cmsSettings, productsList]);
 
   // Combined selectable items array (Presets + Products from store)
   const allSelectableItems = useMemo(() => {
     const presets = [...PRESET_COMBOS];
-    productsList.forEach(p => {
-      if (!presets.some(item => item.name.toLowerCase().includes(p.name.toLowerCase()))) {
+    displayProducts.forEach((p: any) => {
+      if (!presets.some(item => item.name.toLowerCase().includes((p.name || '').toLowerCase()))) {
         presets.push({
           id: p.id,
-          name: `${p.name} - ${p.price.toLocaleString('vi-VN')}đ`,
-          price: p.price,
+          name: `${p.name} - ${(p.price || 0).toLocaleString('vi-VN')}đ`,
+          price: p.price || 0,
           isHot: !!p.is_best_seller
         });
       }
     });
     return presets;
-  }, [productsList]);
+  }, [displayProducts]);
 
   // Auto Nearest Branch Suggestion Logic based on Address
   const suggestedBranch = useMemo(() => {
@@ -771,73 +779,78 @@ export default function PublicStorefrontHome() {
 
         {/* Product Grid Dynamic Sync */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {visibleStorefrontProducts.map((p) => (
-            <div
-              key={p.id}
-              className="bg-white border border-slate-200 rounded-3xl p-5 shadow-xs hover:shadow-xl hover:border-orange-300 transition-all duration-300 flex flex-col justify-between group space-y-4"
-            >
-              <div className="space-y-3">
-                <div className="flex justify-between items-start gap-3">
-                  {/* Product Image Box with onError Fallback */}
-                  <div className="relative w-20 h-20 sm:w-24 sm:h-24 bg-amber-50/80 rounded-2xl overflow-hidden shrink-0 border border-slate-200 shadow-2xs flex items-center justify-center">
-                    {(p.image_url || (p as any).imageUrl || (p as any).image) ? (
-                      <img
-                        src={p.image_url || (p as any).imageUrl || (p as any).image}
-                        alt={p.name}
-                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                        onError={(e) => {
-                          e.currentTarget.style.display = 'none';
-                          e.currentTarget.nextElementSibling?.classList.remove('hidden');
-                        }}
-                      />
-                    ) : null}
-                    <div className={`w-full h-full flex items-center justify-center text-3xl sm:text-4xl ${(p.image_url || (p as any).imageUrl || (p as any).image) ? 'hidden' : ''}`}>
-                      🍗
+          {displayProducts.map((p: any) => {
+            const productImg = p.image_url || p.image || p.imageUrl || p.avatar;
+            return (
+              <div
+                key={p.id || p.name}
+                className="bg-white border border-slate-200 rounded-3xl p-5 shadow-xs hover:shadow-xl hover:border-orange-300 transition-all duration-300 flex flex-col justify-between group space-y-4"
+              >
+                <div className="space-y-3">
+                  <div className="flex justify-between items-start gap-3">
+                    {/* Product Image Box with onError Fallback */}
+                    <div className="relative w-20 h-20 sm:w-24 sm:h-24 bg-amber-50/80 rounded-2xl overflow-hidden shrink-0 border border-slate-200 shadow-2xs flex items-center justify-center">
+                      {productImg ? (
+                        <img
+                          src={productImg}
+                          alt={p.name}
+                          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                            e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                          }}
+                        />
+                      ) : null}
+                      <div className={`w-full h-full flex items-center justify-center text-3xl sm:text-4xl ${productImg ? 'hidden' : ''}`}>
+                        <div className="w-14 h-14 bg-amber-100/90 rounded-2xl flex items-center justify-center">
+                          <span className="text-3xl">🍗</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end gap-1">
+                      {p.is_best_seller && (
+                        <span className="bg-amber-100 text-amber-900 border border-amber-300 font-extrabold text-[10px] px-2.5 py-1 rounded-full flex items-center gap-1 shadow-2xs">
+                          🌟 Bán Chạy Nhất
+                        </span>
+                      )}
+                      <span className="bg-orange-50 text-orange-700 border border-orange-200 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full">
+                        {p.category || 'Món Gà Ủ Muối'}
+                      </span>
                     </div>
                   </div>
-                  <div className="flex flex-col items-end gap-1">
-                    {p.is_best_seller && (
-                      <span className="bg-amber-100 text-amber-900 border border-amber-300 font-extrabold text-[10px] px-2.5 py-1 rounded-full flex items-center gap-1 shadow-2xs">
-                        🌟 Bán Chạy Nhất
-                      </span>
-                    )}
-                    <span className="bg-orange-50 text-orange-700 border border-orange-200 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full">
-                      {p.category}
-                    </span>
+
+                  <div>
+                    <h3 className="font-extrabold text-slate-900 text-base group-hover:text-orange-600 transition">
+                      {p.name}
+                    </h3>
+                    <p className="text-xs text-slate-500 font-medium mt-1 leading-relaxed">
+                      {p.description || (p.ai_keywords ? p.ai_keywords.join(' • ') : 'Gà ủ muối chuẩn vị da giòn sần sật')}
+                    </p>
                   </div>
                 </div>
 
-                <div>
-                  <h3 className="font-extrabold text-slate-900 text-base group-hover:text-orange-600 transition">
-                    {p.name}
-                  </h3>
-                  <p className="text-xs text-slate-500 font-medium mt-1 leading-relaxed">
-                    {p.description || (p.ai_keywords ? p.ai_keywords.join(' • ') : 'Gà ủ muối chuẩn vị da giòn sần sật')}
-                  </p>
-                </div>
-              </div>
-
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] text-slate-400 font-bold block">Giá bán:</span>
-                  <div className="flex items-baseline space-x-2">
-                    <span className="text-lg font-black text-orange-600">{p.price.toLocaleString('vi-VN')}đ</span>
-                    {p.original_price && (
-                      <span className="line-through text-slate-400 font-semibold text-xs">{p.original_price.toLocaleString('vi-VN')}đ</span>
-                    )}
+                <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-bold block">Giá bán:</span>
+                    <div className="flex items-baseline space-x-2">
+                      <span className="text-lg font-black text-orange-600">{(p.price || 0).toLocaleString('vi-VN')}đ</span>
+                      {p.original_price && (
+                        <span className="line-through text-slate-400 font-semibold text-xs">{(p.original_price).toLocaleString('vi-VN')}đ</span>
+                      )}
+                    </div>
                   </div>
-                </div>
 
-                <button
-                  onClick={() => handleOpenOrderModal(p)}
-                  className="py-2 px-4 bg-orange-600 hover:bg-orange-700 text-white font-extrabold rounded-2xl text-xs shadow-sm transition flex items-center space-x-1 cursor-pointer"
-                >
-                  <ShoppingBag className="w-3.5 h-3.5" />
-                  <span>Đặt Món Ngay</span>
-                </button>
+                  <button
+                    onClick={() => handleOpenOrderModal(p)}
+                    className="py-2 px-4 bg-orange-600 hover:bg-orange-700 text-white font-extrabold rounded-2xl text-xs shadow-sm transition flex items-center space-x-1 cursor-pointer"
+                  >
+                    <ShoppingBag className="w-3.5 h-3.5" />
+                    <span>Đặt Món Ngay</span>
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </section>
 
