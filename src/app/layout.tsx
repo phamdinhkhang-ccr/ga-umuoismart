@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import { Inter } from 'next/font/google';
 import './globals.css';
@@ -11,6 +11,20 @@ import CustomerChatWidget from '@/components/CustomerChatWidget';
 
 const inter = Inter({ subsets: ['latin', 'vietnamese'] });
 
+function ClientOnlyWrapper({ children }: { children: React.ReactNode }) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return <div className="min-h-screen bg-slate-50 font-sans">{children}</div>;
+  }
+
+  return <>{children}</>;
+}
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -20,7 +34,9 @@ export default function RootLayout({
     <html lang="vi" className="h-full bg-slate-50 scroll-smooth">
       <body className={`${inter.className} min-h-screen text-slate-900 bg-slate-50 antialiased overflow-x-hidden`}>
         <AuthProvider>
-          <AppShell>{children}</AppShell>
+          <ClientOnlyWrapper>
+            <AppShell>{children}</AppShell>
+          </ClientOnlyWrapper>
         </AuthProvider>
       </body>
     </html>

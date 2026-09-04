@@ -207,24 +207,36 @@ const BASE_INVENTORY_ITEMS = [
   { id: 'm7777777-7777-7777-7777-777777777777', name: 'Trà Đào Cam Sả', unit: 'Ly', initialStock: 250, totalImported: 100, totalWasted: 2, minStock: 100 }
 ];
 
-// Helper to safely access LocalStorage
-export function getItem<T>(key: string, fallback: T): T {
+export function safeGetJSON<T>(key: string, fallback: T): T {
   if (typeof window === 'undefined') return fallback;
   try {
-    const data = localStorage.getItem(key);
-    return data ? JSON.parse(data) : fallback;
-  } catch (e) {
+    const item = localStorage.getItem(key);
+    if (!item || item === 'undefined' || item === 'null' || item.trim() === '') return fallback;
+    return JSON.parse(item) as T;
+  } catch (error) {
+    console.warn(`Error reading localStorage key "${key}":`, error);
     return fallback;
   }
+}
+
+// Helper to safely access LocalStorage
+export function getItem<T>(key: string, fallback: T): T {
+  return safeGetJSON<T>(key, fallback);
 }
 
 export function setItem<T>(key: string, value: T): void {
   if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem(key, JSON.stringify(value));
+    if (value === undefined || value === null) {
+      localStorage.removeItem(key);
+    } else {
+      localStorage.setItem(key, JSON.stringify(value));
+    }
     window.dispatchEvent(new Event('storage'));
     window.dispatchEvent(new Event('gum_store_update'));
-  } catch (e) {}
+  } catch (e) {
+    console.warn(`Error writing localStorage key "${key}":`, e);
+  }
 }
 
 export function playBeep(): void {

@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { UserAccount } from '@/types/auth';
+import { safeGetJSON } from '@/utils/storage';
 
 export const INITIAL_DEMO_ACCOUNTS: (UserAccount & { password?: string })[] = [
   {
@@ -138,10 +139,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     try {
-      const storedUser = localStorage.getItem('gum_auth_user');
-      const storedAccounts = localStorage.getItem('gum_accounts');
-      if (storedUser) setUser(JSON.parse(storedUser));
-      if (storedAccounts) setAccounts(JSON.parse(storedAccounts));
+      const storedUser = safeGetJSON<UserAccount | null>('gum_auth_user', null);
+      const storedAccounts = safeGetJSON<(UserAccount & { password?: string })[]>('gum_accounts', INITIAL_DEMO_ACCOUNTS);
+      setUser(storedUser);
+      if (storedAccounts && storedAccounts.length > 0) setAccounts(storedAccounts);
     } catch (e) {
       console.warn('LocalStorage auth read error', e);
     } finally {
