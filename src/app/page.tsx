@@ -84,31 +84,26 @@ export default function PublicStorefrontHome() {
     setProductsList(getProducts());
 
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('storefront_settings')
         .select('*')
         .eq('id', 'default_config')
         .maybeSingle();
 
-      const configData = data?.data || data?.settings;
+      if (error) {
+        console.warn('Lỗi đọc cấu hình storefront:', error.message);
+      }
+
+      const configData = data?.data;
       if (configData) {
         setCmsSettings(prev => ({ ...prev, ...configData }));
         try {
           localStorage.setItem('storefront_settings', JSON.stringify(configData));
         } catch (e) {}
-      } else {
-        const { data: primaryData } = await supabase
-          .from('storefront_settings')
-          .select('*')
-          .eq('id', 'primary_config')
-          .maybeSingle();
-
-        const primaryConfigData = primaryData?.data || primaryData?.settings;
-        if (primaryConfigData) {
-          setCmsSettings(prev => ({ ...prev, ...primaryConfigData }));
-        }
       }
-    } catch (e) {}
+    } catch (e) {
+      console.error('Lỗi fetch:', e);
+    }
   };
 
   useEffect(() => {
@@ -573,12 +568,12 @@ export default function PublicStorefrontHome() {
 
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-orange-50 border border-orange-200 text-orange-800 text-xs sm:text-sm font-semibold shadow-2xs">
             <span className="text-base">🔥</span>
-            <span>{(cmsSettings as any)?.hotlinePrefix || cmsSettings?.hotlineBadgeText || 'Hotline Đặt Ngay:'}</span>
+            <span>{cmsSettings?.hotlineBadgeText || (cmsSettings as any)?.hotlinePrefix || 'Hotline Đặt Ngay: 0889018221 - 0866164617'}</span>
             <a 
-              href={`tel:${(cmsSettings?.hero_hotline || cmsSettings?.hotline || '0889018221').replace(/\s+/g, '').replace(/\./g, '')}`} 
+              href={`tel:${(cmsSettings?.hotline || cmsSettings?.hero_hotline || '0889018221').replace(/\s+/g, '').replace(/\./g, '')}`} 
               className="font-bold text-orange-900 hover:underline"
             >
-              {cmsSettings?.hero_hotline || cmsSettings?.hotline || '0889018221'}
+              {cmsSettings?.hotline || cmsSettings?.hero_hotline || '0889018221'}
             </a>
           </div>
 
@@ -590,7 +585,7 @@ export default function PublicStorefrontHome() {
           </h1>
 
           <p className="max-w-2xl mx-auto text-xs sm:text-base text-slate-600 leading-relaxed font-medium">
-            {cmsSettings.hero_slogan}
+            {(cmsSettings as any)?.heroSubtitle || cmsSettings.hero_slogan}
           </p>
 
           {/* Banner Hero Image if Uploaded */}

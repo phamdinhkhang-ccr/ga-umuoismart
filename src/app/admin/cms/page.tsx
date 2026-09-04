@@ -63,23 +63,16 @@ export default function AdminCmsPage() {
         .eq('id', 'default_config')
         .maybeSingle();
       
-      const configData = data?.data || data?.settings;
-      if (configData) {
-        setSettings(prev => ({ ...prev, ...configData }));
-      } else {
-        const { data: primaryData } = await supabase
-          .from('storefront_settings')
-          .select('*')
-          .eq('id', 'primary_config')
-          .maybeSingle();
+      if (error) {
+        console.warn('Lỗi đọc cấu hình storefront:', error.message);
+        return;
+      }
 
-        const primaryConfigData = primaryData?.data || primaryData?.settings;
-        if (primaryConfigData) {
-          setSettings(prev => ({ ...prev, ...primaryConfigData }));
-        }
+      if (data && data.data) {
+        setSettings((prev: any) => ({ ...prev, ...data.data }));
       }
     } catch (err) {
-      console.warn('Lỗi đọc settings:', err);
+      console.error('Lỗi fetch:', err);
     }
   };
 
@@ -130,37 +123,28 @@ export default function AdminCmsPage() {
     } catch (e) {}
 
     try {
+      const payload = {
+        id: 'default_config',
+        data: fullConfigData,
+        updated_at: new Date().toISOString()
+      };
+
       const { data, error } = await supabase
         .from('storefront_settings')
-        .upsert({
-          id: 'default_config',
-          data: fullConfigData,
-          settings: fullConfigData,
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'id' });
+        .upsert(payload, { onConflict: 'id' });
 
       if (error) {
-        alert('Lưu Supabase thất bại: ' + error.message);
-        console.error(error);
-        showToast('❌ Lưu Supabase thất bại: ' + error.message);
+        console.error('Chi tiết lỗi Supabase:', error);
+        alert('Lưu thất bại: ' + error.message);
+        showToast('❌ Lưu thất bại: ' + error.message);
         return;
-      } else {
-        alert('Đã cập nhật dữ liệu thành công lên Supabase!');
-        showToast('✅ Đã cập nhật dữ liệu thành công lên Supabase!');
       }
 
-      // Also upsert primary_config as backup
-      await supabase
-        .from('storefront_settings')
-        .upsert({
-          id: 'primary_config',
-          data: fullConfigData,
-          settings: fullConfigData,
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'id' });
+      alert('✅ Đã lưu cấu hình thành công lên Cloud!');
+      showToast('✅ Đã lưu cấu hình thành công lên Cloud!');
     } catch (err: any) {
       console.error('Lỗi khi lưu:', err);
-      alert('Có lỗi xảy ra: ' + (err.message || 'Lỗi hệ thống'));
+      alert('Lỗi hệ thống: ' + err.message);
     }
 
     notifyUpdate();
