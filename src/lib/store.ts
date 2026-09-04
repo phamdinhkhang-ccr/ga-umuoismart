@@ -46,7 +46,8 @@ const KEYS = {
   INITIAL_STOCK: 'gum_smart_initial_stock_v3',
   WASTED_STOCK: 'gum_smart_wasted_stock_v3',
   IMPORTED_STOCK: 'gum_smart_imported_stock_v3',
-  BRANCHES: 'gum_smart_branches_v3'
+  BRANCHES: 'gum_smart_branches_v3',
+  PRODUCTS: 'gum_smart_products_v3'
 };
 
 // Rich Pre-Populated Mock Expenses matching user request screenshot
@@ -472,4 +473,169 @@ export function transferInventoryBetweenBranches(
 
   return updated;
 }
+
+// -------------------------------------------------------------
+// PRODUCTS & MENU MANAGEMENT FUNCTIONS & DATA
+// -------------------------------------------------------------
+export interface ProductRecord {
+  id: string;
+  name: string;
+  price: number;
+  cost_price: number;
+  category: 'Món Gà Ủ Muối' | 'Món Ăn Kèm' | 'Nước Uống' | 'Gia Vị & Extra';
+  unit: string;
+  is_available: boolean;
+  unavailable_branches?: string[];
+  ai_keywords: string[];
+  is_best_seller?: boolean;
+  image_url?: string;
+}
+
+const DEFAULT_PRODUCTS: ProductRecord[] = [
+  {
+    id: 'm1',
+    name: 'Gà Ủ Muối Nguyên Con (Kèm Nước Chấm)',
+    price: 190000,
+    cost_price: 110000,
+    category: 'Món Gà Ủ Muối',
+    unit: 'Con',
+    is_available: true,
+    unavailable_branches: [],
+    ai_keywords: ['1 con', 'nguyên con', 'gà ủ cả con', 'ga nguyen con', 'gà ủ muối'],
+    is_best_seller: true
+  },
+  {
+    id: 'm2',
+    name: 'Gà Ủ Muối Nửa Con (Kèm Nước Chấm)',
+    price: 100000,
+    cost_price: 58000,
+    category: 'Món Gà Ủ Muối',
+    unit: 'Nửa con',
+    is_available: true,
+    unavailable_branches: [],
+    ai_keywords: ['nửa con', '1/2 con', 'ga nua con', 'nửa con gà'],
+    is_best_seller: false
+  },
+  {
+    id: 'm3',
+    name: 'Chân Gà Rút Xương Sốt Thái',
+    price: 65000,
+    cost_price: 32000,
+    category: 'Món Ăn Kèm',
+    unit: 'Hộp',
+    is_available: true,
+    unavailable_branches: [],
+    ai_keywords: ['chân gà', 'sốt thái', 'chân gà rút xương', 'chan ga'],
+    is_best_seller: true
+  },
+  {
+    id: 'm4',
+    name: 'Cánh Gà Ủ Muối (Phần 4 Cánh)',
+    price: 85000,
+    cost_price: 45000,
+    category: 'Món Gà Ủ Muối',
+    unit: 'Phần',
+    is_available: true,
+    unavailable_branches: [],
+    ai_keywords: ['cánh gà', '4 cánh', 'canh ga u muoi'],
+    is_best_seller: false
+  },
+  {
+    id: 'm5',
+    name: 'Nước Chấm Thần Thánh Extra',
+    price: 15000,
+    cost_price: 4000,
+    category: 'Gia Vị & Extra',
+    unit: 'Chai',
+    is_available: true,
+    unavailable_branches: [],
+    ai_keywords: ['nước chấm', 'hũ nước chấm', 'nuoc cham extra', 'sốt chấm'],
+    is_best_seller: false
+  },
+  {
+    id: 'm6',
+    name: 'Trà Tắc Khổng Lồ',
+    price: 20000,
+    cost_price: 6000,
+    category: 'Nước Uống',
+    unit: 'Ly',
+    is_available: true,
+    unavailable_branches: [],
+    ai_keywords: ['trà tắc', 'ly trà tắc', 'tra tac khong lo', 'trà tắc 1 lít'],
+    is_best_seller: true
+  },
+  {
+    id: 'm7',
+    name: 'Trà Đào Cam Sả',
+    price: 30000,
+    cost_price: 10000,
+    category: 'Nước Uống',
+    unit: 'Ly',
+    is_available: true,
+    unavailable_branches: [],
+    ai_keywords: ['trà đào', 'trà đào cam sả', 'tra dao'],
+    is_best_seller: false
+  }
+];
+
+export function getProducts(): ProductRecord[] {
+  return getItem<ProductRecord[]>(KEYS.PRODUCTS, DEFAULT_PRODUCTS);
+}
+
+export function saveProduct(productData: Partial<ProductRecord> & { name: string }): ProductRecord[] {
+  const current = getProducts();
+  if (productData.id) {
+    const updated = current.map(p => p.id === productData.id ? { ...p, ...productData } : p);
+    setItem(KEYS.PRODUCTS, updated);
+    return updated;
+  } else {
+    const newP: ProductRecord = {
+      id: `m-${Date.now()}`,
+      name: productData.name,
+      price: productData.price || 0,
+      cost_price: productData.cost_price || 0,
+      category: productData.category || 'Món Gà Ủ Muối',
+      unit: productData.unit || 'Phần',
+      is_available: productData.is_available !== undefined ? productData.is_available : true,
+      unavailable_branches: productData.unavailable_branches || [],
+      ai_keywords: productData.ai_keywords || [productData.name.toLowerCase()],
+      is_best_seller: productData.is_best_seller || false,
+      image_url: productData.image_url
+    };
+    const updated = [...current, newP];
+    setItem(KEYS.PRODUCTS, updated);
+    return updated;
+  }
+}
+
+export function toggleProductAvailability(id: string, branchId?: string): ProductRecord[] {
+  const current = getProducts();
+  const updated = current.map(p => {
+    if (p.id !== id) return p;
+
+    if (!branchId || branchId === 'ALL') {
+      // Toggle global availability
+      return { ...p, is_available: !p.is_available };
+    } else {
+      // Toggle branch-specific availability
+      const currentUnavail = p.unavailable_branches || [];
+      const isBranchUnavail = currentUnavail.includes(branchId);
+      const updatedUnavail = isBranchUnavail
+        ? currentUnavail.filter(b => b !== branchId)
+        : [...currentUnavail, branchId];
+      return { ...p, unavailable_branches: updatedUnavail };
+    }
+  });
+
+  setItem(KEYS.PRODUCTS, updated);
+  return updated;
+}
+
+export function deleteProduct(id: string): ProductRecord[] {
+  const current = getProducts();
+  const updated = current.filter(p => p.id !== id);
+  setItem(KEYS.PRODUCTS, updated);
+  return updated;
+}
+
 
