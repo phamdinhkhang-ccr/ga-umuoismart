@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { 
   MessageCircle, X, Minus, Send, Bot, Sparkles, ShoppingBag, 
   PhoneCall, Truck, CheckCircle2, QrCode, MapPin, CreditCard, 
-  Plus, RefreshCw, User, Check, Flame, ChevronRight
+  Plus, RefreshCw, User, Check, Flame, ChevronRight, Headset, MessageSquareHeart
 } from 'lucide-react';
 import { createOrder } from '@/actions/orders';
 import { addNotification, addOrUpdateCustomerFromOrder, deductInventoryForOrder } from '@/lib/store';
@@ -357,18 +357,17 @@ export default function CustomerChatWidget() {
       
       {/* 1. WELCOME TOOLTIP BUBBLE */}
       {showTooltip && !isOpen && (
-        <div className="mb-3 max-w-xs bg-slate-900 text-white text-xs p-3 rounded-2xl shadow-xl relative animate-in fade-in slide-in-from-bottom-2 duration-300 border border-slate-700">
+        <div className="mb-3 max-w-xs bg-white text-slate-900 text-xs p-3 rounded-2xl shadow-xl shadow-orange-500/10 relative animate-in fade-in slide-in-from-bottom-2 duration-300 border border-orange-200">
           <button 
             onClick={() => setShowTooltip(false)}
-            className="absolute -top-1 -right-1 bg-slate-700 hover:bg-slate-600 rounded-full p-0.5 text-slate-300"
+            className="absolute -top-1.5 -right-1.5 bg-slate-200 hover:bg-slate-300 text-slate-600 rounded-full p-1 cursor-pointer transition"
           >
             <X className="w-3 h-3" />
           </button>
-          <div className="flex items-center space-x-2 font-semibold">
-            <span className="text-base">🍗</span>
-            <span>Bạn muốn đặt Gà Ủ Muối giao nóng ngay? Chat với AI nhé!</span>
+          <div className="flex items-center space-x-2 font-bold text-slate-800">
+            <span>👋 Bạn cần tư vấn đặt món gà nóng hổi?</span>
           </div>
-          <div className="absolute -bottom-1.5 right-6 w-3 h-3 bg-slate-900 rotate-45 border-r border-b border-slate-700"></div>
+          <div className="absolute -bottom-1.5 right-6 w-3 h-3 bg-white rotate-45 border-r border-b border-orange-200"></div>
         </div>
       )}
 
@@ -384,18 +383,18 @@ export default function CustomerChatWidget() {
             <div className="flex items-center space-x-3">
               <div className="relative">
                 <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md border border-white/40 flex items-center justify-center text-white shadow-inner">
-                  <Bot className="w-5 h-5 text-white" />
+                  <Headset className="w-5.5 h-5.5 text-white stroke-[2.2]" />
                 </div>
                 <span className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-400 border-2 border-orange-600 rounded-full"></span>
               </div>
               <div>
                 <h3 className="font-extrabold text-sm flex items-center gap-1.5 text-white">
-                  <span>Trợ Lý Gà Ủ Muối Smart</span>
+                  <span>Trợ Lý CSKH Gà Ủ Muối Smart</span>
                   <Sparkles className="w-3.5 h-3.5 text-amber-300" />
                 </h3>
                 <p className="text-[10px] text-orange-100 font-medium flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                  Đang trực tuyến • Trả lời tự động 24/7
+                  Đang trực tuyến • Sẵn sàng hỗ trợ 24/7
                 </p>
               </div>
             </div>
@@ -709,24 +708,27 @@ export default function CustomerChatWidget() {
         </div>
       )}
 
-      {/* 3. FLOATING TRIGGER BUTTON (ROUND ORANGE GRADIENT BUTTON) */}
+      {/* 3. FLOATING CSKH TRIGGER BUTTON */}
       <button
         onClick={() => {
           setIsOpen(!isOpen);
           setIsMinimized(false);
           setShowTooltip(false);
         }}
-        className="group relative bg-gradient-to-r from-orange-500 via-orange-600 to-rose-500 hover:from-orange-600 hover:to-rose-600 text-white p-4 rounded-full shadow-2xl shadow-orange-500/40 hover:scale-105 active:scale-95 transition-all duration-300 flex items-center justify-center cursor-pointer border-2 border-white/40"
-        title="Chat với Trợ Lý AI Gà Ủ Muối Smart 24/7"
+        className="group relative bg-gradient-to-tr from-amber-500 via-orange-500 to-rose-500 hover:from-amber-600 hover:to-rose-600 text-white p-4 rounded-full shadow-xl shadow-orange-500/30 hover:shadow-2xl hover:scale-105 active:scale-95 transition-all duration-300 flex items-center justify-center cursor-pointer border-2 border-white/50"
+        title="Tư vấn & CSKH trực tuyến 24/7"
       >
-        <span className="absolute -top-1 -right-1 bg-emerald-500 text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded-full border-2 border-white animate-pulse">
-          24/7
+        {/* Glowing Online Status Badge */}
+        <span className="absolute -top-1 -right-1 flex h-4 w-4">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+          <span className="relative inline-flex rounded-full h-4 w-4 bg-emerald-500 border-2 border-white items-center justify-center text-[8px] font-extrabold text-white">✓</span>
         </span>
+
         {isOpen ? (
           <X className="w-7 h-7 text-white" />
         ) : (
-          <div className="flex items-center space-x-1">
-            <Bot className="w-7 h-7 text-white animate-bounce" />
+          <div className="flex items-center justify-center">
+            <Headset className="w-7 h-7 text-white stroke-[2.2] animate-bounce" />
           </div>
         )}
       </button>
