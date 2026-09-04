@@ -15,7 +15,8 @@ import {
   UtensilsCrossed,
   ArrowDownLeft,
   PieChart as PieChartIcon,
-  BarChart3
+  BarChart3,
+  Calendar
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -62,7 +63,12 @@ export default function DashboardPage() {
   const [data, setData] = useState<any>(null);
   const [pettyExpenses, setPettyExpenses] = useState<number>(0);
   const [isMounted, setIsMounted] = useState(false);
-  const [timeRange, setTimeRange] = useState<'today' | 'week' | 'month'>('today');
+  
+  // Filter States
+  const [timeRange, setTimeRange] = useState<'today' | 'week' | 'month' | 'custom'>('today');
+  const [customStartDate, setCustomStartDate] = useState<string>('2026-09-04');
+  const [customEndDate, setCustomEndDate] = useState<string>('2026-09-04');
+  const [showCustomDatePicker, setShowCustomDatePicker] = useState<boolean>(false);
   const [selectedBranch, setSelectedBranch] = useState<string>('all');
 
   const loadAllData = async () => {
@@ -94,47 +100,108 @@ export default function DashboardPage() {
     statusBreakdown: { RECEIVED: 1, PREPARING: 2, SHIPPING: 3, PAID: 6 }
   };
 
-  // Adjusted gross profit deducting petty cash expenses
-  const metrics = {
-    ...rawMetrics,
-    grossProfit: Math.max(0, rawMetrics.grossProfit - (pettyExpenses > 0 ? pettyExpenses : 275000))
-  };
+  // Calculate dynamic multiplier based on time range & selected date
+  const metrics = useMemo(() => {
+    let scale = 1;
+    if (timeRange === 'week') scale = 4.2;
+    else if (timeRange === 'month') scale = 18.5;
+    else if (timeRange === 'custom') {
+      const start = new Date(customStartDate).getTime();
+      const end = new Date(customEndDate).getTime();
+      const diffDays = Math.max(1, Math.round((end - start) / (1000 * 60 * 60 * 24)) + 1);
+      scale = diffDays === 1 ? 0.95 : diffDays * 0.85;
+    }
 
-  // Dynamic Chart Data based on timeRange, selectedBranch & pettyExpenses
+    const gmvVal = Math.round(rawMetrics.gmv * scale);
+    const profitVal = Math.max(0, Math.round((rawMetrics.grossProfit - (pettyExpenses > 0 ? pettyExpenses : 275000)) * scale));
+    const totalOrdersVal = Math.round(rawMetrics.totalOrders * scale);
+    const todayCustVal = Math.round(rawMetrics.todayCustomers * scale);
+
+    return {
+      totalOrders: totalOrdersVal,
+      gmv: gmvVal,
+      grossProfit: profitVal,
+      completionRate: rawMetrics.completionRate,
+      cancellationRate: rawMetrics.cancellationRate,
+      activeStaff: rawMetrics.activeStaff,
+      todayCustomers: todayCustVal,
+      newVsReturning: `${Math.round(todayCustVal * 0.65)} mới · ${Math.round(todayCustVal * 0.35)} quay lại`
+    };
+  }, [timeRange, customStartDate, customEndDate, rawMetrics, pettyExpenses]);
+
+  // Dynamic Chart Data based on timeRange, custom dates & selectedBranch
   const chartData = useMemo(() => {
-    const multiplier = selectedBranch === 'all' ? 1 : selectedBranch === 'caugiai' ? 0.45 : 0.3;
+    const branchMultiplier = selectedBranch === 'all' ? 1 : selectedBranch === 'caugiai' ? 0.45 : 0.3;
     const extraExpShare = Math.round((pettyExpenses > 0 ? pettyExpenses : 275000) / 8);
 
     if (timeRange === 'today') {
       return [
-        { name: '08:00', gmv: Math.round(250000 * multiplier), expenses: Math.round((110000 + extraExpShare) * multiplier), profit: Math.round((140000 - extraExpShare) * multiplier) },
-        { name: '10:00', gmv: Math.round(520000 * multiplier), expenses: Math.round((230000 + extraExpShare) * multiplier), profit: Math.round((290000 - extraExpShare) * multiplier) },
-        { name: '12:00', gmv: Math.round(1180000 * multiplier), expenses: Math.round((510000 + extraExpShare) * multiplier), profit: Math.round((670000 - extraExpShare) * multiplier) },
-        { name: '14:00', gmv: Math.round(750000 * multiplier), expenses: Math.round((320000 + extraExpShare) * multiplier), profit: Math.round((430000 - extraExpShare) * multiplier) },
-        { name: '16:00', gmv: Math.round(610000 * multiplier), expenses: Math.round((270000 + extraExpShare) * multiplier), profit: Math.round((340000 - extraExpShare) * multiplier) },
-        { name: '18:00', gmv: Math.round(1650000 * multiplier), expenses: Math.round((710000 + extraExpShare) * multiplier), profit: Math.round((940000 - extraExpShare) * multiplier) },
-        { name: '20:00', gmv: Math.round(1980000 * multiplier), expenses: Math.round((840000 + extraExpShare) * multiplier), profit: Math.round((1140000 - extraExpShare) * multiplier) },
-        { name: '22:00', gmv: Math.round(920000 * multiplier), expenses: Math.round((400000 + extraExpShare) * multiplier), profit: Math.round((520000 - extraExpShare) * multiplier) },
+        { name: '08:00', gmv: Math.round(250000 * branchMultiplier), expenses: Math.round((110000 + extraExpShare) * branchMultiplier), profit: Math.round((140000 - extraExpShare) * branchMultiplier) },
+        { name: '10:00', gmv: Math.round(520000 * branchMultiplier), expenses: Math.round((230000 + extraExpShare) * branchMultiplier), profit: Math.round((290000 - extraExpShare) * branchMultiplier) },
+        { name: '12:00', gmv: Math.round(1180000 * branchMultiplier), expenses: Math.round((510000 + extraExpShare) * branchMultiplier), profit: Math.round((670000 - extraExpShare) * branchMultiplier) },
+        { name: '14:00', gmv: Math.round(750000 * branchMultiplier), expenses: Math.round((320000 + extraExpShare) * branchMultiplier), profit: Math.round((430000 - extraExpShare) * branchMultiplier) },
+        { name: '16:00', gmv: Math.round(610000 * branchMultiplier), expenses: Math.round((270000 + extraExpShare) * branchMultiplier), profit: Math.round((340000 - extraExpShare) * branchMultiplier) },
+        { name: '18:00', gmv: Math.round(1650000 * branchMultiplier), expenses: Math.round((710000 + extraExpShare) * branchMultiplier), profit: Math.round((940000 - extraExpShare) * branchMultiplier) },
+        { name: '20:00', gmv: Math.round(1980000 * branchMultiplier), expenses: Math.round((840000 + extraExpShare) * branchMultiplier), profit: Math.round((1140000 - extraExpShare) * branchMultiplier) },
+        { name: '22:00', gmv: Math.round(920000 * branchMultiplier), expenses: Math.round((400000 + extraExpShare) * branchMultiplier), profit: Math.round((520000 - extraExpShare) * branchMultiplier) },
       ];
     } else if (timeRange === 'week') {
       return [
-        { name: 'Thứ 2', gmv: Math.round(3200000 * multiplier), expenses: Math.round((1400000 + extraExpShare * 2) * multiplier), profit: Math.round((1800000 - extraExpShare * 2) * multiplier) },
-        { name: 'Thứ 3', gmv: Math.round(3800000 * multiplier), expenses: Math.round((1650000 + extraExpShare * 2) * multiplier), profit: Math.round((2150000 - extraExpShare * 2) * multiplier) },
-        { name: 'Thứ 4', gmv: Math.round(3500000 * multiplier), expenses: Math.round((1500000 + extraExpShare * 2) * multiplier), profit: Math.round((2000000 - extraExpShare * 2) * multiplier) },
-        { name: 'Thứ 5', gmv: Math.round(4200000 * multiplier), expenses: Math.round((1800000 + extraExpShare * 2) * multiplier), profit: Math.round((2400000 - extraExpShare * 2) * multiplier) },
-        { name: 'Thứ 6', gmv: Math.round(5500000 * multiplier), expenses: Math.round((2350000 + extraExpShare * 2) * multiplier), profit: Math.round((3150000 - extraExpShare * 2) * multiplier) },
-        { name: 'Thứ 7', gmv: Math.round(7800000 * multiplier), expenses: Math.round((3300000 + extraExpShare * 2) * multiplier), profit: Math.round((4500000 - extraExpShare * 2) * multiplier) },
-        { name: 'Chủ Nhật', gmv: Math.round(8500000 * multiplier), expenses: Math.round((3600000 + extraExpShare * 2) * multiplier), profit: Math.round((4900000 - extraExpShare * 2) * multiplier) },
+        { name: 'Thứ 2', gmv: Math.round(3200000 * branchMultiplier), expenses: Math.round((1400000 + extraExpShare * 2) * branchMultiplier), profit: Math.round((1800000 - extraExpShare * 2) * branchMultiplier) },
+        { name: 'Thứ 3', gmv: Math.round(3800000 * branchMultiplier), expenses: Math.round((1650000 + extraExpShare * 2) * branchMultiplier), profit: Math.round((2150000 - extraExpShare * 2) * branchMultiplier) },
+        { name: 'Thứ 4', gmv: Math.round(3500000 * branchMultiplier), expenses: Math.round((1500000 + extraExpShare * 2) * branchMultiplier), profit: Math.round((2000000 - extraExpShare * 2) * branchMultiplier) },
+        { name: 'Thứ 5', gmv: Math.round(4200000 * branchMultiplier), expenses: Math.round((1800000 + extraExpShare * 2) * branchMultiplier), profit: Math.round((2400000 - extraExpShare * 2) * branchMultiplier) },
+        { name: 'Thứ 6', gmv: Math.round(5500000 * branchMultiplier), expenses: Math.round((2350000 + extraExpShare * 2) * branchMultiplier), profit: Math.round((3150000 - extraExpShare * 2) * branchMultiplier) },
+        { name: 'Thứ 7', gmv: Math.round(7800000 * branchMultiplier), expenses: Math.round((3300000 + extraExpShare * 2) * branchMultiplier), profit: Math.round((4500000 - extraExpShare * 2) * branchMultiplier) },
+        { name: 'Chủ Nhật', gmv: Math.round(8500000 * branchMultiplier), expenses: Math.round((3600000 + extraExpShare * 2) * branchMultiplier), profit: Math.round((4900000 - extraExpShare * 2) * branchMultiplier) },
+      ];
+    } else if (timeRange === 'month') {
+      return [
+        { name: 'Tuần 1', gmv: Math.round(24500000 * branchMultiplier), expenses: Math.round((10500000 + extraExpShare * 5) * branchMultiplier), profit: Math.round((14000000 - extraExpShare * 5) * branchMultiplier) },
+        { name: 'Tuần 2', gmv: Math.round(28900000 * branchMultiplier), expenses: Math.round((12400000 + extraExpShare * 5) * branchMultiplier), profit: Math.round((16500000 - extraExpShare * 5) * branchMultiplier) },
+        { name: 'Tuần 3', gmv: Math.round(31200000 * branchMultiplier), expenses: Math.round((13300000 + extraExpShare * 5) * branchMultiplier), profit: Math.round((17900000 - extraExpShare * 5) * branchMultiplier) },
+        { name: 'Tuần 4', gmv: Math.round(36800000 * branchMultiplier), expenses: Math.round((15700000 + extraExpShare * 5) * branchMultiplier), profit: Math.round((21100000 - extraExpShare * 5) * branchMultiplier) },
       ];
     } else {
-      return [
-        { name: 'Tuần 1', gmv: Math.round(24500000 * multiplier), expenses: Math.round((10500000 + extraExpShare * 5) * multiplier), profit: Math.round((14000000 - extraExpShare * 5) * multiplier) },
-        { name: 'Tuần 2', gmv: Math.round(28900000 * multiplier), expenses: Math.round((12400000 + extraExpShare * 5) * multiplier), profit: Math.round((16500000 - extraExpShare * 5) * multiplier) },
-        { name: 'Tuần 3', gmv: Math.round(31200000 * multiplier), expenses: Math.round((13300000 + extraExpShare * 5) * multiplier), profit: Math.round((17900000 - extraExpShare * 5) * multiplier) },
-        { name: 'Tuần 4', gmv: Math.round(36800000 * multiplier), expenses: Math.round((15700000 + extraExpShare * 5) * multiplier), profit: Math.round((21100000 - extraExpShare * 5) * multiplier) },
-      ];
+      // CUSTOM DATE / RANGE
+      const isSingleDay = customStartDate === customEndDate;
+      if (isSingleDay) {
+        // Format single date hourly ticks
+        return [
+          { name: '08:00', gmv: Math.round(310000 * branchMultiplier), expenses: Math.round(140000 * branchMultiplier), profit: Math.round(170000 * branchMultiplier) },
+          { name: '10:00', gmv: Math.round(640000 * branchMultiplier), expenses: Math.round(280000 * branchMultiplier), profit: Math.round(360000 * branchMultiplier) },
+          { name: '12:00', gmv: Math.round(1350000 * branchMultiplier), expenses: Math.round(590000 * branchMultiplier), profit: Math.round(760000 * branchMultiplier) },
+          { name: '14:00', gmv: Math.round(820000 * branchMultiplier), expenses: Math.round(360000 * branchMultiplier), profit: Math.round(460000 * branchMultiplier) },
+          { name: '16:00', gmv: Math.round(710000 * branchMultiplier), expenses: Math.round(310000 * branchMultiplier), profit: Math.round(400000 * branchMultiplier) },
+          { name: '18:00', gmv: Math.round(1890000 * branchMultiplier), expenses: Math.round(820000 * branchMultiplier), profit: Math.round(1070000 * branchMultiplier) },
+          { name: '20:00', gmv: Math.round(2100000 * branchMultiplier), expenses: Math.round(910000 * branchMultiplier), profit: Math.round(1190000 * branchMultiplier) },
+          { name: '22:00', gmv: Math.round(1050000 * branchMultiplier), expenses: Math.round(460000 * branchMultiplier), profit: Math.round(590000 * branchMultiplier) },
+        ];
+      } else {
+        // Format multi-day range ticks
+        const d1 = new Date(customStartDate);
+        const d2 = new Date(customEndDate);
+        const ticks = [];
+        const curr = new Date(d1);
+        let idx = 1;
+        while (curr <= d2 && idx <= 7) {
+          const dateStr = `${curr.getDate()}/${curr.getMonth() + 1}`;
+          ticks.push({
+            name: dateStr,
+            gmv: Math.round((2900000 + idx * 450000) * branchMultiplier),
+            expenses: Math.round((1250000 + idx * 190000) * branchMultiplier),
+            profit: Math.round((1650000 + idx * 260000) * branchMultiplier)
+          });
+          curr.setDate(curr.getDate() + 1);
+          idx++;
+        }
+        return ticks.length > 0 ? ticks : [
+          { name: customStartDate, gmv: Math.round(3200000 * branchMultiplier), expenses: Math.round(1400000 * branchMultiplier), profit: Math.round(1800000 * branchMultiplier) },
+          { name: customEndDate, gmv: Math.round(4500000 * branchMultiplier), expenses: Math.round(1900000 * branchMultiplier), profit: Math.round(2600000 * branchMultiplier) }
+        ];
+      }
     }
-  }, [timeRange, selectedBranch, pettyExpenses]);
+  }, [timeRange, selectedBranch, pettyExpenses, customStartDate, customEndDate]);
 
   // Donut Chart Financial Ratio Data
   const donutData = useMemo(() => [
@@ -142,6 +209,14 @@ export default function DashboardPage() {
     { name: 'Chi phí vận hành & sổ quỹ', value: 15, color: '#EF4444' },
     { name: 'Lợi nhuận ròng', value: 42, color: '#3B82F6' },
   ], []);
+
+  // Format date helper (YYYY-MM-DD to DD/MM/YYYY)
+  const formatDateDisplay = (dateStr: string) => {
+    if (!dateStr) return '';
+    const parts = dateStr.split('-');
+    if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    return dateStr;
+  };
 
   return (
     <div className="space-y-6">
@@ -237,7 +312,7 @@ export default function DashboardPage() {
           <div className="text-xl sm:text-2xl font-extrabold text-teal-900">
             {metrics.todayCustomers || 18} <span className="text-xs text-slate-500 font-normal">khách</span>
           </div>
-          <p className="text-[11px] text-teal-700 font-medium truncate">{metrics.newVsReturning || '12 mới · 6 quay lại'}</p>
+          <p className="text-[11px] text-teal-700 font-medium truncate">{metrics.newVsReturning}</p>
         </div>
       </div>
 
@@ -248,13 +323,13 @@ export default function DashboardPage() {
           <div>
             <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
               <BarChart3 className="w-5 h-5 text-orange-600" />
-              Phân Tích Biến Động Tài Chính Realtime (Tự Động Đồng Bộ)
+              Phân Tích Biến Động Tài Chính Realtime
             </h2>
-            <p className="text-xs text-slate-500 mt-0.5">Biểu đồ tự động ghi nhận phiếu chi mới &amp; trừ GMV/hoàn kho khi HỦY ĐƠN hàng.</p>
+            <p className="text-xs text-slate-500 mt-0.5">Lọc dữ liệu linh hoạt theo Ngày Cụ Thể, Khoảng Ngày hoặc preset thời gian.</p>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            {/* Time Filter Tabs */}
+            {/* Time Filter Preset Tabs */}
             <div className="flex bg-slate-100 p-1 rounded-xl text-xs font-semibold text-slate-600">
               {[
                 { id: 'today', label: 'Hôm nay' },
@@ -263,7 +338,10 @@ export default function DashboardPage() {
               ].map((tab) => (
                 <button
                   key={tab.id}
-                  onClick={() => setTimeRange(tab.id as any)}
+                  onClick={() => {
+                    setTimeRange(tab.id as any);
+                    setShowCustomDatePicker(false);
+                  }}
                   className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
                     timeRange === tab.id
                       ? 'bg-white text-orange-600 shadow-xs font-bold'
@@ -273,6 +351,94 @@ export default function DashboardPage() {
                   {tab.label}
                 </button>
               ))}
+            </div>
+
+            {/* Custom Date Picker Trigger Button & Popover */}
+            <div className="relative">
+              <button
+                onClick={() => setShowCustomDatePicker(!showCustomDatePicker)}
+                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition cursor-pointer ${
+                  timeRange === 'custom'
+                    ? 'bg-orange-50 border-orange-300 text-orange-600 shadow-2xs'
+                    : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
+                }`}
+              >
+                <Calendar className="w-3.5 h-3.5 text-orange-600 shrink-0" />
+                <span>
+                  {timeRange === 'custom'
+                    ? customStartDate === customEndDate
+                      ? `Ngày ${formatDateDisplay(customStartDate)}`
+                      : `${formatDateDisplay(customStartDate)} ➔ ${formatDateDisplay(customEndDate)}`
+                    : '📅 Chọn Ngày Cụ Thể'}
+                </span>
+              </button>
+
+              {/* Popover Card for Custom Date & Range Picker */}
+              {showCustomDatePicker && (
+                <div className="absolute right-0 top-full mt-2 z-50 bg-white border border-slate-200 rounded-2xl p-4 shadow-xl w-72 space-y-3 animate-in fade-in zoom-in-95 duration-150">
+                  <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+                    <span className="text-xs font-extrabold text-slate-900 flex items-center gap-1.5">
+                      <Calendar className="w-4 h-4 text-orange-600" />
+                      Bộ Lọc Ngày Cụ Thể
+                    </span>
+                    <button
+                      onClick={() => setShowCustomDatePicker(false)}
+                      className="text-slate-400 hover:text-slate-600 text-xs font-bold cursor-pointer"
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  <div className="space-y-2.5 text-xs">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Bắt đầu (Từ ngày):</label>
+                      <input
+                        type="date"
+                        value={customStartDate}
+                        onChange={(e) => {
+                          setCustomStartDate(e.target.value);
+                          setTimeRange('custom');
+                        }}
+                        className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 outline-none focus:border-orange-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Kết thúc (Đến ngày):</label>
+                      <input
+                        type="date"
+                        value={customEndDate}
+                        onChange={(e) => {
+                          setCustomEndDate(e.target.value);
+                          setTimeRange('custom');
+                        }}
+                        className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 outline-none focus:border-orange-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2 pt-1 text-xs">
+                    <button
+                      onClick={() => {
+                        setCustomEndDate(customStartDate);
+                        setTimeRange('custom');
+                        setShowCustomDatePicker(false);
+                      }}
+                      className="flex-1 py-1.5 bg-orange-50 text-orange-700 font-bold rounded-xl text-[11px] hover:bg-orange-100 transition cursor-pointer"
+                    >
+                      Chỉ Ngày Này
+                    </button>
+                    <button
+                      onClick={() => {
+                        setTimeRange('custom');
+                        setShowCustomDatePicker(false);
+                      }}
+                      className="flex-1 py-1.5 bg-orange-600 text-white font-bold rounded-xl text-[11px] hover:bg-orange-700 shadow-2xs transition cursor-pointer"
+                    >
+                      Áp Dụng Khoảng
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Branch Selector Dropdown */}
@@ -297,7 +463,13 @@ export default function DashboardPage() {
           {/* Left Column: Grouped Bar Chart (65% -> col-span-8) */}
           <div className="lg:col-span-8 space-y-4">
             <div className="flex items-center justify-between text-xs">
-              <span className="font-bold text-slate-700">So Sánh Theo Cột (Doanh Thu vs Chi Phí vs Lợi Nhuận)</span>
+              <span className="font-bold text-slate-700">
+                {timeRange === 'custom'
+                  ? customStartDate === customEndDate
+                    ? `Biểu Đồ Theo Khung Giờ (Ngày ${formatDateDisplay(customStartDate)})`
+                    : `Biểu Đồ Theo Ngày (${formatDateDisplay(customStartDate)} - ${formatDateDisplay(customEndDate)})`
+                  : 'So Sánh Theo Cột (Doanh Thu vs Chi Phí vs Lợi Nhuận)'}
+              </span>
               <div className="flex items-center space-x-4 font-semibold text-[11px]">
                 <span className="flex items-center space-x-1">
                   <span className="w-2.5 h-2.5 rounded-xs bg-orange-500" />
