@@ -36,6 +36,7 @@ export default function AdminCmsPage() {
 
   const [products, setProducts] = useState<ProductRecord[]>([]);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Add Product Modal State
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -51,13 +52,17 @@ export default function AdminCmsPage() {
     image_url: ''
   });
 
-  const reloadData = async () => {
-    const localSettings = getCmsSettings();
-    setSettings(localSettings);
-    setProducts(getProducts());
-
+  const reloadData = async (isMounted = true) => {
     try {
-      const { data, error } = await supabase
+      const localSettings = getCmsSettings();
+      const localProducts = getProducts();
+
+      if (isMounted) {
+        setSettings(localSettings);
+        setProducts(localProducts);
+      }
+
+      const { data: record, error } = await supabase
         .from('storefront_settings')
         .select('*')
         .eq('id', 'default_config')
@@ -65,26 +70,55 @@ export default function AdminCmsPage() {
       
       if (error) {
         console.warn('Lỗi đọc cấu hình storefront:', error.message);
-        return;
       }
 
-      if (data && data.data) {
-        setSettings(data.data);
-        const cloudMenu = data.data.menuItems || data.data.products;
-        if (Array.isArray(cloudMenu) && cloudMenu.length > 0) {
+      const safeData = record?.data || {};
+
+      if (isMounted && record && record.data) {
+        setSettings({
+          brandName: safeData.brandName ?? '',
+          hero_title: safeData.hero_title ?? '',
+          hotline: safeData.hotline ?? safeData.hero_hotline ?? '',
+          hero_hotline: safeData.hero_hotline ?? safeData.hotline ?? '',
+          hotlineBadgeText: safeData.hotlineBadgeText ?? '',
+          hotlinePrefix: safeData.hotlinePrefix ?? safeData.hotlineBadgeText ?? '',
+          heroHighlightTitle: safeData.heroHighlightTitle ?? '',
+          heroSubtitle: safeData.heroSubtitle ?? safeData.hero_slogan ?? '',
+          hero_slogan: safeData.hero_slogan ?? safeData.heroSubtitle ?? '',
+          promoBannerText: safeData.promoBannerText ?? '',
+          hero_banner_image: safeData.hero_banner_image ?? '',
+          branches: Array.isArray(safeData.branches) ? safeData.branches : [],
+          social_facebook: safeData.social_facebook ?? '',
+          social_tiktok: safeData.social_tiktok ?? '',
+          social_zalo: safeData.social_zalo ?? '',
+          hotline_complaints: safeData.hotline_complaints ?? '',
+          bankInfo: safeData.bankInfo || { bankName: '', accountNumber: '', accountHolder: '' }
+        });
+
+        const cloudMenu = safeData.menuItems || safeData.products;
+        if (Array.isArray(cloudMenu)) {
           setProducts(cloudMenu);
         }
       }
     } catch (err) {
-      console.error('Lỗi fetch:', err);
+      console.error('Lỗi khởi tạo CMS:', err);
+    } finally {
+      if (isMounted) {
+        setIsLoading(false);
+      }
     }
   };
 
   useEffect(() => {
-    reloadData();
-    const handleStoreUpdate = () => reloadData();
+    let isMounted = true;
+    reloadData(isMounted);
+
+    const handleStoreUpdate = () => reloadData(isMounted);
     window.addEventListener('gum_store_update', handleStoreUpdate);
-    return () => window.removeEventListener('gum_store_update', handleStoreUpdate);
+    return () => {
+      isMounted = false;
+      window.removeEventListener('gum_store_update', handleStoreUpdate);
+    };
   }, []);
 
   const showToast = (msg: string) => {
@@ -338,6 +372,17 @@ export default function AdminCmsPage() {
     });
     showToast(`✨ Đã thêm món "${newProduct.name}" vào thực đơn trang chủ!`);
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-[400px] flex items-center justify-center p-8 text-slate-500 font-bold text-xs">
+        <div className="flex flex-col items-center gap-3 bg-white p-6 rounded-2xl border border-slate-200 shadow-md">
+          <div className="w-8 h-8 border-3 border-orange-500 border-t-transparent rounded-full animate-spin" />
+          <span>Đang nạp cấu hình trang chủ Storefront CMS...</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 p-4 sm:p-6 lg:p-8 space-y-6">

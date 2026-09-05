@@ -31,12 +31,12 @@ export class GlobalErrorBoundary extends React.Component<
                   try {
                     localStorage.clear();
                   } catch (e) {}
-                  window.location.reload();
+                  window.location.href = '/login';
                 }
               }}
               className="w-full py-3 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-xl shadow-lg transition"
             >
-              Làm Mới & Tiếp Tục
+              Về Trang Đăng Nhập / Làm Mới
             </button>
           </div>
         </div>

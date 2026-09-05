@@ -48,7 +48,7 @@ export default function RootLayout({
 
 function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { isLoading } = useAuth();
+  const { isLoading, user } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const isAdminOrBranch = pathname.startsWith('/admin') || pathname.startsWith('/branch');
@@ -59,6 +59,20 @@ function AppShell({ children }: { children: React.ReactNode }) {
         <div className="flex flex-col items-center gap-3 bg-white p-6 rounded-2xl border border-slate-200 shadow-md">
           <div className="w-8 h-8 border-3 border-orange-500 border-t-transparent rounded-full animate-spin" />
           <span>Đang kiểm tra phiên đăng nhập...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (isAdminOrBranch && !user) {
+    if (typeof window !== 'undefined') {
+      window.location.href = '/login';
+    }
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center font-sans text-slate-500 text-xs font-bold p-4">
+        <div className="flex flex-col items-center gap-3 bg-white p-6 rounded-2xl border border-slate-200 shadow-md">
+          <div className="w-8 h-8 border-3 border-orange-500 border-t-transparent rounded-full animate-spin" />
+          <span>Đang chuyển hướng về trang đăng nhập...</span>
         </div>
       </div>
     );
