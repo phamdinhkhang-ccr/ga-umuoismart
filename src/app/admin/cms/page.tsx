@@ -14,14 +14,14 @@ import { supabase } from '@/lib/supabaseClient';
 
 export default function AdminCmsPage() {
   const [settings, setSettings] = useState<StorefrontCmsSettings>({
-    hero_title: 'GÀ Ủ MUỐI SMART',
+    hero_title: '',
     hero_slogan: '',
     hero_hotline: '',
     hotline: '',
-    hotlineBadgeText: 'Hotline Đặt Ngay:',
-    hotlinePrefix: 'Hotline Đặt Ngay:',
+    hotlineBadgeText: '',
+    hotlinePrefix: '',
     promoBannerText: '',
-    brandName: 'Gà Ủ Muối Smart',
+    brandName: '',
     branches: [],
     social_facebook: '',
     social_tiktok: '',

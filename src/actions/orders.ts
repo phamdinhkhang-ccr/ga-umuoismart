@@ -3,77 +3,7 @@
 import { supabaseServer } from '@/lib/supabase/server';
 import { Branch, MenuItem, Order, OrderItem, OrderStatus, Voucher } from '@/types/database';
 
-const globalMockOrders: Order[] = [
-  {
-    id: 'mock-1',
-    order_code: 'GUM-88A1',
-    customer_name: 'Nguyễn Văn Nam',
-    customer_phone: '0901234567',
-    shipping_address: '123 Lê Lợi, Phường Bến Thành',
-    district: 'Quận 1',
-    city: 'Hồ Chí Minh',
-    branch_id: 'b1111111-1111-1111-1111-111111111111',
-    items: [
-      { menu_item_id: 'm1111111-1111-1111-1111-111111111111', item_name: 'Gà Ủ Muối Nguyên Con (Kèm Nước Chấm)', quantity: 2, unit_price: 190000, cost_price: 110000, subtotal: 380000 },
-      { menu_item_id: 'm6666666-6666-6666-6666-666666666666', item_name: 'Trà Tắc Khổng Lồ', quantity: 2, unit_price: 20000, cost_price: 6000, subtotal: 40000 }
-    ],
-    subtotal: 420000,
-    discount_amount: 30000,
-    final_amount: 390000,
-    estimated_profit: 158000,
-    voucher_code: null,
-    note: 'Giao trước 12h, cho thêm 2 bịch nước chấm',
-    status: 'PAID',
-    created_at: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
-    updated_at: new Date(Date.now() - 1000 * 60 * 15).toISOString()
-  },
-  {
-    id: 'mock-2',
-    order_code: 'GUM-94B2',
-    customer_name: 'Anh Tuấn',
-    customer_phone: '0988776655',
-    shipping_address: '456 Điện Biên Phủ, Phường 3',
-    district: 'Quận 3',
-    city: 'Hồ Chí Minh',
-    branch_id: 'b2222222-2222-2222-2222-222222222222',
-    items: [
-      { menu_item_id: 'm2222222-2222-2222-2222-222222222222', item_name: 'Gà Ủ Muối Nửa Con (Kèm Nước Chấm)', quantity: 1, unit_price: 100000, cost_price: 58000, subtotal: 100000 },
-      { menu_item_id: 'm3333333-3333-3333-3333-333333333333', item_name: 'Chân Gà Rút Xương Sốt Thái', quantity: 1, unit_price: 65000, cost_price: 32000, subtotal: 65000 }
-    ],
-    subtotal: 165000,
-    discount_amount: 30000,
-    final_amount: 135000,
-    estimated_profit: 45000,
-    voucher_code: 'CHAO2026',
-    note: 'Chân gà làm cay vừa',
-    status: 'PAID',
-    created_at: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
-    updated_at: new Date(Date.now() - 1000 * 60 * 45).toISOString()
-  },
-  {
-    id: 'mock-3',
-    order_code: 'GUM-77C3',
-    customer_name: 'Chị Mai',
-    customer_phone: '0912345678',
-    shipping_address: '789 Xô Viết Nghệ Tĩnh',
-    district: 'Quận Bình Thạnh',
-    city: 'Hồ Chí Minh',
-    branch_id: 'b3333333-3333-3333-3333-333333333333',
-    items: [
-      { menu_item_id: 'm4444444-4444-4444-4444-444444444444', item_name: 'Cánh Gà Ủ Muối (Phần 4 Cánh)', quantity: 4, unit_price: 85000, cost_price: 45000, subtotal: 340000 },
-      { menu_item_id: 'm7777777-7777-7777-7777-777777777777', item_name: 'Trà Đào Cam Sả', quantity: 4, unit_price: 30000, cost_price: 10000, subtotal: 120000 }
-    ],
-    subtotal: 460000,
-    discount_amount: 30000,
-    final_amount: 430000,
-    estimated_profit: 210000,
-    voucher_code: null,
-    note: 'Gọi trước khi giao',
-    status: 'SHIPPING',
-    created_at: new Date(Date.now() - 1000 * 60 * 90).toISOString(),
-    updated_at: new Date(Date.now() - 1000 * 60 * 90).toISOString()
-  }
-];
+const globalMockOrders: Order[] = [];
 
 function generateOrderCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -93,13 +23,7 @@ async function withTimeout<T>(fn: () => Promise<T>, timeoutMs: number = 300): Pr
   return Promise.race([fn(), timeoutPromise]).finally(() => clearTimeout(timeoutId));
 }
 
-const DEFAULT_BRANCHES: Branch[] = [
-  { id: 'b1111111-1111-1111-1111-111111111111', name: 'Chi Nhánh Gà Ủ Muối Quận 1', address: '123 Lê Lợi', district: 'Quận 1', city: 'Hồ Chí Minh', phone: '02838111111' },
-  { id: 'b2222222-2222-2222-2222-222222222222', name: 'Chi Nhánh Gà Ủ Muối Quận 3', address: '456 Điện Biên Phủ', district: 'Quận 3', city: 'Hồ Chí Minh', phone: '02838222222' },
-  { id: 'b3333333-3333-3333-3333-333333333333', name: 'Chi Nhánh Gà Ủ Muối Bình Thạnh', address: '789 Xô Viết Nghệ Tĩnh', district: 'Quận Bình Thạnh', city: 'Hồ Chí Minh', phone: '02838333333' },
-  { id: 'b4444444-4444-4444-4444-444444444444', name: 'Chi Nhánh Gà Ủ Muối Thủ Đức', address: '102 Võ Văn Ngân', district: 'Thành phố Thủ Đức', city: 'Hồ Chí Minh', phone: '02838444444' },
-  { id: 'b5555555-5555-5555-5555-555555555555', name: 'Chi Nhánh Gà Ủ Muối Hà Nội (Thanh Trì / Cầu Giấy)', address: 'Số 9 Thượng Phúc, Đại Thanh', district: 'Huyện Thanh Trì', city: 'Hà Nội', phone: '02438555555' }
-];
+const DEFAULT_BRANCHES: Branch[] = [];
 
 export async function getBranches(): Promise<Branch[]> {
   const isRealSupabase = process.env.NEXT_PUBLIC_SUPABASE_URL && !process.env.NEXT_PUBLIC_SUPABASE_URL.includes('placeholder');
@@ -113,15 +37,7 @@ export async function getBranches(): Promise<Branch[]> {
   return DEFAULT_BRANCHES;
 }
 
-const DEFAULT_MENU_ITEMS: MenuItem[] = [
-  { id: 'm1111111-1111-1111-1111-111111111111', name: 'Gà Ủ Muối Nguyên Con (Kèm Nước Chấm)', price: 190000, cost_price: 110000, is_available: true },
-  { id: 'm2222222-2222-2222-2222-222222222222', name: 'Gà Ủ Muối Nửa Con (Kèm Nước Chấm)', price: 100000, cost_price: 58000, is_available: true },
-  { id: 'm3333333-3333-3333-3333-333333333333', name: 'Chân Gà Rút Xương Sốt Thái', price: 65000, cost_price: 32000, is_available: true },
-  { id: 'm4444444-4444-4444-4444-444444444444', name: 'Cánh Gà Ủ Muối (Phần 4 Cánh)', price: 85000, cost_price: 45000, is_available: true },
-  { id: 'm5555555-5555-5555-5555-555555555555', name: 'Nước Chấm Thần Thánh Extra', price: 15000, cost_price: 4000, is_available: true },
-  { id: 'm6666666-6666-6666-6666-666666666666', name: 'Trà Tắc Khổng Lồ', price: 20000, cost_price: 6000, is_available: true },
-  { id: 'm7777777-7777-7777-7777-777777777777', name: 'Trà Đào Cam Sả', price: 30000, cost_price: 10000, is_available: true }
-];
+const DEFAULT_MENU_ITEMS: MenuItem[] = [];
 
 export async function getMenuItems(): Promise<MenuItem[]> {
   const isRealSupabase = process.env.NEXT_PUBLIC_SUPABASE_URL && !process.env.NEXT_PUBLIC_SUPABASE_URL.includes('placeholder');

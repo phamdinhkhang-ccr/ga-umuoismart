@@ -19,27 +19,18 @@ import {
 import { Order } from '@/types/database';
 import { supabase } from '@/lib/supabaseClient';
 
-const PRESET_COMBOS = [
-  { id: 'cb1', name: 'Set nửa ủ muối + 1 hộp chân gà - 230k (Ship nội thành)', price: 230000, isHot: true },
-  { id: 'cb2', name: 'Set 1 Gà Ủ Muối + 1 hộp chân gà - 355k', price: 355000, isHot: true },
-  { id: 'cb3', name: 'Gà ủ muối nửa con - 150k', price: 150000, isHot: false },
-  { id: 'cb4', name: 'Gà ủ muối nguyên con - 270k', price: 270000, isHot: false },
-  { id: 'cb5', name: 'Chân gà rút xương ủ muối - 85k', price: 85000, isHot: false },
-  { id: 'cb6', name: '1 Nem ngựa - 95k / 2 Nem ngựa - 180k', price: 95000, isHot: false },
-  { id: 'cb7', name: 'Set ăn chơi (1/2 Gà & 1 Nem Ngựa) - 240k', price: 240000, isHot: true },
-  { id: 'cb8', name: 'Set ăn nhậu (1 Gà Ủ Muối & 1 Nem Ngựa) - 360k', price: 360000, isHot: true }
-];
+const PRESET_COMBOS: any[] = [];
 
 export default function PublicStorefrontHome() {
   const { user } = useAuth();
 
   // Dynamic Storefront CMS & Products State
   const [cmsSettings, setCmsSettings] = useState<StorefrontCmsSettings>({
-    hero_title: 'GÀ Ủ MUỐI SMART',
+    hero_title: '',
     hero_slogan: '',
     hero_hotline: '',
     hotline: '',
-    hotlineBadgeText: 'Hotline Đặt Ngay:',
+    hotlineBadgeText: '',
     branches: [],
     social_facebook: '',
     social_tiktok: '',
@@ -66,7 +57,7 @@ export default function PublicStorefrontHome() {
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
   const [selectedBranchId, setSelectedBranchId] = useState<string>('');
-  const [selectedComboIds, setSelectedComboIds] = useState<string[]>(['cb1']);
+  const [selectedComboIds, setSelectedComboIds] = useState<string[]>([]);
   const [cutPreference, setCutPreference] = useState<'Chặt sẵn ăn luôn' | 'Không chặt (để nguyên con)'>('Chặt sẵn ăn luôn');
   const [quantityNote, setQuantityNote] = useState('');
   const [extraNote, setExtraNote] = useState('');
@@ -524,7 +515,7 @@ export default function PublicStorefrontHome() {
             </div>
             <div>
               <span className="text-lg font-black text-slate-900 tracking-tight flex items-center gap-1.5">
-                {cmsSettings.hero_title || 'Gà Ủ Muối Smart'}
+                {cmsSettings.hero_title || cmsSettings.brandName || ''}
                 <Sparkles className="w-4 h-4 text-orange-500 animate-pulse" />
               </span>
               <p className="text-[10px] text-slate-500 font-semibold hidden sm:block">Đặc Sản Da Giòn Sần Sật • Giao Hỏa Tốc</p>
@@ -875,7 +866,7 @@ export default function PublicStorefrontHome() {
           </div>
         ) : (
           <div className="text-center py-12 bg-white border border-slate-200 rounded-3xl p-8 shadow-xs">
-            <p className="text-slate-500 font-bold text-sm">Đang cập nhật thực đơn món...</p>
+            <p className="text-slate-500 font-bold text-sm">Cửa hàng đang cập nhật thực đơn món mới...</p>
           </div>
         )}
       </section>

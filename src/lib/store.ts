@@ -126,86 +126,11 @@ export function savePosOrder(newOrderData: any): any[] {
   return updated;
 }
 
-// Rich Pre-Populated Mock Expenses matching user request screenshot
-const DEFAULT_EXPENSES: ExpenseRecord[] = [
-  {
-    id: 'exp-1418',
-    code: '#EX1418',
-    category: 'Tiền ship',
-    amount: 26000,
-    payment_method: 'Tiền mặt',
-    description: 'Trả ship hỏa tốc đơn #OD9672',
-    payer: 'Đức',
-    branch: 'CƠ SỞ VIN SMART CITY',
-    created_at: '2026-09-04'
-  },
-  {
-    id: 'exp-1417',
-    code: '#EX1417',
-    category: 'Nước & Đá',
-    amount: 160000,
-    payment_method: 'Chuyển khoản',
-    description: 'Nước uống giải khát bếp',
-    payer: 'Đức',
-    branch: 'CƠ SỞ VIN SMART CITY',
-    created_at: '2026-09-04'
-  },
-  {
-    id: 'exp-1414',
-    code: '#EX1414',
-    category: 'Ăn uống nội bộ',
-    amount: 200000,
-    payment_method: 'Tiền mặt',
-    description: 'Ăn trưa ca làm việc',
-    payer: 'Đức',
-    branch: 'CƠ SỞ VIN SMART CITY',
-    created_at: '2026-09-04'
-  },
-  {
-    id: 'exp-1411',
-    code: '#EX1411',
-    category: 'Nguyên phụ liệu',
-    amount: 45000,
-    payment_method: 'Tiền mặt',
-    description: 'Mua rau răm + sả tắc tươi',
-    payer: 'Nam',
-    branch: 'Chi Nhánh Cầu Giấy',
-    created_at: '2026-09-04'
-  },
-  {
-    id: 'exp-1409',
-    code: '#EX1409',
-    category: 'Nước & Đá',
-    amount: 120000,
-    payment_method: 'Tiền mặt',
-    description: 'mua nc+ đá bi 5 bao',
-    payer: 'Admin',
-    branch: 'Chi Nhánh Đống Đa',
-    created_at: '2026-09-03'
-  },
-  {
-    id: 'exp-1408',
-    code: '#EX1408',
-    category: 'Bao bì & VPP',
-    amount: 85000,
-    payment_method: 'Chuyển khoản',
-    description: 'mua giấy in K80 bill',
-    payer: 'Đức',
-    branch: 'CƠ SỞ VIN SMART CITY',
-    created_at: '2026-09-03'
-  }
-];
+// Production Empty Default Arrays
+const DEFAULT_EXPENSES: ExpenseRecord[] = [];
 
 // Base Inventory Items Schema
-const BASE_INVENTORY_ITEMS = [
-  { id: 'm1111111-1111-1111-1111-111111111111', name: 'Gà Ủ Muối Nguyên Con', unit: 'Con', initialStock: 120, totalImported: 50, totalWasted: 2, minStock: 50 },
-  { id: 'm2222222-2222-2222-2222-222222222222', name: 'Gà Ủ Muối Nửa Con', unit: 'Khay', initialStock: 80, totalImported: 30, totalWasted: 1, minStock: 40 },
-  { id: 'm3333333-3333-3333-3333-333333333333', name: 'Chân Gà Rút Xương Sốt Thái', unit: 'Hộp', initialStock: 150, totalImported: 40, totalWasted: 0, minStock: 60 },
-  { id: 'm4444444-4444-4444-4444-444444444444', name: 'Cánh Gà Ủ Muối (Phần 4 Cánh)', unit: 'Phần', initialStock: 90, totalImported: 20, totalWasted: 1, minStock: 30 },
-  { id: 'm5555555-5555-5555-5555-555555555555', name: 'Nước Chấm Thần Thánh Extra', unit: 'Chai', initialStock: 200, totalImported: 100, totalWasted: 3, minStock: 100 },
-  { id: 'm6666666-6666-6666-6666-666666666666', name: 'Trà Tắc Khổng Lồ', unit: 'Ly', initialStock: 300, totalImported: 150, totalWasted: 5, minStock: 150 },
-  { id: 'm7777777-7777-7777-7777-777777777777', name: 'Trà Đào Cam Sả', unit: 'Ly', initialStock: 250, totalImported: 100, totalWasted: 2, minStock: 100 }
-];
+const BASE_INVENTORY_ITEMS: any[] = [];
 
 export function safeGetJSON<T>(key: string, fallback: T): T {
   if (typeof window === 'undefined') return fallback;
@@ -325,27 +250,7 @@ export function getTotalPettyExpenses(): number {
 // INVENTORY LOGS & AUDIT CALCULATIONS
 // -------------------------------------------------------------
 export function getInventoryLogs(): InventoryLog[] {
-  return getItem<InventoryLog[]>(KEYS.LOGS, [
-    {
-      id: 'log-1',
-      timestamp: new Date(Date.now() - 1000 * 60 * 180).toLocaleString('vi-VN'),
-      type: 'IMPORT',
-      branchName: 'Chi Nhánh Gà Ủ Muối Quận 1',
-      itemName: 'Gà Ủ Muối Nguyên Con',
-      quantityChange: 50,
-      note: 'Nhập kho từ nông trang Đông Anh'
-    },
-    {
-      id: 'log-2',
-      timestamp: new Date(Date.now() - 1000 * 60 * 60).toLocaleString('vi-VN'),
-      type: 'DEDUCT_SALE',
-      orderCode: 'GUM-88A1',
-      branchName: 'Chi Nhánh Gà Ủ Muối Quận 1',
-      itemName: 'Gà Ủ Muối Nguyên Con',
-      quantityChange: -2,
-      note: 'Trừ kho tự động theo đơn #GUM-88A1'
-    }
-  ]);
+  return getItem<InventoryLog[]>(KEYS.LOGS, []);
 }
 
 export function addInventoryLog(log: Omit<InventoryLog, 'id' | 'timestamp'>): InventoryLog {
@@ -439,84 +344,7 @@ export function calculateInventoryAudit(ordersList: Order[]): InventoryAuditItem
 // -------------------------------------------------------------
 // BRANCHES MANAGEMENT FUNCTIONS & DATA
 // -------------------------------------------------------------
-const DEFAULT_BRANCHES: Branch[] = [
-  {
-    id: 'b-vinsmart',
-    name: 'CƠ SỞ VIN SMART CITY',
-    address: 'Tòa S2.02 Vinhomes Smart City, Tây Mỗ',
-    district: 'Nam Từ Liêm',
-    city: 'Hà Nội',
-    phone: '0988.123.456',
-    manager: 'Nguyễn Văn Đức',
-    status: 'ACTIVE',
-    coverage_zones: ['Nam Từ Liêm', 'Hoài Đức', 'Hà Đông', 'Bắc Từ Liêm'],
-    capacity_per_hour: 45,
-    bank_name: 'MB Bank',
-    bank_account: '0988123456',
-    bank_holder: 'CHI NHANH VIN SMART CITY',
-    orders_pending: 5,
-    orders_total_today: 24,
-    revenue_today: 3420000,
-    main_stock: 42
-  },
-  {
-    id: 'b-caugiay',
-    name: 'Chi Nhánh Cầu Giấy',
-    address: '102 Trần Thái Tông, Dịch Vọng',
-    district: 'Cầu Giấy',
-    city: 'Hà Nội',
-    phone: '0977.888.999',
-    manager: 'Hoàng Văn Nam',
-    status: 'ACTIVE',
-    coverage_zones: ['Cầu Giấy', 'Đống Đa', 'Tây Hồ', 'Thanh Xuân'],
-    capacity_per_hour: 40,
-    bank_name: 'Vietcombank',
-    bank_account: '1012345678',
-    bank_holder: 'CHI NHANH CAU GIAY',
-    orders_pending: 3,
-    orders_total_today: 18,
-    revenue_today: 2580000,
-    main_stock: 35
-  },
-  {
-    id: 'b-thanhtri',
-    name: 'Chi Nhánh Thanh Trì',
-    address: 'Số 9 Thượng Phúc, Đại Thanh',
-    district: 'Huyện Thanh Trì',
-    city: 'Hà Nội',
-    phone: '0243.855.5555',
-    manager: 'Hoàng Văn Hà Nội',
-    status: 'ACTIVE',
-    coverage_zones: ['Thanh Trì', 'Hoàng Mai', 'Hà Đông', 'Gia Lâm'],
-    capacity_per_hour: 35,
-    bank_name: 'Techcombank',
-    bank_account: '190333444555',
-    bank_holder: 'CHI NHANH THANH TRI',
-    orders_pending: 2,
-    orders_total_today: 15,
-    revenue_today: 2150000,
-    main_stock: 28
-  },
-  {
-    id: 'b-quan1',
-    name: 'Chi Nhánh Quận 1 (TP.HCM)',
-    address: '123 Lê Lợi, Phường Bến Thành',
-    district: 'Quận 1',
-    city: 'Hồ Chí Minh',
-    phone: '0283.811.1111',
-    manager: 'Lê Văn Cơ Sở 1',
-    status: 'ACTIVE',
-    coverage_zones: ['Quận 1', 'Quận 3', 'Quận 4', 'Bình Thạnh', 'Phú Nhuận'],
-    capacity_per_hour: 30,
-    bank_name: 'ACB',
-    bank_account: '888999111',
-    bank_holder: 'CHI NHANH QUAN 1',
-    orders_pending: 4,
-    orders_total_today: 20,
-    revenue_today: 2890000,
-    main_stock: 32
-  }
-];
+const DEFAULT_BRANCHES: Branch[] = [];
 
 export function getBranches(): Branch[] {
   return getItem<Branch[]>(KEYS.BRANCHES, DEFAULT_BRANCHES);
@@ -629,136 +457,7 @@ export interface ProductRecord {
   batch_code?: string;
 }
 
-const DEFAULT_PRODUCTS: ProductRecord[] = [
-  {
-    id: 'm1',
-    name: 'Gà Ủ Muối Nguyên Con (Kèm Nước Chấm)',
-    price: 190000,
-    cost_price: 110000,
-    category: 'Món Gà Ủ Muối',
-    unit: 'Con',
-    is_available: true,
-    unavailable_branches: [],
-    ai_keywords: ['1 con', 'nguyên con', 'gà ủ cả con', 'ga nguyen con', 'gà ủ muối'],
-    is_best_seller: true,
-    production_date: '2026-09-02',
-    shelf_life_days: 14,
-    expiry_date: '2026-09-16',
-    batch_code: 'LÔ-GUM-0409'
-  },
-  {
-    id: 'm2',
-    name: 'Gà Ủ Muối Nửa Con (Kèm Nước Chấm)',
-    price: 100000,
-    cost_price: 58000,
-    category: 'Món Gà Ủ Muối',
-    unit: 'Nửa con',
-    is_available: true,
-    unavailable_branches: [],
-    ai_keywords: ['nửa con', '1/2 con', 'ga nua con', 'nửa con gà'],
-    is_best_seller: false,
-    production_date: '2026-09-03',
-    shelf_life_days: 14,
-    expiry_date: '2026-09-17',
-    batch_code: 'LÔ-GUM-0409B'
-  },
-  {
-    id: 'm3',
-    name: 'Chân Gà Rút Xương Sốt Thái',
-    price: 65000,
-    cost_price: 32000,
-    category: 'Món Ăn Kèm',
-    unit: 'Hộp',
-    is_available: true,
-    unavailable_branches: [],
-    ai_keywords: ['chân gà', 'sốt thái', 'chân gà rút xương', 'chan ga'],
-    is_best_seller: true,
-    production_date: '2026-08-31',
-    shelf_life_days: 6,
-    expiry_date: '2026-09-06', // ⚠️Còn 2 ngày!
-    batch_code: 'LÔ-CG-0409'
-  },
-  {
-    id: 'm4',
-    name: 'Cánh Gà Ủ Muối (Phần 4 Cánh)',
-    price: 85000,
-    cost_price: 45000,
-    category: 'Món Gà Ủ Muối',
-    unit: 'Phần',
-    is_available: true,
-    unavailable_branches: [],
-    ai_keywords: ['cánh gà', '4 cánh', 'canh ga u muoi'],
-    is_best_seller: false,
-    production_date: '2026-08-30',
-    shelf_life_days: 8,
-    expiry_date: '2026-09-07', // ⚠️Còn 3 ngày!
-    batch_code: 'LÔ-CGU-0209'
-  },
-  {
-    id: 'm5',
-    name: 'Nước Chấm Thần Thánh Extra',
-    price: 15000,
-    cost_price: 4000,
-    category: 'Gia Vị & Extra',
-    unit: 'Chai',
-    is_available: true,
-    unavailable_branches: [],
-    ai_keywords: ['nước chấm', 'hũ nước chấm', 'nuoc cham extra', 'sốt chấm'],
-    is_best_seller: false,
-    production_date: '2026-09-01',
-    shelf_life_days: 30,
-    expiry_date: '2026-10-01',
-    batch_code: 'LÔ-NC-0109'
-  },
-  {
-    id: 'm6',
-    name: 'Trà Tắc Khổng Lồ',
-    price: 20000,
-    cost_price: 6000,
-    category: 'Nước Uống',
-    unit: 'Ly',
-    is_available: true,
-    unavailable_branches: [],
-    ai_keywords: ['trà tắc', 'ly trà tắc', 'tra tac khong lo', 'trà tắc 1 lít'],
-    is_best_seller: true,
-    production_date: '2026-09-04',
-    shelf_life_days: 5,
-    expiry_date: '2026-09-09',
-    batch_code: 'LÔ-TT-0409'
-  },
-  {
-    id: 'm7',
-    name: 'Trà Đào Cam Sả',
-    price: 30000,
-    cost_price: 10000,
-    category: 'Nước Uống',
-    unit: 'Ly',
-    is_available: true,
-    unavailable_branches: [],
-    ai_keywords: ['trà đào', 'trà đào cam sả', 'tra dao'],
-    is_best_seller: false,
-    production_date: '2026-09-04',
-    shelf_life_days: 5,
-    expiry_date: '2026-09-09',
-    batch_code: 'LÔ-TD-0409'
-  },
-  {
-    id: 'm8',
-    name: 'Nộm Gà Xé Phay Chua Ngọt',
-    price: 60000,
-    cost_price: 36000,
-    category: 'Món Ăn Kèm',
-    unit: 'Hộp',
-    is_available: false,
-    unavailable_branches: [],
-    ai_keywords: ['nộm gà', 'gà xé phay', 'nom ga'],
-    is_best_seller: false,
-    production_date: '2026-08-25',
-    shelf_life_days: 7,
-    expiry_date: '2026-09-01', // ⛔ Đã hết hạn!
-    batch_code: 'LÔ-NGX-2808'
-  }
-];
+const DEFAULT_PRODUCTS: ProductRecord[] = [];
 
 export function getProducts(): ProductRecord[] {
   return getItem<ProductRecord[]>(KEYS.PRODUCTS, DEFAULT_PRODUCTS);
@@ -876,101 +575,7 @@ export interface CustomerRecord {
   order_history?: CustomerOrderHistory[];
 }
 
-const DEFAULT_CUSTOMERS: CustomerRecord[] = [
-  {
-    id: 'c1',
-    name: 'Nguyễn Văn Nam',
-    phone: '0901234567',
-    secondary_phone: '0909888777',
-    address: '123 Lê Lợi, Phường Bến Thành, Quận 1, TP.HCM',
-    secondary_address: 'Số 8 Tôn Đức Thắng, Quận 1',
-    total_orders: 12,
-    avg_frequency_days: 5,
-    total_spend: 4680000,
-    points: 234,
-    tier: 'VIP',
-    last_order_date: '2026-09-04 11:30',
-    days_since_last_order: 0,
-    taste_tags: ['🌶️ Ăn cay', '🥫 Nhiều sốt', '☀️ Ship giờ trưa', '🐓 Thích nguyên con'],
-    notes: 'Gia đình hay ăn cay đậm đà, ship trước 12h trưa. Thường xuyên gọi điện đặt combo gà ủ muối nguyên con.',
-    favorite_item: 'Gà Ủ Muối Nguyên Con (Kèm Nước Chấm)',
-    favorite_branch: 'Chi Nhánh Quận 1 (TP.HCM)',
-    avg_order_value: 390000,
-    order_history: [
-      { id: 'oh-1', order_code: '#OD9672', created_at: '2026-09-04 11:30', items_summary: '2x Gà Ủ Muối Nguyên Con, 2x Trà Tắc', total_amount: 420000, status: 'PAID' },
-      { id: 'oh-2', order_code: '#OD9510', created_at: '2026-08-30 12:15', items_summary: '1x Gà Ủ Muối Nguyên Con, 1x Chân Gà Sốt Thái', total_amount: 255000, status: 'DELIVERED' },
-      { id: 'oh-3', order_code: '#OD9344', created_at: '2026-08-25 11:45', items_summary: '3x Gà Ủ Muối Nguyên Con, 4x Trà Đào', total_amount: 690000, status: 'DELIVERED' }
-    ]
-  },
-  {
-    id: 'c2',
-    name: 'Anh Tuấn',
-    phone: '0988776655',
-    secondary_phone: '0977112233',
-    address: '456 Điện Biên Phủ, Phường 3, Quận 3, TP.HCM',
-    total_orders: 5,
-    avg_frequency_days: 7,
-    total_spend: 1250000,
-    points: 62,
-    tier: 'Thân Thiết',
-    last_order_date: '2026-09-01 14:15',
-    days_since_last_order: 3,
-    taste_tags: ['🍋 Thích chua ngọt', '🥤 Uống trà tắc khổng lồ', '⚡ Ship hỏa tốc'],
-    notes: 'Lấy thêm 2 hũ nước chấm extra mỗi đơn. Thường giao buổi chiều.',
-    favorite_item: 'Chân Gà Rút Xương Sốt Thái',
-    favorite_branch: 'CƠ SỞ VIN SMART CITY',
-    avg_order_value: 250000,
-    order_history: [
-      { id: 'oh-4', order_code: '#OD9488', created_at: '2026-09-01 14:15', items_summary: '2x Chân Gà Sốt Thái, 2x Trà Tắc Khổng Lồ', total_amount: 170000, status: 'DELIVERED' },
-      { id: 'oh-5', order_code: '#OD9210', created_at: '2026-08-24 16:00', items_summary: '1x Gà Ủ Muối Nửa Con, 2x Cánh Gà Ủ Muối', total_amount: 270000, status: 'DELIVERED' }
-    ]
-  },
-  {
-    id: 'c3',
-    name: 'Chị Mai',
-    phone: '0912345678',
-    secondary_phone: '',
-    address: '789 Xô Viết Nghệ Tĩnh, Quận Bình Thạnh, TP.HCM',
-    total_orders: 8,
-    avg_frequency_days: 4,
-    total_spend: 2980000,
-    points: 149,
-    tier: 'VIP',
-    last_order_date: '2026-08-17 18:45',
-    days_since_last_order: 18,
-    taste_tags: ['🚫 Không lấy hành', '🍗 Thích cánh gà', '📦 Bọc giấy bạc giữ nhiệt'],
-    notes: '⚠️ QUÁ 15 NGÀY CHƯA ĐẶT LẠI! Khách có nguy cơ rời bỏ. Cần nhân viên telesale gọi tặng voucher CHAO2026 giảm 30k.',
-    favorite_item: 'Cánh Gà Ủ Muối (Phần 4 Cánh)',
-    favorite_branch: 'Chi Nhánh Cầu Giấy',
-    avg_order_value: 372500,
-    order_history: [
-      { id: 'oh-6', order_code: '#OD8992', created_at: '2026-08-17 18:45', items_summary: '3x Cánh Gà Ủ Muối, 2x Trà Đào Cam Sả', total_amount: 315000, status: 'DELIVERED' },
-      { id: 'oh-7', order_code: '#OD8750', created_at: '2026-08-12 19:10', items_summary: '2x Gà Ủ Muối Nửa Con, 1x Chân Gà Sốt Thái', total_amount: 265000, status: 'DELIVERED' }
-    ]
-  },
-  {
-    id: 'c4',
-    name: 'Anh Hoàng (Hà Nội)',
-    phone: '0889018221',
-    secondary_phone: '',
-    address: 'Mipec 1, Hà Đông, Hà Nội',
-    total_orders: 1,
-    avg_frequency_days: 1,
-    total_spend: 580000,
-    points: 29,
-    tier: 'Khách Mới',
-    last_order_date: '2026-09-04 16:20',
-    days_since_last_order: 0,
-    taste_tags: ['🆕 Đơn đầu tiên', '🏢 Đặt văn phòng', '🥢 Lấy thêm đũa thìa'],
-    notes: 'Khách mới thử nghiệm đơn đầu tiên cho nhóm văn phòng Hà Đông.',
-    favorite_item: 'Gà Ủ Muối Nguyên Con (Kèm Nước Chấm)',
-    favorite_branch: 'CƠ SỞ VIN SMART CITY',
-    avg_order_value: 580000,
-    order_history: [
-      { id: 'oh-8', order_code: '#OD9710', created_at: '2026-09-04 16:20', items_summary: '2x Gà Ủ Muối Nguyên Con, 4x Trà Tắc Khổng Lồ', total_amount: 580000, status: 'RECEIVED' }
-    ]
-  }
-];
+const DEFAULT_CUSTOMERS: CustomerRecord[] = [];
 
 export function getCustomers(): CustomerRecord[] {
   return getItem<CustomerRecord[]>(KEYS.CUSTOMERS, DEFAULT_CUSTOMERS);
@@ -1025,8 +630,8 @@ export function saveCustomer(custData: Partial<CustomerRecord> & { name: string;
       days_since_last_order: 0,
       taste_tags: custData.taste_tags || ['🆕 Khách mới'],
       notes: custData.notes || 'Hồ sơ tạo mới.',
-      favorite_item: custData.favorite_item || 'Gà Ủ Muối Nguyên Con',
-      favorite_branch: custData.favorite_branch || 'CƠ SỞ VIN SMART CITY',
+      favorite_item: custData.favorite_item || '',
+      favorite_branch: custData.favorite_branch || '',
       avg_order_value: totalOrders > 0 ? Math.round(totalSpend / totalOrders) : 0,
       order_history: custData.order_history || []
     };
@@ -1128,53 +733,12 @@ export interface SystemNotification {
   actionText?: string;
 }
 
-const DEFAULT_NOTIFICATIONS: SystemNotification[] = [
-  {
-    id: 'n1',
-    type: 'ORDER',
-    title: '🍗 Đơn hàng mới #OD9673',
-    message: 'Khách vừa đặt 2 Gà Ủ Muối Nguyên Con + 2 Trà Tắc qua AI Parser.',
-    timestamp: '2 phút trước',
-    read: false,
-    link: '/admin/orders',
-    actionText: 'Xem đơn'
-  },
-  {
-    id: 'n2',
-    type: 'STOCK_EXPIRY',
-    title: '⚠️ Cảnh báo HSD: Gà Ủ Muối Lô 01',
-    message: 'Còn 3 ngày hết hạn! Cần ưu tiên xuất bán hoặc khuyến mãi.',
-    timestamp: '15 phút trước',
-    read: false,
-    link: '/admin/products',
-    actionText: 'Xem HSD'
-  },
-  {
-    id: 'n3',
-    type: 'SHIFT',
-    title: '🕒 Mở ca làm việc mới',
-    message: 'Nhân viên Đức vừa Mở Ca 1 tại CƠ SỞ VIN SMART CITY.',
-    timestamp: '45 phút trước',
-    read: false,
-    link: '/admin/shifts',
-    actionText: 'Xem ca'
-  },
-  {
-    id: 'n4',
-    type: 'EXPENSE',
-    title: '💸 Phiếu chi mới #EX1419',
-    message: 'Chi 35.000 VNĐ trả tiền ship hỏa tốc đơn #OD9672 (Đức).',
-    timestamp: '1 giờ trước',
-    read: true,
-    link: '/admin/expenses',
-    actionText: 'Xem phiếu'
-  }
-];
+const DEFAULT_NOTIFICATIONS: SystemNotification[] = [];
 
 export function getNotifications(): SystemNotification[] {
   const notifs = getItem<SystemNotification[]>('pos_notifications_data', []);
   if (notifs && notifs.length > 0) return notifs;
-  return getItem<SystemNotification[]>('gum_smart_notifications_v3', DEFAULT_NOTIFICATIONS);
+  return getItem<SystemNotification[]>('gum_smart_notifications_v3', []);
 }
 
 export function addNotification(notif: Partial<SystemNotification> & { title: string }): SystemNotification {
@@ -1259,13 +823,13 @@ export interface StorefrontCmsSettings {
 }
 
 const DEFAULT_CMS_SETTINGS: StorefrontCmsSettings = {
-  hero_title: 'GÀ Ủ MUỐI SMART',
+  hero_title: '',
   hero_slogan: '',
   hero_hotline: '',
   hotline: '',
-  hotlineBadgeText: 'Hotline Đặt Ngay:',
+  hotlineBadgeText: '',
   promoBannerText: '',
-  brandName: 'Gà Ủ Muối Smart',
+  brandName: '',
   branches: [],
   social_facebook: '',
   social_tiktok: '',
@@ -1297,15 +861,6 @@ export function saveCmsSettings(newSettings: Partial<StorefrontCmsSettings>): St
   };
 
   setItem(KEYS.CMS, updated);
-
-  addNotification({
-    type: 'ORDER',
-    title: '🎨 Cập nhật giao diện Trang chủ',
-    message: 'Super Admin vừa lưu cấu hình mới cho trang chủ bán hàng.',
-    link: '/',
-    actionText: 'Xem trang chủ'
-  });
-
   return updated;
 }
 
