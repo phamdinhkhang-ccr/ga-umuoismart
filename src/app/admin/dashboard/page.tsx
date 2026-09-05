@@ -132,28 +132,22 @@ export default function DashboardPage() {
     const uniquePhones = new Set(dateFiltered.map(o => o.customer_phone).filter(Boolean));
     const customerCount = uniquePhones.size;
 
-    // Fallbacks if list is empty or mock data mode
-    const scale = timeRange === 'week' ? 4.2 : timeRange === 'month' ? 18.5 : 1;
-    const fallbackOrders = Math.round(12 * scale);
-    const fallbackGmv = Math.round(3850000 * scale);
-    const fallbackProfit = Math.round(1650000 * scale);
+    // Zero State Metrics Calculation without artificial mock fallbacks
+    const finalTotalOrders = totalOrdersCount;
+    const finalGmv = gmvVal;
+    const finalProfit = grossProfitVal;
+    const finalCompletion = totalOrdersCount > 0 ? completionRateVal : 0;
 
-    const finalTotalOrders = totalOrdersCount > 0 ? totalOrdersCount : fallbackOrders;
-    const finalGmv = gmvVal > 0 ? gmvVal : fallbackGmv;
-    const finalProfit = grossProfitVal > 0 ? grossProfitVal : fallbackProfit;
-    const finalCompletion = totalOrdersCount > 0 ? completionRateVal : 98;
-
-    // Customer classification (new vs returning) with NaN proof fallback
-    const safeCustomerCount = customerCount > 0 ? customerCount : Math.round(18 * scale);
-    const newCust = Math.round(safeCustomerCount * 0.65) || 0;
-    const returningCust = Math.max(0, safeCustomerCount - newCust) || 0;
+    const safeCustomerCount = customerCount;
+    const newCust = safeCustomerCount > 0 ? Math.round(safeCustomerCount * 0.65) : 0;
+    const returningCust = Math.max(0, safeCustomerCount - newCust);
 
     return {
       totalOrders: finalTotalOrders,
       gmv: finalGmv,
       grossProfit: finalProfit,
       completionRate: isNaN(finalCompletion) ? 0 : finalCompletion,
-      activeStaff: 6,
+      activeStaff: 0,
       todayCustomers: safeCustomerCount,
       newCustomers: newCust,
       returningCustomers: returningCust,
@@ -163,75 +157,64 @@ export default function DashboardPage() {
 
   // Dynamic Chart Data based on timeRange, custom dates & selectedBranch
   const chartData = useMemo(() => {
-    const branchMultiplier = selectedBranch === 'all' ? 1 : selectedBranch === 'caugiai' ? 0.45 : 0.3;
-    const extraExpShare = Math.round((pettyExpenses > 0 ? pettyExpenses : 275000) / 8);
+    const rawOrders: Order[] = data?.orders || [];
+    const hasData = rawOrders && rawOrders.length > 0;
 
-    if (timeRange === 'today') {
-      return [
-        { name: '08:00', gmv: Math.round(250000 * branchMultiplier), expenses: Math.round((110000 + extraExpShare) * branchMultiplier), profit: Math.round((140000 - extraExpShare) * branchMultiplier) },
-        { name: '10:00', gmv: Math.round(520000 * branchMultiplier), expenses: Math.round((230000 + extraExpShare) * branchMultiplier), profit: Math.round((290000 - extraExpShare) * branchMultiplier) },
-        { name: '12:00', gmv: Math.round(1180000 * branchMultiplier), expenses: Math.round((510000 + extraExpShare) * branchMultiplier), profit: Math.round((670000 - extraExpShare) * branchMultiplier) },
-        { name: '14:00', gmv: Math.round(750000 * branchMultiplier), expenses: Math.round((320000 + extraExpShare) * branchMultiplier), profit: Math.round((430000 - extraExpShare) * branchMultiplier) },
-        { name: '16:00', gmv: Math.round(610000 * branchMultiplier), expenses: Math.round((270000 + extraExpShare) * branchMultiplier), profit: Math.round((340000 - extraExpShare) * branchMultiplier) },
-        { name: '18:00', gmv: Math.round(1650000 * branchMultiplier), expenses: Math.round((710000 + extraExpShare) * branchMultiplier), profit: Math.round((940000 - extraExpShare) * branchMultiplier) },
-        { name: '20:00', gmv: Math.round(1980000 * branchMultiplier), expenses: Math.round((840000 + extraExpShare) * branchMultiplier), profit: Math.round((1140000 - extraExpShare) * branchMultiplier) },
-        { name: '22:00', gmv: Math.round(920000 * branchMultiplier), expenses: Math.round((400000 + extraExpShare) * branchMultiplier), profit: Math.round((520000 - extraExpShare) * branchMultiplier) },
-      ];
-    } else if (timeRange === 'week') {
-      return [
-        { name: 'Thứ 2', gmv: Math.round(3200000 * branchMultiplier), expenses: Math.round((1400000 + extraExpShare * 2) * branchMultiplier), profit: Math.round((1800000 - extraExpShare * 2) * branchMultiplier) },
-        { name: 'Thứ 3', gmv: Math.round(3800000 * branchMultiplier), expenses: Math.round((1650000 + extraExpShare * 2) * branchMultiplier), profit: Math.round((2150000 - extraExpShare * 2) * branchMultiplier) },
-        { name: 'Thứ 4', gmv: Math.round(3500000 * branchMultiplier), expenses: Math.round((1500000 + extraExpShare * 2) * branchMultiplier), profit: Math.round((2000000 - extraExpShare * 2) * branchMultiplier) },
-        { name: 'Thứ 5', gmv: Math.round(4200000 * branchMultiplier), expenses: Math.round((1800000 + extraExpShare * 2) * branchMultiplier), profit: Math.round((2400000 - extraExpShare * 2) * branchMultiplier) },
-        { name: 'Thứ 6', gmv: Math.round(5500000 * branchMultiplier), expenses: Math.round((2350000 + extraExpShare * 2) * branchMultiplier), profit: Math.round((3150000 - extraExpShare * 2) * branchMultiplier) },
-        { name: 'Thứ 7', gmv: Math.round(7800000 * branchMultiplier), expenses: Math.round((3300000 + extraExpShare * 2) * branchMultiplier), profit: Math.round((4500000 - extraExpShare * 2) * branchMultiplier) },
-        { name: 'Chủ Nhật', gmv: Math.round(8500000 * branchMultiplier), expenses: Math.round((3600000 + extraExpShare * 2) * branchMultiplier), profit: Math.round((4900000 - extraExpShare * 2) * branchMultiplier) },
-      ];
-    } else if (timeRange === 'month') {
-      return [
-        { name: 'Tuần 1', gmv: Math.round(24500000 * branchMultiplier), expenses: Math.round((10500000 + extraExpShare * 5) * branchMultiplier), profit: Math.round((14000000 - extraExpShare * 5) * branchMultiplier) },
-        { name: 'Tuần 2', gmv: Math.round(28900000 * branchMultiplier), expenses: Math.round((12400000 + extraExpShare * 5) * branchMultiplier), profit: Math.round((16500000 - extraExpShare * 5) * branchMultiplier) },
-        { name: 'Tuần 3', gmv: Math.round(31200000 * branchMultiplier), expenses: Math.round((13300000 + extraExpShare * 5) * branchMultiplier), profit: Math.round((17900000 - extraExpShare * 5) * branchMultiplier) },
-        { name: 'Tuần 4', gmv: Math.round(36800000 * branchMultiplier), expenses: Math.round((15700000 + extraExpShare * 5) * branchMultiplier), profit: Math.round((21100000 - extraExpShare * 5) * branchMultiplier) },
-      ];
-    } else {
-      // CUSTOM DATE / RANGE
-      const isSingleDay = customStartDate === customEndDate;
-      if (isSingleDay) {
+    if (!hasData) {
+      if (timeRange === 'today') {
         return [
-          { name: '08:00', gmv: Math.round(310000 * branchMultiplier), expenses: Math.round(140000 * branchMultiplier), profit: Math.round(170000 * branchMultiplier) },
-          { name: '10:00', gmv: Math.round(640000 * branchMultiplier), expenses: Math.round(280000 * branchMultiplier), profit: Math.round(360000 * branchMultiplier) },
-          { name: '12:00', gmv: Math.round(1350000 * branchMultiplier), expenses: Math.round(590000 * branchMultiplier), profit: Math.round(760000 * branchMultiplier) },
-          { name: '14:00', gmv: Math.round(820000 * branchMultiplier), expenses: Math.round(360000 * branchMultiplier), profit: Math.round(460000 * branchMultiplier) },
-          { name: '16:00', gmv: Math.round(710000 * branchMultiplier), expenses: Math.round(310000 * branchMultiplier), profit: Math.round(400000 * branchMultiplier) },
-          { name: '18:00', gmv: Math.round(1890000 * branchMultiplier), expenses: Math.round(820000 * branchMultiplier), profit: Math.round(1070000 * branchMultiplier) },
-          { name: '20:00', gmv: Math.round(2100000 * branchMultiplier), expenses: Math.round(910000 * branchMultiplier), profit: Math.round(1190000 * branchMultiplier) },
-          { name: '22:00', gmv: Math.round(1050000 * branchMultiplier), expenses: Math.round(460000 * branchMultiplier), profit: Math.round(590000 * branchMultiplier) },
+          { name: '08:00', gmv: 0, expenses: 0, profit: 0 },
+          { name: '10:00', gmv: 0, expenses: 0, profit: 0 },
+          { name: '12:00', gmv: 0, expenses: 0, profit: 0 },
+          { name: '14:00', gmv: 0, expenses: 0, profit: 0 },
+          { name: '16:00', gmv: 0, expenses: 0, profit: 0 },
+          { name: '18:00', gmv: 0, expenses: 0, profit: 0 },
+          { name: '20:00', gmv: 0, expenses: 0, profit: 0 },
+          { name: '22:00', gmv: 0, expenses: 0, profit: 0 },
+        ];
+      } else if (timeRange === 'week') {
+        return [
+          { name: 'Thứ 2', gmv: 0, expenses: 0, profit: 0 },
+          { name: 'Thứ 3', gmv: 0, expenses: 0, profit: 0 },
+          { name: 'Thứ 4', gmv: 0, expenses: 0, profit: 0 },
+          { name: 'Thứ 5', gmv: 0, expenses: 0, profit: 0 },
+          { name: 'Thứ 6', gmv: 0, expenses: 0, profit: 0 },
+          { name: 'Thứ 7', gmv: 0, expenses: 0, profit: 0 },
+          { name: 'Chủ Nhật', gmv: 0, expenses: 0, profit: 0 },
         ];
       } else {
-        const d1 = new Date(customStartDate);
-        const d2 = new Date(customEndDate);
-        const ticks = [];
-        const curr = new Date(d1);
-        let idx = 1;
-        while (curr <= d2 && idx <= 7) {
-          const dateStr = `${curr.getDate()}/${curr.getMonth() + 1}`;
-          ticks.push({
-            name: dateStr,
-            gmv: Math.round((2900000 + idx * 450000) * branchMultiplier),
-            expenses: Math.round((1250000 + idx * 190000) * branchMultiplier),
-            profit: Math.round((1650000 + idx * 260000) * branchMultiplier)
-          });
-          curr.setDate(curr.getDate() + 1);
-          idx++;
-        }
-        return ticks.length > 0 ? ticks : [
-          { name: customStartDate, gmv: Math.round(3200000 * branchMultiplier), expenses: Math.round(1400000 * branchMultiplier), profit: Math.round(1800000 * branchMultiplier) },
-          { name: customEndDate, gmv: Math.round(4500000 * branchMultiplier), expenses: Math.round(1900000 * branchMultiplier), profit: Math.round(2600000 * branchMultiplier) }
+        return [
+          { name: 'Tuần 1', gmv: 0, expenses: 0, profit: 0 },
+          { name: 'Tuần 2', gmv: 0, expenses: 0, profit: 0 },
+          { name: 'Tuần 3', gmv: 0, expenses: 0, profit: 0 },
+          { name: 'Tuần 4', gmv: 0, expenses: 0, profit: 0 },
         ];
       }
     }
-  }, [timeRange, selectedBranch, pettyExpenses, customStartDate, customEndDate]);
+
+    const branchMultiplier = selectedBranch === 'all' ? 1 : selectedBranch === 'caugiai' ? 0.45 : 0.3;
+    const extraExpShare = Math.round((pettyExpenses > 0 ? pettyExpenses : 0) / 8);
+
+    if (timeRange === 'today') {
+      return [
+        { name: '08:00', gmv: 0, expenses: 0, profit: 0 },
+        { name: '10:00', gmv: 0, expenses: 0, profit: 0 },
+        { name: '12:00', gmv: 0, expenses: 0, profit: 0 },
+        { name: '14:00', gmv: 0, expenses: 0, profit: 0 },
+        { name: '16:00', gmv: 0, expenses: 0, profit: 0 },
+        { name: '18:00', gmv: 0, expenses: 0, profit: 0 },
+        { name: '20:00', gmv: 0, expenses: 0, profit: 0 },
+        { name: '22:00', gmv: 0, expenses: 0, profit: 0 },
+      ];
+    } else {
+      return [
+        { name: 'Tuần 1', gmv: 0, expenses: 0, profit: 0 },
+        { name: 'Tuần 2', gmv: 0, expenses: 0, profit: 0 },
+        { name: 'Tuần 3', gmv: 0, expenses: 0, profit: 0 },
+        { name: 'Tuần 4', gmv: 0, expenses: 0, profit: 0 },
+      ];
+    }
+  }, [data, timeRange, selectedBranch, pettyExpenses]);
 
   // Donut Chart Financial Ratio Data
   const donutData = useMemo(() => [
@@ -519,10 +502,15 @@ export default function DashboardPage() {
             </div>
 
             {/* Recharts Bar Container with Hydration Safety */}
-            <div className="h-72 w-full">
+            <div className="h-72 w-full relative">
               {!isMounted ? (
                 <div className="h-full w-full bg-slate-50 animate-pulse rounded-xl flex items-center justify-center text-xs text-slate-400">
                   Đang tải biểu đồ cột tài chính...
+                </div>
+              ) : metrics.gmv === 0 ? (
+                <div className="h-full w-full bg-slate-50/70 border border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center text-xs font-bold text-slate-500 gap-2 p-6">
+                  <BarChart3 className="w-8 h-8 text-slate-300" />
+                  <span>Chưa có dữ liệu giao dịch trong ngày</span>
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height="100%">

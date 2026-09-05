@@ -6,78 +6,7 @@ declare global {
   var __CLOUD_PRODUCTS__: any[];
 }
 
-const INITIAL_MOCK_PRODUCTS = [
-  {
-    id: 'p1',
-    name: 'Gà Ủ Muối Nguyên Con',
-    category: 'Món Gà Ủ Muối',
-    unit: 'Con',
-    price: 190000,
-    cost_price: 110000,
-    is_available: true,
-    is_best_seller: true,
-    batch_code: 'LÔ-GUM-0409',
-    production_date: '2026-09-04',
-    shelf_life_days: 14,
-    expiry_date: '2026-09-18'
-  },
-  {
-    id: 'p2',
-    name: 'Gà Ủ Muối Nửa Con',
-    category: 'Món Gà Ủ Muối',
-    unit: 'Nửa con',
-    price: 100000,
-    cost_price: 58000,
-    is_available: true,
-    is_best_seller: true,
-    batch_code: 'LÔ-GUM-0409',
-    production_date: '2026-09-04',
-    shelf_life_days: 14,
-    expiry_date: '2026-09-18'
-  },
-  {
-    id: 'p3',
-    name: 'Chân Gà Rút Xương Sả Tắc',
-    category: 'Món Ăn Kèm',
-    unit: 'Hũ 500g',
-    price: 65000,
-    cost_price: 32000,
-    is_available: true,
-    is_best_seller: true,
-    batch_code: 'LÔ-CG-0409',
-    production_date: '2026-09-04',
-    shelf_life_days: 7,
-    expiry_date: '2026-09-11'
-  },
-  {
-    id: 'p4',
-    name: 'Cánh Gà Ủ Muối (Phần 4 Cánh)',
-    category: 'Món Gà Ủ Muối',
-    unit: 'Phần',
-    price: 85000,
-    cost_price: 45000,
-    is_available: true,
-    is_best_seller: false,
-    batch_code: 'LÔ-CGUM-0409',
-    production_date: '2026-09-04',
-    shelf_life_days: 10,
-    expiry_date: '2026-09-14'
-  },
-  {
-    id: 'p5',
-    name: 'Trà Tắc Khổng Lồ',
-    category: 'Nước Uống',
-    unit: 'Ly 1 Lit',
-    price: 20000,
-    cost_price: 6000,
-    is_available: true,
-    is_best_seller: true,
-    batch_code: 'LÔ-TT-0409',
-    production_date: '2026-09-04',
-    shelf_life_days: 2,
-    expiry_date: '2026-09-06'
-  }
-];
+const INITIAL_MOCK_PRODUCTS: any[] = [];
 
 if (!globalThis.__CLOUD_ORDERS__) {
   globalThis.__CLOUD_ORDERS__ = [];
@@ -182,10 +111,10 @@ export const addCloudNotif = (notif: any): any[] => {
 };
 
 export const getCloudProducts = (): any[] => {
-  return globalThis.__CLOUD_PRODUCTS__ || INITIAL_MOCK_PRODUCTS;
+  return globalThis.__CLOUD_PRODUCTS__ || [];
 };
 
 export const setCloudProducts = (products: any[]): any[] => {
-  globalThis.__CLOUD_PRODUCTS__ = Array.isArray(products) ? products : INITIAL_MOCK_PRODUCTS;
+  globalThis.__CLOUD_PRODUCTS__ = Array.isArray(products) ? products : [];
   return globalThis.__CLOUD_PRODUCTS__;
 };

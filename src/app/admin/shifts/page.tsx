@@ -35,59 +35,7 @@ export interface ClosedShiftAudit {
   note: string;              // Ghi chú
 }
 
-const MOCK_CLOSED_SHIFTS: ClosedShiftAudit[] = [
-  {
-    id: 'shift-aud-101',
-    shiftName: 'Ca 1 (Ca Sáng)',
-    staff: 'Đức',
-    branch: 'CƠ SỞ VIN SMART CITY',
-    openingCash: 431000,
-    closingCash: 211000,
-    cashSales: 0,
-    transferSales: 270000,
-    unpaidSales: 95000,
-    cashExpenses: 267000,
-    transferExpenses: 0,
-    openedAt: '04/09/2026 07:00',
-    closedAt: '04/09/2026 15:30',
-    variance: 0,
-    note: '44 gà 7 chân, bàn giao két đủ'
-  },
-  {
-    id: 'shift-aud-100',
-    shiftName: 'Ca 2 (Ca Tối)',
-    staff: 'Nam',
-    branch: 'Chi Nhánh Gà Ủ Muối Cầu Giấy',
-    openingCash: 500000,
-    closingCash: 1850000,
-    cashSales: 1500000,
-    transferSales: 2200000,
-    unpaidSales: 0,
-    cashExpenses: 150000,
-    transferExpenses: 0,
-    openedAt: '03/09/2026 15:00',
-    closedAt: '03/09/2026 23:00',
-    variance: 0,
-    note: 'Gà 51 Chân 10 Nem 19'
-  },
-  {
-    id: 'shift-aud-99',
-    shiftName: 'Ca 1 (Ca Sáng)',
-    staff: 'Admin',
-    branch: 'Chi Nhánh Gà Ủ Muối Đống Đa',
-    openingCash: 500000,
-    closingCash: 3200000,
-    cashSales: 2800000,
-    transferSales: 4100000,
-    unpaidSales: 120000,
-    cashExpenses: 100000,
-    transferExpenses: 50000,
-    openedAt: '02/09/2026 07:00',
-    closedAt: '02/09/2026 15:00',
-    variance: 0,
-    note: 'Kiểm két khớp 100%'
-  }
-];
+const MOCK_CLOSED_SHIFTS: ClosedShiftAudit[] = [];
 
 export default function ShiftsAuditHistoryPage() {
   const [filterDate, setFilterDate] = useState<string>('2026-09-04');
@@ -98,7 +46,6 @@ export default function ShiftsAuditHistoryPage() {
   const filteredShifts = useMemo(() => {
     return shiftsList.filter(shift => {
       const matchBranch = filterBranch === 'ALL' || shift.branch === filterBranch;
-      // If date is selected, check if opening time starts with date in DD/MM/YYYY format or YYYY-MM-DD
       const dateParts = filterDate.split('-');
       const formattedDateFilter = dateParts.length === 3 ? `${partsFormat(dateParts[2])}/${partsFormat(dateParts[1])}/${dateParts[0]}` : '';
       const matchDate = !filterDate || shift.openedAt.includes(formattedDateFilter) || shift.openedAt.includes(filterDate);
@@ -120,12 +67,12 @@ export default function ShiftsAuditHistoryPage() {
     const totalTransferExpenses = filteredShifts.reduce((sum, s) => sum + s.transferExpenses, 0);
 
     return {
-      totalRevenue: totalRevenue > 0 ? totalRevenue : 270000,
-      totalCashSales: totalCashSales,
-      totalTransferSales: totalTransferSales > 0 ? totalTransferSales : 270000,
-      totalUnpaid: totalUnpaid > 0 ? totalUnpaid : 95000,
-      totalCashExpenses: totalCashExpenses > 0 ? totalCashExpenses : 267000,
-      totalTransferExpenses: totalTransferExpenses
+      totalRevenue,
+      totalCashSales,
+      totalTransferSales,
+      totalUnpaid,
+      totalCashExpenses,
+      totalTransferExpenses
     };
   }, [filteredShifts]);
 
@@ -295,8 +242,8 @@ export default function ShiftsAuditHistoryPage() {
             <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
               {filteredShifts.length === 0 ? (
                 <tr>
-                  <td colSpan={13} className="p-8 text-center text-slate-400">
-                    Không có ca đã đóng phù hợp với bộ lọc
+                  <td colSpan={13} className="p-8 text-center text-slate-400 font-bold">
+                    Chưa có ca làm việc nào được chốt
                   </td>
                 </tr>
               ) : (

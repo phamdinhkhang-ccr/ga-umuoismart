@@ -26,57 +26,7 @@ export interface ExportRecord {
   photo_url?: string;
 }
 
-const DEFAULT_EXPORTS: ExportRecord[] = [
-  {
-    id: 'exp-201',
-    code: '#EXP-201',
-    item_name: 'Gà Ủ Muối Nguyên Con (Thành Phẩm đóng túi)',
-    quantity: 30,
-    unit: 'Con',
-    cost_price: 110000,
-    export_type: 'TRANSFER',
-    reason: 'Điều Chuyển Chi Nhánh Nội Bộ - Cơ sở Q3 thiếu gà gấp',
-    from_branch: 'Chi Nhánh Quận 1 (TP.HCM)',
-    to_branch: 'Chi Nhánh Cầu Giấy',
-    status: 'IN_TRANSIT',
-    loss_value: 0,
-    handler: 'Lê Văn Cơ Sở 1',
-    created_at: '2026-09-04 10:15'
-  },
-  {
-    id: 'exp-200',
-    code: '#EXP-200',
-    item_name: 'Bao Bì Giấy Hút Chân Không Special',
-    quantity: 100,
-    unit: 'Túi',
-    cost_price: 3500,
-    export_type: 'TRANSFER',
-    reason: 'Điều chuyển bao bì gấp cho điểm bán mới',
-    from_branch: 'Chi Nhánh Quận 1 (TP.HCM)',
-    to_branch: 'CƠ SỞ VIN SMART CITY',
-    status: 'COMPLETED',
-    loss_value: 0,
-    handler: 'Trần Thị Thu Ngân',
-    created_at: '2026-09-03 14:00'
-  },
-  {
-    id: 'exp-199',
-    code: '#EXP-199',
-    item_name: 'Chân Gà Rút Xương Sốt Thái',
-    quantity: 5,
-    unit: 'Hộp',
-    cost_price: 32000,
-    export_type: 'DAMAGE',
-    reason: 'Hủy Hàng Rách Bao Bì Hỏng Cấp Đông',
-    from_branch: 'Chi Nhánh Cầu Giấy',
-    to_branch: '--- (Hủy Hàng)',
-    status: 'COMPLETED',
-    loss_value: 160000,
-    handler: 'Phạm Thị Cơ Sở 2',
-    created_at: '2026-09-02 17:30',
-    photo_url: 'https://images.unsplash.com/photo-1541832676-9b763b0239ab?w=400'
-  }
-];
+const DEFAULT_EXPORTS: ExportRecord[] = [];
 
 export default function InventoryExportPage() {
   const [exports, setExports] = useState<ExportRecord[]>(DEFAULT_EXPORTS);
@@ -407,8 +357,8 @@ export default function InventoryExportPage() {
             <tbody className="divide-y divide-slate-100">
               {filteredExports.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-8 text-center text-slate-500 text-xs">
-                    Không tìm thấy phiếu xuất kho nào phù hợp.
+                  <td colSpan={9} className="px-4 py-8 text-center text-slate-500 text-xs font-semibold">
+                    Chưa có phiếu xuất kho / điều chuyển nào. Vui lòng tạo mới để bắt đầu
                   </td>
                 </tr>
               ) : (

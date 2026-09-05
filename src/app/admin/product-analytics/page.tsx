@@ -30,144 +30,7 @@ export interface ProductAnalyticItem {
   matrix_label: string;
 }
 
-const MOCK_ANALYTICS_DATA: ProductAnalyticItem[] = [
-  {
-    id: 'p1',
-    rank: 1,
-    name: 'Gà Ủ Muối Nguyên Con (Kèm Nước Chấm)',
-    category: 'Gà ủ muối',
-    branch: 'CƠ SỞ VIN SMART CITY',
-    unit_price: 190000,
-    cost_price: 110000,
-    sold_qty: 148,
-    total_gmv: 28120000,
-    total_profit: 11840000,
-    margin_percent: 42.1,
-    stock_qty: 42,
-    forecast_prep: 'Cần chuẩn bị ~45 con',
-    matrix_type: 'STAR',
-    matrix_label: '🌟 Ngôi Sao'
-  },
-  {
-    id: 'p2',
-    rank: 2,
-    name: 'Chân Gà Rút Xương Sốt Thái',
-    category: 'Món ăn kèm',
-    branch: 'Chi Nhánh Cầu Giấy',
-    unit_price: 65000,
-    cost_price: 32000,
-    sold_qty: 210,
-    total_gmv: 13650000,
-    total_profit: 6930000,
-    margin_percent: 50.7,
-    stock_qty: 65,
-    forecast_prep: 'Cần chuẩn bị ~60 hộp',
-    matrix_type: 'CASH_COW',
-    matrix_label: '🐄 Chủ Lực'
-  },
-  {
-    id: 'p3',
-    rank: 3,
-    name: 'Gà Ủ Muối Nửa Con (Kèm Nước Chấm)',
-    category: 'Gà ủ muối',
-    branch: 'CƠ SỞ VIN SMART CITY',
-    unit_price: 100000,
-    cost_price: 58000,
-    sold_qty: 95,
-    total_gmv: 9500000,
-    total_profit: 3990000,
-    margin_percent: 42.0,
-    stock_qty: 8, // Thấp!
-    forecast_prep: 'Cần chuẩn bị ~25 khay',
-    matrix_type: 'STAR',
-    matrix_label: '🌟 Ngôi Sao'
-  },
-  {
-    id: 'p4',
-    rank: 4,
-    name: 'Trà Tắc Khổng Lồ',
-    category: 'Đồ uống',
-    branch: 'Chi Nhánh Cầu Giấy',
-    unit_price: 20000,
-    cost_price: 6000,
-    sold_qty: 340,
-    total_gmv: 6800000,
-    total_profit: 4760000,
-    margin_percent: 70.0,
-    stock_qty: 180,
-    forecast_prep: 'Cần chuẩn bị ~90 ly',
-    matrix_type: 'CASH_COW',
-    matrix_label: '🐄 Chủ Lực'
-  },
-  {
-    id: 'p5',
-    rank: 5,
-    name: 'Cánh Gà Ủ Muối (Phần 4 Cánh)',
-    category: 'Gà ủ muối',
-    branch: 'Chi Nhánh Thanh Trì',
-    unit_price: 85000,
-    cost_price: 45000,
-    sold_qty: 62,
-    total_gmv: 5270000,
-    total_profit: 2480000,
-    margin_percent: 47.0,
-    stock_qty: 5, // Thấp!
-    forecast_prep: 'Cần chuẩn bị ~20 phần',
-    matrix_type: 'PUZZLE',
-    matrix_label: '❓ Cơ Hội'
-  },
-  {
-    id: 'p6',
-    rank: 6,
-    name: 'Nước Chấm Thần Thánh Extra (Chai 250ml)',
-    category: 'Món ăn kèm',
-    branch: 'CƠ SỞ VIN SMART CITY',
-    unit_price: 25000,
-    cost_price: 7500,
-    sold_qty: 168,
-    total_gmv: 4200000,
-    total_profit: 2940000,
-    margin_percent: 70.0,
-    stock_qty: 90,
-    forecast_prep: 'Cần chuẩn bị ~40 chai',
-    matrix_type: 'STAR',
-    matrix_label: '🌟 Ngôi Sao'
-  },
-  {
-    id: 'p7',
-    rank: 7,
-    name: 'Trà Đào Cam Sả',
-    category: 'Đồ uống',
-    branch: 'Chi Nhánh Quận 1 (TP.HCM)',
-    unit_price: 30000,
-    cost_price: 9600,
-    sold_qty: 125,
-    total_gmv: 3750000,
-    total_profit: 2550000,
-    margin_percent: 68.0,
-    stock_qty: 110,
-    forecast_prep: 'Cần chuẩn bị ~35 ly',
-    matrix_type: 'PUZZLE',
-    matrix_label: '❓ Cơ Hội'
-  },
-  {
-    id: 'p8',
-    rank: 8,
-    name: 'Nộm Gà Xé Phay Chua Ngọt',
-    category: 'Món ăn kèm',
-    branch: 'Chi Nhánh Thanh Trì',
-    unit_price: 60000,
-    cost_price: 36000,
-    sold_qty: 36,
-    total_gmv: 2160000,
-    total_profit: 8640000,
-    margin_percent: 40.0,
-    stock_qty: 6, // Thấp!
-    forecast_prep: 'Cần chuẩn bị ~15 đĩa',
-    matrix_type: 'DOG',
-    matrix_label: '⚠️ Cảnh Báo'
-  }
-];
+const MOCK_ANALYTICS_DATA: ProductAnalyticItem[] = [];
 
 const DONUT_COLORS = ['#10B981', '#0284C7', '#F59E0B', '#6366F1'];
 
@@ -573,7 +436,14 @@ export default function ProductAnalyticsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredProducts.map((p) => {
+              {filteredProducts.length === 0 ? (
+                <tr>
+                  <td colSpan={11} className="px-4 py-8 text-center text-slate-500 text-xs font-semibold">
+                    Chưa có dữ liệu bán hàng để phân tích
+                  </td>
+                </tr>
+              ) : (
+                filteredProducts.map((p) => {
                 const isLowStock = p.stock_qty < 10;
 
                 return (
@@ -633,7 +503,8 @@ export default function ProductAnalyticsPage() {
                     </td>
                   </tr>
                 );
-              })}
+              })
+              )}
             </tbody>
           </table>
         </div>

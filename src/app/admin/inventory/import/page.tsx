@@ -32,77 +32,7 @@ export interface ImportRecord {
   }[];
 }
 
-const DEFAULT_IMPORTS: ImportRecord[] = [
-  {
-    id: 'imp-104',
-    code: '#IMP-104',
-    item_name: 'Gà Sống Làm Sạch Cấp Đóng Thùng',
-    quantity: 150,
-    unit: 'Con',
-    import_price: 68000,
-    total_cost: 10200000,
-    supplier: 'Trang Trại Gà Sạch Đông Anh',
-    branch: 'CƠ SỞ VIN SMART CITY',
-    payment_status: 'PAID',
-    inspection_note: 'Gà kiểm đạt cân nặng 1.3 - 1.4kg/con, tem mác kiểm dịch thú y đầy đủ.',
-    created_at: '2026-09-04 08:30',
-    items: [
-      { item_name: 'Gà Sống Làm Sạch Cấp Đóng Thùng', quantity: 150, unit: 'Con', import_price: 68000, subtotal: 10200000 }
-    ]
-  },
-  {
-    id: 'imp-103',
-    code: '#IMP-103',
-    item_name: 'Chân Gà Rút Xương Đông Lạnh Premium',
-    quantity: 60,
-    unit: 'Hộp',
-    import_price: 32000,
-    total_cost: 1920000,
-    supplier: 'Công Ty Thực Phẩm Sạch Hà Nội',
-    branch: 'Chi Nhánh Cầu Giấy',
-    payment_status: 'DEBT',
-    due_date: '2026-09-10',
-    inspection_note: 'Chân gà tươi ngon, không dập nát. Hẹn thanh toán vào ngày 10/09.',
-    created_at: '2026-09-03 16:45',
-    items: [
-      { item_name: 'Chân Gà Rút Xương Đông Lạnh Premium', quantity: 60, unit: 'Hộp', import_price: 32000, subtotal: 1920000 }
-    ]
-  },
-  {
-    id: 'imp-102',
-    code: '#IMP-102',
-    item_name: 'Bao Bì Giấy Hút Chân Không Special',
-    quantity: 500,
-    unit: 'Túi',
-    import_price: 3500,
-    total_cost: 1750000,
-    supplier: 'Xưởng In Bao Bì Việt Nam',
-    branch: 'CƠ SỞ VIN SMART CITY',
-    payment_status: 'PAID',
-    inspection_note: 'Bao bì in logo sắc nét, chất liệu PE cao cấp chịu nhiệt.',
-    created_at: '2026-09-03 11:15',
-    items: [
-      { item_name: 'Bao Bì Giấy Hút Chân Không Special', quantity: 500, unit: 'Túi', import_price: 3500, subtotal: 1750000 }
-    ]
-  },
-  {
-    id: 'imp-101',
-    code: '#IMP-101',
-    item_name: 'Nước Chấm Thần Thánh Extra (Chai 500ml)',
-    quantity: 100,
-    unit: 'Chai',
-    import_price: 4000,
-    total_cost: 400000,
-    supplier: 'Kho Tổng Gia Vị Bếp Smart',
-    branch: 'Chi Nhánh Quận 1 (TP.HCM)',
-    payment_status: 'PAID',
-    inspection_note: 'Sốt chấm đóng chai thủy tinh niêm phong nắp.',
-    created_at: '2026-09-02 09:00',
-    items: [
-      { item_name: 'Nước Chấm Thần Thánh Extra (Chai 500ml)', quantity: 100, unit: 'Chai', import_price: 4000, subtotal: 400000 }
-    ]
-  }
-];
+const DEFAULT_IMPORTS: ImportRecord[] = [];
 
 export default function InventoryImportPage() {
   const [imports, setImports] = useState<ImportRecord[]>(DEFAULT_IMPORTS);
@@ -515,7 +445,14 @@ export default function InventoryImportPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredImports.map((imp) => (
+              {filteredImports.length === 0 ? (
+                <tr>
+                  <td colSpan={10} className="px-4 py-8 text-center text-slate-500 text-xs font-semibold">
+                    Chưa có phiếu nhập kho nào. Vui lòng tạo mới để bắt đầu
+                  </td>
+                </tr>
+              ) : (
+                filteredImports.map((imp) => (
                 <tr key={imp.id} className="hover:bg-slate-50 transition">
                   {/* Receipt Code */}
                   <td className="px-4 py-3.5">
@@ -609,7 +546,8 @@ export default function InventoryImportPage() {
                     </div>
                   </td>
                 </tr>
-              ))}
+              ))
+              )}
             </tbody>
           </table>
         </div>
