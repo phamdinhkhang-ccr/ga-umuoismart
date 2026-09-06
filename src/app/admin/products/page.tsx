@@ -9,7 +9,8 @@ import {
 } from 'lucide-react';
 import { 
   getProducts, saveProduct, toggleProductAvailability, 
-  deleteProduct, ProductRecord, getBranches, getExpiryDetails 
+  deleteProduct, ProductRecord, getBranches, getExpiryDetails,
+  safeFormatPrice, sanitizeProduct
 } from '@/lib/store';
 import { Branch } from '@/types/database';
 import { supabase } from '@/lib/supabaseClient';
@@ -655,8 +656,9 @@ export default function ProductsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredProducts.map((p) => {
-                const profit = p.price - p.cost_price;
+              {filteredProducts.map((rawP) => {
+                const p = sanitizeProduct(rawP);
+                const profit = p.price - (p.cost_price || 0);
                 const margin = p.price > 0 ? ((profit / p.price) * 100).toFixed(1) : '0';
                 const expInfo = getExpiryDetails(p.expiry_date);
 

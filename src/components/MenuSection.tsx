@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
+import { safeFormatPrice, sanitizeProduct } from '@/lib/store';
 
 export interface ProductItem {
   id: string;
@@ -11,6 +12,7 @@ export interface ProductItem {
   category?: string;
   description?: string;
   is_best_seller?: boolean;
+  is_active?: boolean;
 }
 
 interface MenuSectionProps {
@@ -59,9 +61,10 @@ export default function MenuSection({ onSelectProduct }: MenuSectionProps) {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {products.map((item) => {
-            const priceFormatted = Number(item.price || 0).toLocaleString('vi-VN') + 'đ';
-            return (
+          {(products || [])
+            .filter((p) => p && p.is_active !== false)
+            .map(sanitizeProduct)
+            .map((item) => (
               <div
                 key={item.id}
                 className="bg-white border border-slate-200 rounded-3xl p-5 shadow-xs hover:shadow-xl hover:border-orange-300 transition-all duration-300 flex flex-col justify-between group space-y-4"
@@ -69,32 +72,26 @@ export default function MenuSection({ onSelectProduct }: MenuSectionProps) {
                 <div className="space-y-3">
                   <div className="flex justify-between items-start gap-3">
                     <div className="w-full h-44 bg-amber-50 rounded-2xl overflow-hidden flex items-center justify-center relative border border-slate-200 shadow-2xs">
-                      {item.image_url ? (
-                        <img
-                          src={item.image_url}
-                          alt={item.name}
-                          className="w-full h-full object-cover rounded-2xl transition-transform duration-300 group-hover:scale-105"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).style.display = 'none';
-                            const fallbackEl = (e.target as HTMLImageElement).nextElementSibling as HTMLElement;
-                            if (fallbackEl) fallbackEl.classList.remove('hidden');
-                          }}
-                        />
-                      ) : null}
-                      <div className={`w-full h-full flex items-center justify-center text-4xl ${item.image_url ? 'hidden' : ''}`}>
-                        <div className="w-20 h-20 bg-amber-100/90 rounded-2xl flex items-center justify-center">
-                          <span className="text-4xl">🍗</span>
-                        </div>
-                      </div>
+                      <img
+                        src={item.image_url}
+                        alt={item.name}
+                        className="w-full h-full object-cover rounded-2xl transition-transform duration-300 group-hover:scale-105"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?q=80&w=800&auto=format&fit=crop';
+                        }}
+                      />
                     </div>
                   </div>
 
                   <div>
-                    <h3 className="font-extrabold text-slate-900 text-base group-hover:text-orange-600 transition">
+                    <span className="text-xs px-2 py-0.5 bg-orange-50 text-orange-600 rounded-md font-semibold">
+                      {item.category}
+                    </span>
+                    <h3 className="font-extrabold text-slate-900 text-base group-hover:text-orange-600 transition mt-1">
                       {item.name}
                     </h3>
                     {item.description && (
-                      <p className="text-xs text-slate-500 font-medium mt-1 leading-relaxed">
+                      <p className="text-xs text-slate-500 font-medium mt-1 leading-relaxed line-clamp-2">
                         {item.description}
                       </p>
                     )}
@@ -105,7 +102,7 @@ export default function MenuSection({ onSelectProduct }: MenuSectionProps) {
                   <div>
                     <span className="text-xs text-gray-400 block font-medium">Giá bán</span>
                     <span className="text-xl font-bold text-orange-600">
-                      {priceFormatted}
+                      {safeFormatPrice(item.price)}
                     </span>
                   </div>
 
@@ -118,8 +115,7 @@ export default function MenuSection({ onSelectProduct }: MenuSectionProps) {
                   </button>
                 </div>
               </div>
-            );
-          })}
+            ))}
         </div>
       )}
     </section>

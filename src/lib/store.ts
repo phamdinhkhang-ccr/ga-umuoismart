@@ -10,6 +10,35 @@ export const formatPrice = (price: any) => {
   return new Intl.NumberFormat('vi-VN').format(cleanNumber) + 'đ';
 };
 
+export const safeFormatPrice = (price: any): string => {
+  if (price === null || price === undefined || price === '') return '0đ';
+  const numeric = typeof price === 'number' ? price : Number(String(price).replace(/[^0-9]/g, ''));
+  if (isNaN(numeric)) return '0đ';
+  return numeric.toLocaleString('vi-VN') + 'đ';
+};
+
+export const sanitizeProduct = (p: any): ProductRecord => ({
+  id: String(p?.id || Math.random().toString()),
+  name: String(p?.name || 'Sản phẩm chưa đặt tên'),
+  price: Number(p?.price) || 0,
+  cost_price: Number(p?.cost_price || p?.original_price) || 0,
+  original_price: p?.original_price ? Number(p.original_price) : undefined,
+  category: (p?.category || 'Món Ăn Kèm') as any,
+  unit: String(p?.unit || 'Phần'),
+  image_url: p?.image_url && typeof p.image_url === 'string' && p.image_url.trim() !== ''
+    ? p.image_url
+    : 'https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?q=80&w=800&auto=format&fit=crop',
+  description: String(p?.description || ''),
+  is_available: p?.is_available !== false && p?.is_active !== false,
+  is_best_seller: Boolean(p?.is_best_seller || p?.isBestSeller),
+  expiry_date: String(p?.expiry_date || ''),
+  batch_code: String(p?.batch_code || ''),
+  production_date: String(p?.production_date || ''),
+  shelf_life_days: Number(p?.shelf_life_days || 7),
+  ai_keywords: Array.isArray(p?.ai_keywords) ? p.ai_keywords : [],
+  unavailable_branches: Array.isArray(p?.unavailable_branches) ? p.unavailable_branches : []
+});
+
 export interface InventoryAuditItem {
   id: string;
   name: string;

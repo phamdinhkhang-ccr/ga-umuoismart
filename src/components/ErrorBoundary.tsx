@@ -16,13 +16,20 @@ export class GlobalErrorBoundary extends React.Component<
     return { hasError: true };
   }
 
+  handleReset = () => {
+    this.setState({ hasError: false });
+    if (typeof window !== 'undefined') {
+      window.location.reload();
+    }
+  };
+
   componentDidCatch(error: any, errorInfo: any) {
     console.error('Captured by GlobalErrorBoundary:', error, errorInfo);
-    // Auto recovery attempt after 1.5 seconds if transient error
+    // Auto recovery attempt after 2 seconds if transient error
     if (this.timer) clearTimeout(this.timer);
     this.timer = setTimeout(() => {
       this.setState({ hasError: false });
-    }, 1500);
+    }, 2000);
   }
 
   componentWillUnmount() {
@@ -45,11 +52,7 @@ export class GlobalErrorBoundary extends React.Component<
                 Thử Lại Ngay
               </button>
               <button
-                onClick={() => {
-                  if (typeof window !== 'undefined') {
-                    window.location.reload();
-                  }
-                }}
+                onClick={this.handleReset}
                 className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition cursor-pointer"
               >
                 Tải Lại Trang

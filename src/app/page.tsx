@@ -15,7 +15,8 @@ import {
 import { getAnalyticsData, addNewMockOrder } from '@/actions/orders';
 import { 
   getProducts, getCmsSettings, StorefrontCmsSettings, ProductRecord, 
-  addNotification, addOrUpdateCustomerFromOrder, getItem, setItem, savePosOrder, playBeep, formatPrice 
+  addNotification, addOrUpdateCustomerFromOrder, getItem, setItem, savePosOrder, playBeep, formatPrice,
+  safeFormatPrice, sanitizeProduct
 } from '@/lib/store';
 import { Order } from '@/types/database';
 import { supabase } from '@/lib/supabaseClient';
@@ -972,54 +973,43 @@ export default function PublicStorefrontHome() {
         {/* Product Grid Dynamic Sync */}
         {displayProducts.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {displayProducts.map((p: any) => {
-              const productImg = p.image || p.imageUrl || p.image_url || p.avatar;
-              const currentPrice = Number(p.price || p.salePrice || 0);
-              return (
+            {displayProducts
+              .filter((p: any) => p && p.is_active !== false)
+              .map(sanitizeProduct)
+              .map((item: any) => (
                 <div
-                  key={p.id || p.name}
+                  key={item.id}
                   className="bg-white border border-slate-200 rounded-3xl p-5 shadow-xs hover:shadow-xl hover:border-orange-300 transition-all duration-300 flex flex-col justify-between group space-y-4"
                 >
                   <div className="space-y-3">
                     <div className="flex justify-between items-start gap-3">
                       {/* Product Image Box with onError Fallback */}
                       <div className="w-full h-44 bg-amber-50 rounded-2xl overflow-hidden flex items-center justify-center relative border border-slate-200 shadow-2xs">
-                        {productImg ? (
-                          <img
-                            src={productImg}
-                            alt={p.name}
-                            className="w-full h-full object-cover rounded-2xl transition-transform duration-300 group-hover:scale-105"
-                            onError={(e) => {
-                              e.currentTarget.style.display = 'none';
-                              e.currentTarget.nextElementSibling?.classList.remove('hidden');
-                            }}
-                          />
-                        ) : null}
-                        <div className={`w-full h-full flex items-center justify-center text-4xl ${productImg ? 'hidden' : ''}`}>
-                          <div className="w-20 h-20 bg-amber-100/90 rounded-2xl flex items-center justify-center">
-                            <span className="text-4xl">🍗</span>
-                          </div>
-                        </div>
+                        <img
+                          src={item.image_url}
+                          alt={item.name}
+                          className="w-full h-full object-cover rounded-2xl transition-transform duration-300 group-hover:scale-105"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?q=80&w=800&auto=format&fit=crop';
+                          }}
+                        />
                       </div>
                       <div className="flex flex-col items-end gap-1">
-                        {Boolean(p.is_best_seller || p.isBestSeller) && (
-                          <span className="bg-amber-100 text-amber-900 border border-amber-300 font-extrabold text-[10px] px-2.5 py-1 rounded-full flex items-center gap-1 shadow-2xs">
-                            🌟 Bán Chạy Nhất
-                          </span>
-                        )}
                         <span className="bg-orange-50 text-orange-700 border border-orange-200 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full">
-                          {p.category || 'Món Gà Ủ Muối'}
+                          {item.category}
                         </span>
                       </div>
                     </div>
 
                     <div>
                       <h3 className="font-extrabold text-slate-900 text-base group-hover:text-orange-600 transition">
-                        {p.name}
+                        {item.name}
                       </h3>
-                      <p className="text-xs text-slate-500 font-medium mt-1 leading-relaxed">
-                        {p.description || (p.ai_keywords ? p.ai_keywords.join(' • ') : '')}
-                      </p>
+                      {item.description && (
+                        <p className="text-xs text-slate-500 font-medium mt-1 leading-relaxed line-clamp-2">
+                          {item.description}
+                        </p>
+                      )}
                     </div>
                   </div>
 
@@ -1028,17 +1018,13 @@ export default function PublicStorefrontHome() {
                     <div>
                       <span className="text-xs text-gray-400 block font-medium">Giá bán</span>
                       <span className="text-xl font-bold text-orange-600">
-                        {(() => {
-                          const raw = String(p.price || 0).replace(/[^0-9]/g, '');
-                          const num = Number(raw) || 0;
-                          return num.toLocaleString('vi-VN') + 'đ';
-                        })()}
+                        {safeFormatPrice(item.price)}
                       </span>
                     </div>
 
                     <button
                       type="button"
-                      onClick={() => handleOpenOrderModal(p)}
+                      onClick={() => handleOpenOrderModal(item)}
                       className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-sm shadow-md transition-all whitespace-nowrap cursor-pointer"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1048,8 +1034,7 @@ export default function PublicStorefrontHome() {
                     </button>
                   </div>
                 </div>
-              );
-            })}
+              ))}
           </div>
         ) : (
           <div className="text-center py-12 bg-white border border-slate-200 rounded-3xl p-8 shadow-xs">
