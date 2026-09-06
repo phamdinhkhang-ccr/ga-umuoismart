@@ -1,5 +1,7 @@
-import { redirect } from 'next/navigation';
+'use client';
+
+import InventoryCheckPage from './check/page';
 
 export default function InventoryRootPage() {
-  redirect('/admin/inventory/import');
+  return <InventoryCheckPage />;
 }

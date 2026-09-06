@@ -4,14 +4,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import Topbar from '@/components/Topbar';
 import Sidebar from '@/components/Sidebar';
 import { useAuth } from '@/context/AuthContext';
-import { 
-  getBranches, 
-  calculateInventoryAudit, 
-  addInventoryLog, 
-  InventoryAuditItem, 
-  getItem 
-} from '@/lib/store';
-import { Order, Branch } from '@/types/database';
+import { supabase } from '@/lib/supabaseClient';
+import { getBranches, getProducts, calculateInventoryAudit, addInventoryLog, getItem } from '@/lib/store';
 import { 
   PackageCheck, 
   Search, 
@@ -23,75 +17,176 @@ import {
   Edit, 
   Save, 
   X,
-  Boxes,
-  TrendingDown
+  Boxes
 } from 'lucide-react';
+
+export interface InventoryItem {
+  id: string;
+  name: string;
+  sku?: string;
+  category?: string;
+  unit?: string;
+  stock_quantity: number;
+  min_alert_threshold?: number;
+  branch_id?: string;
+  total_sold?: number;
+}
+
+export interface BranchItem {
+  id: string;
+  name: string;
+}
 
 export default function InventoryCheckPage() {
   const { user } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [branches, setBranches] = useState<Branch[]>([]);
+  const [items, setItems] = useState<InventoryItem[]>([]);
+  const [branches, setBranches] = useState<BranchItem[]>([]);
   const [selectedBranchId, setSelectedBranchId] = useState<string>('all');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [auditList, setAuditList] = useState<InventoryAuditItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [searchTerm, setSearchTerm] = useState<string>('');
 
-  // Edit stock modal state
-  const [selectedItem, setSelectedItem] = useState<InventoryAuditItem | null>(null);
+  // Audit / Stock Edit Modal State
+  const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
   const [newStockVal, setNewStockVal] = useState<string>('');
   const [note, setNote] = useState<string>('');
   const [isUpdating, setIsUpdating] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
 
-  const loadData = () => {
+  const loadData = async () => {
     setLoading(true);
     try {
-      const allBranches = getBranches();
-      setBranches(allBranches);
+      // 1. Fetch active branches safely
+      let branchList: BranchItem[] = [];
+      try {
+        const { data: branchData } = await supabase
+          .from('branches')
+          .select('id, name')
+          .eq('is_active', true);
+        if (Array.isArray(branchData) && branchData.length > 0) {
+          branchList = branchData;
+        } else {
+          branchList = getBranches()
+            .filter(b => b.is_active !== false)
+            .map(b => ({ id: b.id, name: b.name }));
+        }
+      } catch (e) {
+        branchList = getBranches()
+          .filter(b => b.is_active !== false)
+          .map(b => ({ id: b.id, name: b.name }));
+      }
+      setBranches(branchList || []);
 
       // Default selected branch for staff / manager
       if (user?.branch_id && selectedBranchId === 'all') {
         setSelectedBranchId(user.branch_id);
       }
 
-      const allOrders = getItem<Order[]>('pos_orders_data', []);
-      // Filter orders by branch if selected
-      const filteredOrders = (selectedBranchId && selectedBranchId !== 'all')
-        ? allOrders.filter(o => o.branch_id === selectedBranchId)
-        : allOrders;
+      // 2. Fetch products / inventory list safely
+      let inventoryList: InventoryItem[] = [];
 
-      const auditData = calculateInventoryAudit(filteredOrders);
-      setAuditList(auditData);
-    } catch (e) {
-      console.error('Error loading inventory data:', e);
-    } fontComplete();
+      try {
+        const { data: prodData, error } = await supabase
+          .from('products')
+          .select('*');
+
+        if (!error && Array.isArray(prodData) && prodData.length > 0) {
+          inventoryList = prodData.map((p: any) => ({
+            id: p.id,
+            name: p.name || 'Chưa đặt tên',
+            sku: p.sku || `SP-${String(p.id).slice(0, 5)}`,
+            category: p.category || 'Món ăn',
+            unit: p.unit || 'Phần',
+            stock_quantity: Number(p.stock_quantity ?? p.stock ?? 0),
+            min_alert_threshold: Number(p.min_alert_threshold ?? 10),
+            branch_id: p.branch_id || ''
+          }));
+        } else {
+          // Fallback to calculateInventoryAudit or local products store
+          const allOrders = getItem<any[]>('pos_orders_data', []);
+          const auditData = calculateInventoryAudit(allOrders);
+
+          if (Array.isArray(auditData) && auditData.length > 0) {
+            inventoryList = auditData.map(a => ({
+              id: a.id,
+              name: a.name,
+              sku: `SP-${a.id}`,
+              category: 'Đặc sản Gà',
+              unit: a.unit,
+              stock_quantity: a.currentStock,
+              min_alert_threshold: a.minStock || 10,
+              total_sold: a.totalSold
+            }));
+          } else {
+            const products = getProducts();
+            if (Array.isArray(products)) {
+              inventoryList = products.map(p => ({
+                id: p.id,
+                name: p.name,
+                sku: `SP-${p.id}`,
+                category: p.category || 'Món ăn',
+                unit: 'Phần',
+                stock_quantity: Number((p as any).stock ?? 50),
+                min_alert_threshold: 10
+              }));
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('Fallback loading store audit data:', e);
+        const allOrders = getItem<any[]>('pos_orders_data', []);
+        const auditData = calculateInventoryAudit(allOrders);
+        if (Array.isArray(auditData)) {
+          inventoryList = auditData.map(a => ({
+            id: a.id,
+            name: a.name,
+            sku: `SP-${a.id}`,
+            category: 'Đặc sản Gà',
+            unit: a.unit,
+            stock_quantity: a.currentStock,
+            min_alert_threshold: a.minStock || 10,
+            total_sold: a.totalSold
+          }));
+        }
+      }
+
+      setItems(inventoryList || []);
+    } catch (err) {
+      console.error('Lỗi khi nạp dữ liệu kiểm kho:', err);
+      setItems([]);
+    } finally {
+      setLoading(false);
+    }
   };
-
-  function fontComplete() {
-    setLoading(false);
-  }
 
   useEffect(() => {
     loadData();
   }, [selectedBranchId]);
 
   const filteredItems = useMemo(() => {
-    if (!searchTerm.trim()) return auditList;
-    return auditList.filter(item => 
-      item.name.toLowerCase().includes(searchTerm.trim().toLowerCase())
-    );
-  }, [auditList, searchTerm]);
+    const safeItems = Array.isArray(items) ? items : [];
+    return safeItems.filter((item) => {
+      if (!item) return false;
+      const matchBranch = selectedBranchId === 'all' || !item.branch_id || item.branch_id === selectedBranchId;
+      const matchSearch = !searchTerm.trim() || (item.name || '').toLowerCase().includes(searchTerm.trim().toLowerCase());
+      return matchBranch && matchSearch;
+    });
+  }, [items, selectedBranchId, searchTerm]);
 
-  // Statistics
+  // Statistics memo
   const stats = useMemo(() => {
     let inStock = 0;
     let lowStock = 0;
     let outOfStock = 0;
 
-    auditList.forEach(item => {
-      if (item.currentStock <= 0) {
+    const safeItems = Array.isArray(items) ? items : [];
+    safeItems.forEach((item) => {
+      if (!item) return;
+      const qty = item.stock_quantity ?? 0;
+      const min = item.min_alert_threshold ?? 10;
+      if (qty <= 0) {
         outOfStock++;
-      } else if (item.currentStock <= item.minStock) {
+      } else if (qty <= min) {
         lowStock++;
       } else {
         inStock++;
@@ -99,21 +194,21 @@ export default function InventoryCheckPage() {
     });
 
     return {
-      total: auditList.length,
+      total: safeItems.length,
       inStock,
       lowStock,
       outOfStock
     };
-  }, [auditList]);
+  }, [items]);
 
-  const handleOpenAuditModal = (item: InventoryAuditItem) => {
+  const handleOpenAuditModal = (item: InventoryItem) => {
     setSelectedItem(item);
-    setNewStockVal(item.currentStock.toString());
+    setNewStockVal(String(item.stock_quantity ?? 0));
     setNote('Kiểm kê điều chỉnh kho thực tế');
     setSuccessMsg('');
   };
 
-  const handleSaveStockAudit = () => {
+  const handleSaveStockAudit = async () => {
     if (!selectedItem) return;
     const targetVal = parseInt(newStockVal, 10);
     if (isNaN(targetVal) || targetVal < 0) {
@@ -123,32 +218,38 @@ export default function InventoryCheckPage() {
 
     setIsUpdating(true);
     try {
-      const diff = targetVal - selectedItem.currentStock;
-      const currentBranchObj = branches.find(b => b.id === selectedBranchId);
+      const currentBranchObj = (branches || []).find(b => b.id === selectedBranchId);
       const branchName = currentBranchObj ? currentBranchObj.name : (user?.branch_name || 'Chi Nhánh Kiểm Kho');
+      const diff = targetVal - (selectedItem.stock_quantity ?? 0);
+
+      // Attempt Supabase update
+      try {
+        await supabase
+          .from('products')
+          .update({ stock_quantity: targetVal, stock: targetVal })
+          .eq('id', selectedItem.id);
+      } catch (e) {}
 
       if (diff > 0) {
-        // Increase stock via IMPORT log
         addInventoryLog({
           type: 'IMPORT',
           branchName,
           itemName: selectedItem.name,
           quantityChange: diff,
-          note: note.trim() || `Cập nhật tăng tồn kho thủ công (+${diff} ${selectedItem.unit})`
+          note: note.trim() || `Cập nhật tăng tồn kho thủ công (+${diff} ${selectedItem.unit || 'Phần'})`
         });
       } else if (diff < 0) {
-        // Decrease stock via WASTE log
         addInventoryLog({
           type: 'WASTE',
           branchName,
           itemName: selectedItem.name,
           quantityChange: Math.abs(diff),
-          note: note.trim() || `Điều chỉnh giảm tồn kho thủ công (-${Math.abs(diff)} ${selectedItem.unit})`
+          note: note.trim() || `Điều chỉnh giảm tồn kho thủ công (-${Math.abs(diff)} ${selectedItem.unit || 'Phần'})`
         });
       }
 
-      setSuccessMsg(`Đã cập nhật tồn kho món "${selectedItem.name}" thành ${targetVal} ${selectedItem.unit}`);
-      loadData();
+      setSuccessMsg(`Đã cập nhật tồn kho món "${selectedItem.name}" thành ${targetVal} ${selectedItem.unit || 'Phần'}`);
+      await loadData();
 
       setTimeout(() => {
         setSelectedItem(null);
@@ -170,7 +271,7 @@ export default function InventoryCheckPage() {
         <Topbar onToggleMobileMenu={() => setMobileOpen(!mobileOpen)} />
 
         <main className="p-4 md:p-6 max-w-7xl mx-auto w-full space-y-6">
-          {/* Top Banner */}
+          {/* Top Banner Header */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
             <div>
               <div className="flex items-center space-x-2 text-orange-600 mb-1">
@@ -181,7 +282,7 @@ export default function InventoryCheckPage() {
                 Kiểm Tra Tồn Kho Thực Tế
               </h1>
               <p className="text-slate-500 text-xs md:text-sm mt-0.5">
-                Theo dõi tình trạng tồn kho sản phẩm, phát hiện món sắp hết và cập nhật tồn thực tế tức thì.
+                Theo dõi số lượng tồn, ngưỡng cảnh báo và đối soát kho theo từng cơ sở
               </p>
             </div>
 
@@ -203,7 +304,7 @@ export default function InventoryCheckPage() {
                 <Boxes className="w-5 h-5" />
               </div>
               <div>
-                <span className="text-[11px] font-bold text-slate-400 block uppercase">Tổng Loại Món</span>
+                <span className="text-[11px] font-bold text-slate-400 block uppercase">Tổng Mặt Hàng</span>
                 <span className="text-xl font-extrabold text-slate-900">{stats.total}</span>
               </div>
             </div>
@@ -213,7 +314,7 @@ export default function InventoryCheckPage() {
                 <CheckCircle2 className="w-5 h-5" />
               </div>
               <div>
-                <span className="text-[11px] font-bold text-emerald-600 block uppercase">🟢 Còn Hàng</span>
+                <span className="text-[11px] font-bold text-emerald-600 block uppercase">🟢 Đủ Hàng</span>
                 <span className="text-xl font-extrabold text-emerald-700">{stats.inStock}</span>
               </div>
             </div>
@@ -233,13 +334,13 @@ export default function InventoryCheckPage() {
                 <XCircle className="w-5 h-5" />
               </div>
               <div>
-                <span className="text-[11px] font-bold text-rose-600 block uppercase">🔴 Đã Hết</span>
+                <span className="text-[11px] font-bold text-rose-600 block uppercase">🔴 Hết Hàng</span>
                 <span className="text-xl font-extrabold text-rose-700">{stats.outOfStock}</span>
               </div>
             </div>
           </div>
 
-          {/* Filter Controls */}
+          {/* Filter Controls Row */}
           <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row items-center justify-between gap-4">
             {/* Branch Filter */}
             <div className="flex items-center space-x-2 w-full md:w-auto">
@@ -250,93 +351,88 @@ export default function InventoryCheckPage() {
                 onChange={(e) => setSelectedBranchId(e.target.value)}
                 className="w-full md:w-64 bg-slate-50 border border-slate-200 text-slate-800 text-xs font-bold rounded-xl px-3 py-2 focus:ring-2 focus:ring-orange-500 focus:outline-hidden transition"
               >
-                <option value="all">Toàn Chuỗi (Tất Cả Chi Nhánh)</option>
-                {branches.map(b => (
+                <option value="all">-- Tất cả chi nhánh --</option>
+                {(branches || []).map((b) => (
                   <option key={b.id} value={b.id}>
-                    {b.name} ({b.district})
+                    {b.name}
                   </option>
                 ))}
               </select>
             </div>
 
             {/* Search Input */}
-            <div className="relative w-full md:w-72">
+            <div className="relative w-full md:w-80">
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="Tìm tên món ăn / nguyên liệu..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Tìm kiếm theo tên món / nguyên liệu..."
                 className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 text-slate-800 text-xs font-semibold rounded-xl focus:ring-2 focus:ring-orange-500 focus:outline-hidden transition"
               />
             </div>
           </div>
 
-          {/* Inventory Table */}
+          {/* Safe Inventory Data Table */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-extrabold uppercase tracking-wider">
-                    <th className="py-3.5 px-4">Tên Món / Nguyên Liệu</th>
-                    <th className="py-3.5 px-4 text-center">Trạng Thái Kho</th>
-                    <th className="py-3.5 px-4 text-right">Tồn Kho Hiện Tại</th>
-                    <th className="py-3.5 px-4 text-right">Đã Bán</th>
-                    <th className="py-3.5 px-4 text-right">Mức Báo Động (Min)</th>
-                    <th className="py-3.5 px-4 text-center">Thao Tác</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {loading ? (
-                    <tr>
-                      <td colSpan={6} className="text-center py-10 text-slate-400 font-medium">
-                        Đang tải dữ liệu kiểm kho...
-                      </td>
+            {loading ? (
+              <div className="py-16 text-center text-slate-500 text-xs font-semibold">
+                Đang tải dữ liệu tồn kho...
+              </div>
+            ) : (filteredItems || []).length === 0 ? (
+              <div className="py-16 text-center text-slate-400 text-xs font-semibold">
+                Chưa có mặt hàng nào trong kho. Dữ liệu kho đang ở trạng thái sẵn sàng cho đợt nhập hàng đầu tiên.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-extrabold uppercase tracking-wider">
+                      <th className="py-3.5 px-4">Tên Món / Mặt Hàng</th>
+                      <th className="py-3.5 px-4">Đơn Vị</th>
+                      <th className="py-3.5 px-4 text-center">Tồn Kho Hiện Tại</th>
+                      <th className="py-3.5 px-4 text-center">Cảnh Báo (Tối Thiểu)</th>
+                      <th className="py-3.5 px-4 text-center">Trạng Thái Kho</th>
+                      <th className="py-3.5 px-4 text-center">Thao Tác</th>
                     </tr>
-                  ) : filteredItems.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="text-center py-10 text-slate-400 font-medium">
-                        Không tìm thấy món nào phù hợp.
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredItems.map((item) => {
-                      let statusBadge = (
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800">
-                          <CheckCircle2 className="w-3 h-3 mr-1" /> Còn hàng
-                        </span>
-                      );
-
-                      if (item.currentStock <= 0) {
-                        statusBadge = (
-                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-100 text-rose-800 animate-pulse">
-                            <XCircle className="w-3 h-3 mr-1" /> Đã hết hàng
-                          </span>
-                        );
-                      } else if (item.currentStock <= item.minStock) {
-                        statusBadge = (
-                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800">
-                            <AlertTriangle className="w-3 h-3 mr-1" /> Sắp hết hàng
-                          </span>
-                        );
-                      }
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {(filteredItems || []).map((item) => {
+                      if (!item) return null;
+                      const qty = item.stock_quantity ?? 0;
+                      const minAlert = item.min_alert_threshold ?? 10;
+                      const isOutOfStock = qty <= 0;
+                      const isLowStock = !isOutOfStock && qty <= minAlert;
 
                       return (
                         <tr key={item.id} className="hover:bg-slate-50/80 transition">
                           <td className="py-3.5 px-4 font-bold text-slate-900">
-                            {item.name}
+                            <div>{item.name}</div>
+                            {item.sku && <span className="text-[10px] text-slate-400 font-normal">{item.sku}</span>}
+                          </td>
+                          <td className="py-3.5 px-4 font-semibold text-slate-600">
+                            {item.unit || 'Phần'}
+                          </td>
+                          <td className="py-3.5 px-4 text-center font-extrabold text-sm text-slate-900">
+                            {qty} <span className="text-slate-400 text-xs font-normal">{item.unit || 'Phần'}</span>
+                          </td>
+                          <td className="py-3.5 px-4 text-center text-slate-500 font-semibold">
+                            {minAlert} {item.unit || 'Phần'}
                           </td>
                           <td className="py-3.5 px-4 text-center">
-                            {statusBadge}
-                          </td>
-                          <td className="py-3.5 px-4 text-right font-extrabold text-sm text-slate-900">
-                            {item.currentStock} <span className="text-slate-400 text-xs font-normal">{item.unit}</span>
-                          </td>
-                          <td className="py-3.5 px-4 text-right font-bold text-slate-600">
-                            {item.totalSold} {item.unit}
-                          </td>
-                          <td className="py-3.5 px-4 text-right text-slate-500 font-semibold">
-                            {item.minStock} {item.unit}
+                            {isOutOfStock ? (
+                              <span className="inline-flex items-center px-3 py-1 text-xs rounded-full bg-rose-100 text-rose-700 font-bold animate-pulse">
+                                Hết hàng
+                              </span>
+                            ) : isLowStock ? (
+                              <span className="inline-flex items-center px-3 py-1 text-xs rounded-full bg-amber-100 text-amber-700 font-bold">
+                                Sắp hết
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-3 py-1 text-xs rounded-full bg-emerald-100 text-emerald-700 font-bold">
+                                Đủ hàng
+                              </span>
+                            )}
                           </td>
                           <td className="py-3.5 px-4 text-center">
                             <button
@@ -349,11 +445,11 @@ export default function InventoryCheckPage() {
                           </td>
                         </tr>
                       );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </main>
       </div>
@@ -393,7 +489,7 @@ export default function InventoryCheckPage() {
                   <div>
                     <label className="block text-slate-500 font-bold mb-1">Tồn Kho Hiện Tại:</label>
                     <div className="p-2.5 bg-slate-100 text-slate-700 font-bold rounded-xl border border-slate-200 text-center">
-                      {selectedItem.currentStock} {selectedItem.unit}
+                      {selectedItem.stock_quantity ?? 0} {selectedItem.unit || 'Phần'}
                     </div>
                   </div>
 
