@@ -640,20 +640,23 @@ export default function PublicStorefrontHome() {
           })()}
 
           {/* Hero CTAs */}
-          <div className="flex flex-wrap items-center justify-center gap-3 pt-3">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-6">
+            {/* Nút Đặt Hàng Ngay */}
             <button
               onClick={() => handleOpenOrderModal()}
-              className="bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-extrabold px-6 py-3.5 rounded-2xl text-xs sm:text-sm shadow-md hover:shadow-lg transition flex items-center space-x-2 cursor-pointer"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-7 py-3.5 md:px-8 md:py-4 rounded-2xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-base md:text-lg shadow-lg shadow-orange-500/30 hover:shadow-orange-500/50 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer"
             >
-              <span>🍗 Đặt Hàng Ngay</span>
-              <ArrowRight className="w-4 h-4" />
+              <span className="text-xl">🍗</span>
+              <span>Đặt Hàng Ngay</span>
+              <ArrowRight className="w-5 h-5 text-white shrink-0 ml-0.5" />
             </button>
 
+            {/* Nút Tra Cứu Tiến Độ Đơn Hàng */}
             <a
               href="#track"
-              className="bg-white border border-slate-300 hover:border-slate-400 text-slate-800 font-extrabold px-6 py-3.5 rounded-2xl text-xs sm:text-sm shadow-2xs transition flex items-center space-x-2 cursor-pointer"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-7 py-3.5 md:px-8 md:py-4 rounded-2xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-base md:text-lg shadow-lg shadow-orange-500/30 hover:shadow-orange-500/50 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer"
             >
-              <Search className="w-4 h-4 text-orange-600" />
+              <Search className="w-5 h-5 text-white shrink-0" />
               <span>Tra Cứu Tiến Độ Đơn Hàng</span>
             </a>
           </div>
