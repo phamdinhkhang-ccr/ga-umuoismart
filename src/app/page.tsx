@@ -804,7 +804,7 @@ export default function PublicStorefrontHome() {
                         </div>
                       </div>
                       <div className="flex flex-col items-end gap-1">
-                        {(p.is_best_seller || p.isBestSeller) && (
+                        {Boolean(p.is_best_seller || p.isBestSeller) && (
                           <span className="bg-amber-100 text-amber-900 border border-amber-300 font-extrabold text-[10px] px-2.5 py-1 rounded-full flex items-center gap-1 shadow-2xs">
                             🌟 Bán Chạy Nhất
                           </span>
@@ -833,7 +833,7 @@ export default function PublicStorefrontHome() {
                         <span className="text-xl md:text-2xl font-black text-orange-600 tracking-tight">
                           {formatPrice(p.price)}
                         </span>
-                        {(p.original_price || p.originalPrice) && Number(p.original_price || p.originalPrice) > Number(p.price) && (
+                        {Boolean((p.original_price || p.originalPrice) && Number(p.original_price || p.originalPrice) > Number(p.price)) && (
                           <span className="text-xs text-slate-400 line-through">
                             {formatPrice(p.original_price || p.originalPrice)}
                           </span>
