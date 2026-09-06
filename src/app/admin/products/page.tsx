@@ -61,30 +61,57 @@ export default function ProductsPage() {
 
   // Notification Toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
-  const reloadData = async () => {
-    const local = getProducts();
-    setBranches(getBranches());
+  const renderMoney = (val: any) => {
+    const num = Number(val || 0);
+    return isNaN(num) ? '0đ' : num.toLocaleString('vi-VN') + 'đ';
+  };
 
+  const calcProfit = (price: number, cost: number) => {
+    const safePrice = Number(price || 0);
+    const safeCost = Number(cost || 0);
+    return safePrice - safeCost;
+  };
+
+  const fetchAdminProducts = async () => {
     try {
+      setIsLoading(true);
+      setFetchError(null);
+      setBranches(getBranches());
+
       const { data, error } = await supabase
         .from('products')
         .select('*');
 
-      if (!error && Array.isArray(data) && data.length > 0) {
-        setProducts(data);
-        return;
+      if (error) {
+        console.error('Lỗi Supabase Products:', error.message);
+        setFetchError(error.message);
+        const fallback = getProducts().map((p: any) => sanitizeProduct(p));
+        setProducts(fallback);
+      } else if (Array.isArray(data) && data.length > 0) {
+        const safeData = data.map((p: any) => sanitizeProduct(p));
+        setProducts(safeData);
+      } else {
+        const fallback = getProducts().map((p: any) => sanitizeProduct(p));
+        setProducts(fallback);
       }
-    } catch (e) {
-      console.warn('Products Supabase fetch bypass:', e);
+    } catch (err: any) {
+      console.error('Lỗi khi nạp sản phẩm:', err);
+      setFetchError(err?.message || 'Không thể tải dữ liệu');
+      const fallback = getProducts().map((p: any) => sanitizeProduct(p));
+      setProducts(fallback);
+    } finally {
+      setIsLoading(false);
     }
-
-    setProducts(local);
   };
 
+  const reloadData = () => fetchAdminProducts();
+
   useEffect(() => {
-    reloadData();
-    const handleStoreUpdate = () => reloadData();
+    fetchAdminProducts();
+    const handleStoreUpdate = () => fetchAdminProducts();
     window.addEventListener('gum_store_update', handleStoreUpdate);
     return () => window.removeEventListener('gum_store_update', handleStoreUpdate);
   }, []);
@@ -427,6 +454,16 @@ export default function ProductsPage() {
         </div>
       )}
 
+      {/* Fetch Error Warning Banner */}
+      {fetchError && (
+        <div className="p-3.5 bg-amber-50 border border-amber-300 text-amber-900 text-xs rounded-xl flex items-center justify-between font-bold shadow-xs">
+          <span>⚠️ Đang đồng bộ cấu trúc dữ liệu: {fetchError}</span>
+          <button onClick={fetchAdminProducts} className="underline font-black cursor-pointer text-amber-900 hover:text-amber-700">
+            Thử lại
+          </button>
+        </div>
+      )}
+
       {/* Top Banner & Action Bar */}
       <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center space-x-3.5">
@@ -658,8 +695,8 @@ export default function ProductsPage() {
             <tbody className="divide-y divide-slate-100">
               {filteredProducts.map((rawP) => {
                 const p = sanitizeProduct(rawP);
-                const profit = p.price - (p.cost_price || 0);
-                const margin = p.price > 0 ? ((profit / p.price) * 100).toFixed(1) : '0';
+                const profit = calcProfit(p.price, p.cost_price);
+                const margin = Number(p.price || 0) > 0 ? ((profit / Number(p.price)) * 100).toFixed(1) : '0';
                 const expInfo = getExpiryDetails(p.expiry_date);
 
                 // Availability check based on branch selection
@@ -752,18 +789,18 @@ export default function ProductsPage() {
 
                     {/* Column 4: Retail Price */}
                     <td className="px-3 py-3.5 text-right font-extrabold text-orange-600 text-xs">
-                      {p.price.toLocaleString('vi-VN')}đ
+                      {renderMoney(p.price)}
                     </td>
 
                     {/* Column 5: Cost Price */}
                     <td className="px-3 py-3.5 text-right font-semibold text-slate-500">
-                      {p.cost_price.toLocaleString('vi-VN')}đ
+                      {renderMoney(p.cost_price)}
                     </td>
 
                     {/* Column 6: Unit Profit & Margin % */}
                     <td className="px-3 py-3.5 text-right">
                       <p className="font-extrabold text-emerald-700 text-xs">
-                        +{profit.toLocaleString('vi-VN')}đ
+                        +{renderMoney(profit)}
                       </p>
                       <span className="inline-block mt-0.5 px-2 py-0.2 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                         {margin}%
