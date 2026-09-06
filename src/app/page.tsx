@@ -673,9 +673,6 @@ export default function PublicStorefrontHome() {
               Tra Cứu Không Cần Đăng Nhập
             </span>
             <h2 className="text-xl sm:text-2xl font-black text-slate-900">Tra Cứu Tiến Độ Đơn Hàng Nhanh</h2>
-            <p className="text-xs text-slate-600 font-medium">
-              Nhập Số điện thoại hoặc Mã đơn (#OD...) để kiểm tra tiến độ bếp &amp; shipper giao hàng.
-            </p>
           </div>
 
           {/* Search Form */}
@@ -685,7 +682,7 @@ export default function PublicStorefrontHome() {
               <input
                 type="text"
                 required
-                placeholder="Nhập SĐT (VD: 0984263340) hoặc Mã đơn (#OD9672)..."
+                placeholder="Nhập số điện thoại (VD: 0984263340)"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-900 outline-none focus:border-orange-500 focus:bg-white transition"
@@ -699,29 +696,6 @@ export default function PublicStorefrontHome() {
               <span>Tra Cứu Ngay</span>
             </button>
           </form>
-
-          {/* Quick Demo Search Chips */}
-          <div className="flex flex-wrap items-center justify-center gap-1.5 text-[11px] font-bold text-slate-500">
-            <span>Gợi ý mẫu:</span>
-            <button
-              onClick={() => {
-                setSearchQuery('OD9672');
-                handleSearchOrder();
-              }}
-              className="bg-slate-100 hover:bg-orange-50 hover:text-orange-700 px-2 py-0.5 rounded-lg transition"
-            >
-              #OD9672
-            </button>
-            <button
-              onClick={() => {
-                setSearchQuery('0984263340');
-                handleSearchOrder();
-              }}
-              className="bg-slate-100 hover:bg-orange-50 hover:text-orange-700 px-2 py-0.5 rounded-lg transition"
-            >
-              0984263340
-            </button>
-          </div>
 
           {/* Search Result Display Card */}
           {hasSearched && (
@@ -794,13 +768,7 @@ export default function PublicStorefrontHome() {
       {/* 4. KHỐI THỰC ĐƠN MENU MÓN ĂN ĐẶC SẮC (#menu) */}
       <section id="menu" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 scroll-mt-20 space-y-8">
         <div className="text-center space-y-2">
-          <span className="bg-orange-100 text-orange-800 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-wider border border-orange-200">
-            Thực Đơn Tươi Nóng
-          </span>
-          <h2 className="text-2xl sm:text-4xl font-black text-slate-900">Thực Đơn Gà Ủ Muối &amp; Món Ăn Kèm Nổi Bật</h2>
-          <p className="text-xs sm:text-sm text-slate-600 font-medium max-w-xl mx-auto">
-            Chế biến tươi mới mỗi ngày, ủ muối hoa tiêu chuẩn vị, da giòn sần sật đóng gói giữ nhiệt công nghệ cao.
-          </p>
+          <h2 className="text-2xl sm:text-4xl font-black text-slate-900">Menu Gà Smart</h2>
         </div>
 
         {/* Product Grid Dynamic Sync */}
