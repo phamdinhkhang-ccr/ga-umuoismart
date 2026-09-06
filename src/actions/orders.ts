@@ -85,18 +85,18 @@ export async function createOrder(params: CreateOrderParams) {
   let subtotal = 0;
   let totalCost = 0;
 
-  const orderItems: OrderItem[] = params.items.map(item => {
-    const menuItem = menuItemMap.get(item.menu_item_id);
-    const unitPrice = menuItem ? menuItem.price : 0;
-    const costPrice = menuItem ? menuItem.cost_price : 0;
-    const itemSubtotal = unitPrice * item.quantity;
+  const orderItems: OrderItem[] = params.items.map((item: any) => {
+    const menuItem = menuItemMap.get(item.menu_item_id || item.id);
+    const unitPrice = menuItem ? menuItem.price : Number(item.unit_price || item.price || 0);
+    const costPrice = menuItem ? menuItem.cost_price : Math.round(unitPrice * 0.55);
+    const itemSubtotal = item.subtotal || item.total || (unitPrice * item.quantity);
     
     subtotal += itemSubtotal;
     totalCost += costPrice * item.quantity;
 
     return {
-      menu_item_id: item.menu_item_id,
-      item_name: menuItem ? menuItem.name : 'Gà Ủ Muối',
+      menu_item_id: item.menu_item_id || item.id || 'p1',
+      item_name: menuItem ? menuItem.name : (item.item_name || item.name || 'Món ăn POS'),
       quantity: item.quantity,
       unit_price: unitPrice,
       cost_price: costPrice,

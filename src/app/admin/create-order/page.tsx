@@ -90,6 +90,7 @@ function CreateOrderContent() {
 
   const [branches, setBranches] = useState<Branch[]>(DEFAULT_SYSTEM_BRANCHES);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [availableProducts, setAvailableProducts] = useState<any[]>([]);
 
   // Update branches when contextActiveBranches updates
   useEffect(() => {
@@ -105,7 +106,9 @@ function CreateOrderContent() {
   const [district, setDistrict] = useState('');
   const [city, setCity] = useState('Hồ Chí Minh');
   const [selectedBranchId, setSelectedBranchId] = useState('');
-  const [selectedItems, setSelectedItems] = useState<{ menu_item_id: string; quantity: number }[]>([]);
+  const [selectedItems, setSelectedItems] = useState<
+    { id: string; name: string; price: number; quantity: number; total: number; menu_item_id?: string }[]
+  >([]);
   const [voucherCode, setVoucherCode] = useState('');
   const [note, setNote] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'QR' | 'CASH'>('QR');
@@ -113,6 +116,43 @@ function CreateOrderContent() {
 
   // Matched CRM Customer
   const [matchedCustomer, setMatchedCustomer] = useState<CustomerRecord | null>(null);
+
+  // Fetch Available Products from Supabase or Fallback
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('products')
+          .select('id, name, price')
+          .eq('is_active', true);
+
+        if (!error && data && data.length > 0) {
+          setAvailableProducts(data);
+        } else {
+          setAvailableProducts([
+            { id: 'p1', name: 'Gà Ủ Muối Nguyên Con', price: 270000 },
+            { id: 'p2', name: 'Set 1/2 gà + 1 hộp chân gà', price: 230000 },
+            { id: 'p3', name: 'Set 1 gà + 1 hộp chân', price: 355000 },
+            { id: 'p4', name: 'Set 1/2 gà + 1 nem ngựa', price: 240000 },
+            { id: 'p5', name: 'Set 1 gà + 1 nem ngựa', price: 360000 },
+            { id: 'p6', name: '1/2 gà ủ muối', price: 150000 },
+            { id: 'p7', name: 'Trà Tắc Khổng Lồ', price: 20000 }
+          ]);
+        }
+      } catch (e) {
+        setAvailableProducts([
+          { id: 'p1', name: 'Gà Ủ Muối Nguyên Con', price: 270000 },
+          { id: 'p2', name: 'Set 1/2 gà + 1 hộp chân gà', price: 230000 },
+          { id: 'p3', name: 'Set 1 gà + 1 hộp chân', price: 355000 },
+          { id: 'p4', name: 'Set 1/2 gà + 1 nem ngựa', price: 240000 },
+          { id: 'p5', name: 'Set 1 gà + 1 nem ngựa', price: 360000 },
+          { id: 'p6', name: '1/2 gà ủ muối', price: 150000 },
+          { id: 'p7', name: 'Trà Tắc Khổng Lồ', price: 20000 }
+        ]);
+      }
+    };
+    fetchProducts();
+  }, []);
 
   // Read URL Search Parameters (from CRM 🛒 action)
   useEffect(() => {
@@ -208,6 +248,63 @@ function CreateOrderContent() {
     `Chào Gà Ủ Muối Smart, cho mình lấy 2 Gà Ủ Muối Nguyên Con và 2 Trà Tắc Khổng Lồ giao đến địa chỉ 123 Lê Lợi, Phường Bến Thành, Quận 1. Tên Nam, SĐT: 0901234567`
   ], []);
 
+  const handleAddNewRow = () => {
+    const prods = availableProducts.length > 0 ? availableProducts : menuItems;
+    if (prods.length === 0) return;
+    const defaultProd = prods[0];
+    const price = Number(defaultProd.price || 0);
+    setSelectedItems((prev) => [
+      ...prev,
+      {
+        id: defaultProd.id,
+        name: defaultProd.name,
+        price: price,
+        quantity: 1,
+        total: price,
+        menu_item_id: defaultProd.id
+      }
+    ]);
+  };
+
+  const handleUpdateQuantity = (index: number, newQty: number) => {
+    if (newQty <= 0) {
+      handleRemoveRow(index);
+      return;
+    }
+    setSelectedItems((prev) => {
+      const updated = [...prev];
+      if (!updated[index]) return prev;
+      updated[index].quantity = newQty;
+      updated[index].total = updated[index].price * newQty;
+      return updated;
+    });
+  };
+
+  const handleSelectProductRow = (index: number, productId: string) => {
+    const prods = availableProducts.length > 0 ? availableProducts : menuItems;
+    const prod = prods.find((p) => p.id === productId);
+    if (!prod) return;
+    setSelectedItems((prev) => {
+      const updated = [...prev];
+      if (!updated[index]) return prev;
+      const qty = updated[index]?.quantity || 1;
+      const price = Number(prod.price || 0);
+      updated[index] = {
+        id: prod.id,
+        name: prod.name,
+        price: price,
+        quantity: qty,
+        total: price * qty,
+        menu_item_id: prod.id
+      };
+      return updated;
+    });
+  };
+
+  const handleRemoveRow = (index: number) => {
+    setSelectedItems((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const handleParseOrder = useCallback(async (textToParse?: string) => {
     const text = textToParse || rawText;
     if (!text.trim()) {
@@ -242,10 +339,22 @@ function CreateOrderContent() {
           setNote(p.note || '');
 
           if (p.items && p.items.length > 0) {
-            setSelectedItems(p.items.map((i: any) => ({
-              menu_item_id: i.menu_item_id,
-              quantity: i.quantity
-            })));
+            const prods = availableProducts.length > 0 ? availableProducts : menuItems;
+            const parsedItems = p.items.map((i: any) => {
+              const matchedProd = prods.find(ap => ap.id === i.menu_item_id || ap.name.toLowerCase().includes((i.name || '').toLowerCase()));
+              const name = matchedProd ? matchedProd.name : (i.name || 'Món ăn');
+              const price = matchedProd ? Number(matchedProd.price || 0) : Number(i.unit_price || i.price || 0);
+              const qty = Number(i.quantity || 1);
+              return {
+                id: matchedProd?.id || i.menu_item_id || `item-${Date.now()}`,
+                name: name,
+                price: price,
+                quantity: qty,
+                total: price * qty,
+                menu_item_id: matchedProd?.id || i.menu_item_id
+              };
+            });
+            setSelectedItems(parsedItems);
           }
           parsedSuccess = true;
         }
@@ -271,17 +380,35 @@ function CreateOrderContent() {
       setCustomerPhone(extractedPhone);
       setShippingAddress(extractedAddr);
 
-      // Auto-pick items by scanning menuItems
-      const matchedItems: { menu_item_id: string; quantity: number }[] = [];
-      menuItems.forEach((m) => {
+      // Auto-pick items by scanning menuItems/availableProducts
+      const matchedItems: any[] = [];
+      const prodsToScan = availableProducts.length > 0 ? availableProducts : menuItems;
+      prodsToScan.forEach((m) => {
         const mName = m.name.toLowerCase();
         if (text.toLowerCase().includes(mName.slice(0, 6))) {
-          matchedItems.push({ menu_item_id: m.id, quantity: 1 });
+          const price = Number(m.price || 0);
+          matchedItems.push({
+            id: m.id,
+            name: m.name,
+            price: price,
+            quantity: 1,
+            total: price,
+            menu_item_id: m.id
+          });
         }
       });
 
-      if (matchedItems.length === 0 && menuItems.length > 0) {
-        matchedItems.push({ menu_item_id: menuItems[0].id, quantity: 1 });
+      if (matchedItems.length === 0 && prodsToScan.length > 0) {
+        const defaultM = prodsToScan[0];
+        const price = Number(defaultM.price || 0);
+        matchedItems.push({
+          id: defaultM.id,
+          name: defaultM.name,
+          price: price,
+          quantity: 1,
+          total: price,
+          menu_item_id: defaultM.id
+        });
       }
 
       setSelectedItems(matchedItems);
@@ -294,23 +421,16 @@ function CreateOrderContent() {
     }
 
     setIsParsing(false);
-  }, [rawText, menuItems, branches, district, city]);
-
-  const handleQuickAddMenuItem = useCallback((itemId: string) => {
-    setSelectedItems((prev) => {
-      const existingIdx = prev.findIndex((i) => i.menu_item_id === itemId);
-      if (existingIdx >= 0) {
-        const updated = [...prev];
-        updated[existingIdx].quantity += 1;
-        return updated;
-      }
-      return [...prev, { menu_item_id: itemId, quantity: 1 }];
-    });
-  }, []);
+  }, [rawText, menuItems, availableProducts, branches, district, city]);
 
   const handleItemQuantityChange = useCallback((itemId: string, delta: number) => {
+    const prods = availableProducts.length > 0 ? availableProducts : menuItems;
+    const prod = prods.find((p) => p.id === itemId);
+    const prodName = prod ? prod.name : 'Món ăn';
+    const prodPrice = prod ? Number(prod.price || 0) : 0;
+
     setSelectedItems((prev) => {
-      const existingIdx = prev.findIndex((i) => i.menu_item_id === itemId);
+      const existingIdx = prev.findIndex((i) => i.id === itemId || i.menu_item_id === itemId);
       if (existingIdx >= 0) {
         const updated = [...prev];
         const newQty = updated[existingIdx].quantity + delta;
@@ -318,45 +438,30 @@ function CreateOrderContent() {
           updated.splice(existingIdx, 1);
         } else {
           updated[existingIdx].quantity = newQty;
+          updated[existingIdx].total = updated[existingIdx].price * newQty;
         }
         return updated;
       }
       if (delta > 0) {
-        return [...prev, { menu_item_id: itemId, quantity: 1 }];
+        return [
+          ...prev,
+          {
+            id: itemId,
+            name: prodName,
+            price: prodPrice,
+            quantity: 1,
+            total: prodPrice,
+            menu_item_id: itemId
+          }
+        ];
       }
       return prev;
     });
-  }, []);
-
-  const handleRemoveItem = useCallback((index: number) => {
-    setSelectedItems((prev) => {
-      const updated = [...prev];
-      updated.splice(index, 1);
-      return updated;
-    });
-  }, []);
-
-  const handleItemChange = useCallback((index: number, field: 'menu_item_id' | 'quantity', value: any) => {
-    setSelectedItems((prev) => {
-      const updated = [...prev];
-      updated[index] = { ...updated[index], [field]: value };
-      return updated;
-    });
-  }, []);
+  }, [availableProducts, menuItems]);
 
   const totals = useMemo(() => {
-    let subtotal = 0;
-    let totalCost = 0;
-
-    const itemMap = new Map(menuItems.map((m) => [m.id, m]));
-
-    selectedItems.forEach((i) => {
-      const item = itemMap.get(i.menu_item_id);
-      if (item) {
-        subtotal += item.price * i.quantity;
-        totalCost += item.cost_price * i.quantity;
-      }
-    });
+    let subtotal = selectedItems.reduce((acc, curr) => acc + (curr.total || (curr.price * curr.quantity) || 0), 0);
+    let totalCost = Math.round(subtotal * 0.55);
 
     let discount = 0;
     const code = voucherCode.trim().toUpperCase();
@@ -374,7 +479,7 @@ function CreateOrderContent() {
     const profit = finalAmount - totalCost;
 
     return { subtotal, discount, finalAmount, profit, isAutoDiscountApplied };
-  }, [menuItems, selectedItems, voucherCode]);
+  }, [selectedItems, voucherCode]);
 
   const handleSubmitOrder = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -401,7 +506,14 @@ function CreateOrderContent() {
         district: district,
         city: city,
         branch_id: selectedBranchId,
-        items: selectedItems,
+        items: selectedItems.map(i => ({
+          menu_item_id: i.menu_item_id || i.id,
+          id: i.id || i.menu_item_id,
+          item_name: i.name,
+          unit_price: i.price,
+          quantity: i.quantity,
+          subtotal: i.total || (i.price * i.quantity)
+        })),
         voucher_code: voucherCode,
         note: note
       });
@@ -802,71 +914,79 @@ function CreateOrderContent() {
 
             {/* Selected Items List */}
             <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                  <ShoppingBag className="w-4 h-4 text-orange-600" /> Danh Sách Món Ăn Đã Chọn ({selectedItems.length})
-                </h2>
+              <div className="flex items-center justify-between mb-3 border-b border-slate-100 pb-3">
+                <span className="font-semibold text-gray-800 flex items-center gap-2">
+                  <ShoppingBag className="w-4 h-4 text-orange-600" />
+                  Danh Sách Món Ăn Đã Chọn ({selectedItems.length})
+                </span>
                 <button
                   type="button"
-                  onClick={() => {
-                    if (menuItems.length > 0) {
-                      setSelectedItems((prev) => [...prev, { menu_item_id: menuItems[0].id, quantity: 1 }]);
-                    }
-                  }}
-                  className="text-xs bg-orange-50 text-orange-700 border border-orange-200 hover:bg-orange-100 px-3 py-1.5 rounded-lg font-semibold flex items-center gap-1 transition cursor-pointer"
+                  onClick={handleAddNewRow}
+                  className="px-3.5 py-1.5 rounded-lg bg-orange-50 text-orange-600 border border-orange-200 hover:bg-orange-100 font-semibold text-xs flex items-center gap-1 transition-colors cursor-pointer"
                 >
-                  <Plus className="w-3.5 h-3.5" /> Thêm món dòng mới
+                  + Thêm món dòng mới
                 </button>
               </div>
 
               {selectedItems.length === 0 ? (
-                <p className="text-xs text-slate-500 text-center py-4">Chưa có món ăn nào. Dán tin nhắn để AI bóc tách hoặc chọn món ở bảng trên.</p>
+                <div className="py-8 text-center text-xs text-gray-400 border border-dashed rounded-xl">
+                  Chưa có món ăn nào. Bấm nút "+ Thêm món dòng mới" ở trên để chọn món.
+                </div>
               ) : (
-                <div className="space-y-3">
-                  {selectedItems.map((item, idx) => {
-                    const currentMenu = menuItems.find((m) => m.id === item.menu_item_id);
-                    const itemSubtotal = currentMenu ? currentMenu.price * item.quantity : 0;
+                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                  {selectedItems.map((item, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center gap-2 p-2 bg-gray-50 rounded-xl border border-gray-200 text-xs md:text-sm"
+                    >
+                      {/* Dropdown chọn món */}
+                      <select
+                        value={item.id || item.menu_item_id}
+                        onChange={(e) => handleSelectProductRow(idx, e.target.value)}
+                        className="flex-1 bg-white border border-gray-300 rounded-lg px-2.5 py-1.5 font-medium text-gray-800 focus:outline-none"
+                      >
+                        {(availableProducts.length > 0 ? availableProducts : menuItems).map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name} - {Number(p.price).toLocaleString('vi-VN')}đ
+                          </option>
+                        ))}
+                      </select>
 
-                    return (
-                      <div key={idx} className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
-                        <div className="flex-1">
-                          <select
-                            value={item.menu_item_id}
-                            onChange={(e) => handleItemChange(idx, 'menu_item_id', e.target.value)}
-                            className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 font-medium focus:outline-none"
-                          >
-                            {menuItems.map((m) => (
-                              <option key={m.id} value={m.id}>
-                                {m.name} - {m.price.toLocaleString('vi-VN')} VNĐ
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-
-                        <div className="w-20">
-                          <input
-                            type="number"
-                            min="1"
-                            value={item.quantity}
-                            onChange={(e) => handleItemChange(idx, 'quantity', Math.max(1, parseInt(e.target.value) || 1))}
-                            className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-center text-slate-900 focus:outline-none font-bold"
-                          />
-                        </div>
-
-                        <div className="w-28 text-right font-bold text-xs text-slate-900">
-                          {itemSubtotal.toLocaleString('vi-VN')} VNĐ
-                        </div>
-
+                      {/* Cụm chỉnh số lượng */}
+                      <div className="flex items-center border rounded-lg bg-white overflow-hidden">
                         <button
                           type="button"
-                          onClick={() => handleRemoveItem(idx)}
-                          className="text-slate-400 hover:text-rose-600 p-1 rounded-md transition cursor-pointer"
+                          onClick={() => handleUpdateQuantity(idx, item.quantity - 1)}
+                          className="px-2.5 py-1 hover:bg-gray-100 text-gray-600 font-bold cursor-pointer"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          -
+                        </button>
+                        <span className="px-2 font-semibold text-gray-800">{item.quantity}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleUpdateQuantity(idx, item.quantity + 1)}
+                          className="px-2.5 py-1 hover:bg-gray-100 text-gray-600 font-bold cursor-pointer"
+                        >
+                          +
                         </button>
                       </div>
-                    );
-                  })}
+
+                      {/* Thành tiền */}
+                      <div className="w-24 text-right font-bold text-orange-600">
+                        {(item.total || (item.price * item.quantity)).toLocaleString('vi-VN')}đ
+                      </div>
+
+                      {/* Nút xóa dòng */}
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveRow(idx)}
+                        className="p-1.5 text-gray-400 hover:text-red-600 transition-colors cursor-pointer"
+                        title="Xóa dòng"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
                 </div>
               )}
 
