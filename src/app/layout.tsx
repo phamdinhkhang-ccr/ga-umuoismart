@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
+import { BranchProvider } from '@/context/BranchContext';
 import Sidebar from '@/components/Sidebar';
 import Topbar from '@/components/Topbar';
 import CustomerChatWidget from '@/components/CustomerChatWidget';
@@ -36,9 +37,11 @@ export default function RootLayout({
       <body className={`${inter.className} min-h-screen text-slate-900 bg-slate-50 antialiased overflow-x-hidden`}>
         <GlobalErrorBoundary>
           <AuthProvider>
-            <ClientOnlyWrapper>
-              <AppShell>{children}</AppShell>
-            </ClientOnlyWrapper>
+            <BranchProvider>
+              <ClientOnlyWrapper>
+                <AppShell>{children}</AppShell>
+              </ClientOnlyWrapper>
+            </BranchProvider>
           </AuthProvider>
         </GlobalErrorBoundary>
       </body>

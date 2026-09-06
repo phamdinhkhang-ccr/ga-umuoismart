@@ -5,6 +5,7 @@ export const dynamic = 'force-dynamic';
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
+import { useBranches } from '@/context/BranchContext';
 import { 
   Store, Search, ShoppingBag, Phone, MapPin, Clock, ExternalLink, 
   CheckCircle2, Sparkles, Truck, ShieldCheck, Flame, MessageCircle, 
@@ -24,6 +25,7 @@ const PRESET_COMBOS: any[] = [];
 
 export default function PublicStorefrontHome() {
   const { user } = useAuth();
+  const { activeBranches: contextActiveBranches } = useBranches();
 
   // Dynamic Storefront CMS & Products State
   const [cmsSettings, setCmsSettings] = useState<StorefrontCmsSettings>({
@@ -182,10 +184,13 @@ export default function PublicStorefrontHome() {
     };
   }, []);
 
-  // Filter active branches only
+  // Filter active branches only (using contextActiveBranches if available)
   const activeBranches = useMemo(() => {
+    if (contextActiveBranches && contextActiveBranches.length > 0) {
+      return contextActiveBranches;
+    }
     return cmsSettings.branches?.filter((b) => b.is_active !== false) || [];
-  }, [cmsSettings.branches]);
+  }, [contextActiveBranches, cmsSettings.branches]);
 
   // Dynamic display products priority: cmsSettings.menuItems -> cmsSettings.products -> productsList
   const displayProducts = useMemo(() => {

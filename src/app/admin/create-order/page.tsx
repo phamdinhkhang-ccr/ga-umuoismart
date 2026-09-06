@@ -10,6 +10,7 @@ import { getBranches, getMenuItems, createOrder } from '@/actions/orders';
 import { Branch, MenuItem } from '@/types/database';
 import { findCustomerByPhone, addOrUpdateCustomerFromOrder, CustomerRecord } from '@/lib/store';
 import { useAuth } from '@/context/AuthContext';
+import { useBranches } from '@/context/BranchContext';
 import ReceiptModal from '@/components/ReceiptModal';
 import { supabase } from '@/lib/supabaseClient';
 import { assignBranch } from '@/lib/routing';
@@ -75,6 +76,7 @@ function CreateOrderContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user } = useAuth();
+  const { activeBranches: contextActiveBranches } = useBranches();
 
   // Mode Selection: 'AI' or 'MANUAL'
   const [mode, setMode] = useState<'AI' | 'MANUAL'>('AI');
@@ -88,6 +90,13 @@ function CreateOrderContent() {
 
   const [branches, setBranches] = useState<Branch[]>(DEFAULT_SYSTEM_BRANCHES);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+
+  // Update branches when contextActiveBranches updates
+  useEffect(() => {
+    if (contextActiveBranches && contextActiveBranches.length > 0) {
+      setBranches(contextActiveBranches);
+    }
+  }, [contextActiveBranches]);
 
   // Form State
   const [customerName, setCustomerName] = useState('');
@@ -120,23 +129,26 @@ function CreateOrderContent() {
   useEffect(() => {
     let isMounted = true;
     async function loadData() {
-      try {
-        const { data, error } = await supabase
-          .from('branches')
-          .select('*')
-          .eq('is_active', true)
-          .order('display_order', { ascending: true });
+      if (contextActiveBranches && contextActiveBranches.length > 0 && isMounted) {
+        setBranches(contextActiveBranches);
+      } else {
+        try {
+          const { data, error } = await supabase
+            .from('branches')
+            .select('*')
+            .eq('is_active', true)
+            .order('display_order', { ascending: true });
 
-        if (!error && Array.isArray(data) && data.length > 0 && isMounted) {
-          setBranches(data);
-        } else {
+          if (!error && Array.isArray(data) && data.length > 0 && isMounted) {
+            setBranches(data);
+          } else {
+            const local = (await getBranches()).filter(b => b.is_active !== false);
+            if (local.length > 0 && isMounted) setBranches(local);
+          }
+        } catch (e) {
           const local = (await getBranches()).filter(b => b.is_active !== false);
           if (local.length > 0 && isMounted) setBranches(local);
         }
-      } catch (e) {
-        console.warn('Lỗi fetch branches Supabase, dùng fallback:', e);
-        const local = (await getBranches()).filter(b => b.is_active !== false);
-        if (local.length > 0 && isMounted) setBranches(local);
       }
 
       const mList = await getMenuItems();
@@ -146,7 +158,7 @@ function CreateOrderContent() {
     }
     loadData();
     return () => { isMounted = false; };
-  }, []);
+  }, [contextActiveBranches]);
 
   // Set default selected branch based on user or first branch
   useEffect(() => {

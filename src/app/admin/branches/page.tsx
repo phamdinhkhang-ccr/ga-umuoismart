@@ -14,11 +14,19 @@ import {
   transferInventoryBetweenBranches, getCmsSettings, saveCmsSettings
 } from '@/lib/store';
 import { useAuth } from '@/context/AuthContext';
+import { useBranches } from '@/context/BranchContext';
 import { supabase } from '@/lib/supabaseClient';
 
 export default function BranchesPage() {
   const { user } = useAuth();
-  const [branches, setBranches] = useState<Branch[]>([]);
+  const { 
+    branches, 
+    createBranch, 
+    updateBranch, 
+    deleteBranch: removeBranch, 
+    toggleBranchActive: toggleBranch,
+    refreshBranches 
+  } = useBranches();
   
   // Filter & Search state
   const [searchQuery, setSearchQuery] = useState('');
@@ -63,61 +71,6 @@ export default function BranchesPage() {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  // Sync to Supabase Storefront Settings
-  const syncBranchesToSupabase = async (branchList: Branch[]) => {
-    try {
-      const cmsBranches = branchList.map(b => ({
-        id: b.id,
-        name: b.name,
-        address: b.address,
-        phone: b.phone,
-        hours: b.hours || '08:00 - 22:00',
-        maps_url: b.maps_url || `https://maps.google.com/?q=${encodeURIComponent(b.address || b.name)}`,
-        is_active: b.is_active !== false && b.status !== 'PAUSED',
-        district: b.district,
-        city: b.city,
-        latitude: b.latitude,
-        longitude: b.longitude
-      }));
-
-      // 1. Update CMS settings local
-      saveCmsSettings({ branches: cmsBranches });
-
-      // 2. Fetch current config and update Supabase
-      const { data } = await supabase
-        .from('storefront_settings')
-        .select('*')
-        .eq('id', 'default_config')
-        .maybeSingle();
-
-      const existingConfig = data?.data || {};
-      const updatedConfig = {
-        ...existingConfig,
-        branches: cmsBranches
-      };
-
-      await supabase.from('storefront_settings').upsert({
-        id: 'default_config',
-        data: updatedConfig,
-        updated_at: new Date().toISOString()
-      });
-    } catch (e) {
-      console.warn('Lỗi đồng bộ Supabase branches:', e);
-    }
-  };
-
-  const reloadBranches = () => {
-    const list = getBranches();
-    setBranches(list);
-  };
-
-  useEffect(() => {
-    reloadBranches();
-    const handleStoreUpdate = () => reloadBranches();
-    window.addEventListener('gum_store_update', handleStoreUpdate);
-    return () => window.removeEventListener('gum_store_update', handleStoreUpdate);
-  }, []);
-
   if (user?.role !== 'SUPER_ADMIN') {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
@@ -155,9 +108,7 @@ export default function BranchesPage() {
   // Toggle Branch Active State
   const handleToggleActive = async (branch: Branch) => {
     const newActiveState = !(branch.is_active !== false && branch.status !== 'PAUSED');
-    const updated = toggleBranchActive(branch.id, newActiveState);
-    setBranches(updated);
-    await syncBranchesToSupabase(updated);
+    await toggleBranch(branch.id, newActiveState);
     showToast(`Đã ${newActiveState ? 'BẬT' : 'TẮT'} trạng thái hoạt động của cơ sở "${branch.name}"`);
   };
 
@@ -216,7 +167,7 @@ export default function BranchesPage() {
       return;
     }
 
-    const updatedList = saveBranch({
+    const payload = {
       ...formData,
       name: formData.name.trim(),
       address: formData.address.trim(),
@@ -224,13 +175,17 @@ export default function BranchesPage() {
       hours: formData.hours?.trim() || '08:00 - 22:00',
       display_order: Number(formData.display_order || 1),
       is_active: formData.is_active ?? true,
-      status: formData.is_active ? 'ACTIVE' : 'PAUSED',
+      status: formData.is_active ? ('ACTIVE' as const) : ('PAUSED' as const),
       latitude: formData.latitude !== undefined && (formData.latitude as any) !== '' ? Number(formData.latitude) : undefined,
       longitude: formData.longitude !== undefined && (formData.longitude as any) !== '' ? Number(formData.longitude) : undefined
-    } as Partial<Branch> & { name: string });
+    };
 
-    setBranches(updatedList);
-    await syncBranchesToSupabase(updatedList);
+    if (selectedBranch) {
+      await updateBranch(selectedBranch.id, payload);
+    } else {
+      await createBranch(payload as Partial<Branch> & { name: string });
+    }
+
     setActiveModal(null);
     showToast(selectedBranch ? `Đã cập nhật thông tin cơ sở "${formData.name}"` : `Đã thêm thành công cơ sở mới "${formData.name}"`);
   };
@@ -244,9 +199,7 @@ export default function BranchesPage() {
   // Confirm Delete Branch
   const handleConfirmDelete = async () => {
     if (!selectedBranch) return;
-    const updatedList = deleteBranch(selectedBranch.id);
-    setBranches(updatedList);
-    await syncBranchesToSupabase(updatedList);
+    await removeBranch(selectedBranch.id);
     setActiveModal(null);
     showToast(`Đã xóa cơ sở "${selectedBranch.name}" khỏi hệ thống!`);
   };
@@ -270,7 +223,7 @@ export default function BranchesPage() {
     if (!selectedBranch || !transferData.targetBranchId) return;
     const targetBranch = branches.find(b => b.id === transferData.targetBranchId);
 
-    const updatedList = transferInventoryBetweenBranches(
+    transferInventoryBetweenBranches(
       selectedBranch.id,
       transferData.targetBranchId,
       transferData.itemName,
@@ -278,7 +231,7 @@ export default function BranchesPage() {
       transferData.note
     );
 
-    setBranches(updatedList);
+    refreshBranches();
     setActiveModal(null);
     showToast(`Đã điều chuyển ${transferData.quantity} ${transferData.itemName} từ "${selectedBranch.name}" tới "${targetBranch?.name}"`);
   };

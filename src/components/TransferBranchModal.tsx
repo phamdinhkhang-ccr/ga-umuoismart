@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { getBranches, getItem, setItem } from '@/lib/store';
+import { useBranches } from '@/context/BranchContext';
 import { Order, Branch } from '@/types/database';
 import { Building2, X, RefreshCw, CheckCircle2, ArrowRightLeft } from 'lucide-react';
 
@@ -13,6 +14,7 @@ interface TransferBranchModalProps {
 }
 
 export default function TransferBranchModal({ order, onClose, onSuccess }: TransferBranchModalProps) {
+  const { activeBranches, isLoading: contextLoading } = useBranches();
   const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
   const [selectedBranchId, setSelectedBranchId] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -21,37 +23,40 @@ export default function TransferBranchModal({ order, onClose, onSuccess }: Trans
   const currentOrderBranchId = order?.branch_id || (order as any)?.branchId || (typeof order?.branch === 'object' ? (order.branch as any)?.id : '');
 
   useEffect(() => {
-    const fetchActiveBranches = async () => {
-      setFetchingBranches(true);
-      try {
-        const { data, error } = await supabase
-          .from('branches')
-          .select('id, name, display_order, is_active')
-          .eq('is_active', true)
-          .order('display_order', { ascending: true });
+    if (activeBranches && activeBranches.length > 0) {
+      setBranches(activeBranches.map(b => ({ id: b.id, name: b.name })));
+      setFetchingBranches(false);
+    } else {
+      const fetchActiveBranches = async () => {
+        setFetchingBranches(true);
+        try {
+          const { data } = await supabase
+            .from('branches')
+            .select('id, name, display_order, is_active')
+            .eq('is_active', true)
+            .order('display_order', { ascending: true });
 
-        if (data && data.length > 0) {
-          setBranches(data);
-        } else {
-          // Fallback to local store branches
+          if (data && data.length > 0) {
+            setBranches(data);
+          } else {
+            const storeBranches = getBranches()
+              .filter((b) => b.is_active !== false)
+              .map((b) => ({ id: b.id, name: b.name }));
+            setBranches(storeBranches);
+          }
+        } catch (e) {
           const storeBranches = getBranches()
             .filter((b) => b.is_active !== false)
             .map((b) => ({ id: b.id, name: b.name }));
           setBranches(storeBranches);
+        } finally {
+          setFetchingBranches(false);
         }
-      } catch (e) {
-        console.warn('Fallback to local branches store:', e);
-        const storeBranches = getBranches()
-          .filter((b) => b.is_active !== false)
-          .map((b) => ({ id: b.id, name: b.name }));
-        setBranches(storeBranches);
-      } finally {
-        setFetchingBranches(false);
-      }
-    };
+      };
 
-    fetchActiveBranches();
-  }, []);
+      fetchActiveBranches();
+    }
+  }, [activeBranches]);
 
   const handleTransfer = async () => {
     if (!selectedBranchId) {
