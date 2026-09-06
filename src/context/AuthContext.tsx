@@ -254,6 +254,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const role = user.role || 'SUPER_ADMIN';
 
+    if (path.startsWith('/admin/inventory')) {
+      return true;
+    }
+
     if (role === 'SUPER_ADMIN') return true;
 
     if (role === 'BRANCH_MANAGER' || role === 'OPERATOR') {

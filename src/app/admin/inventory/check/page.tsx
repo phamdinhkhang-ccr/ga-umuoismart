@@ -1,8 +1,6 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import Topbar from '@/components/Topbar';
-import Sidebar from '@/components/Sidebar';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabaseClient';
 import { getBranches, getProducts, calculateInventoryAudit, addInventoryLog, getItem } from '@/lib/store';
@@ -39,7 +37,6 @@ export interface BranchItem {
 
 export default function InventoryCheckPage() {
   const { user } = useAuth();
-  const [mobileOpen, setMobileOpen] = useState(false);
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [branches, setBranches] = useState<BranchItem[]>([]);
   const [selectedBranchId, setSelectedBranchId] = useState<string>('all');
@@ -264,194 +261,186 @@ export default function InventoryCheckPage() {
   };
 
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden font-sans">
-      <Sidebar mobileOpen={mobileOpen} onCloseMobile={() => setMobileOpen(false)} />
-
-      <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
-        <Topbar onToggleMobileMenu={() => setMobileOpen(!mobileOpen)} />
-
-        <main className="p-4 md:p-6 max-w-7xl mx-auto w-full space-y-6">
-          {/* Top Banner Header */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
-            <div>
-              <div className="flex items-center space-x-2 text-orange-600 mb-1">
-                <PackageCheck className="w-6 h-6" />
-                <span className="font-extrabold text-sm uppercase tracking-wider">Vận Hành Kho Chi Nhánh</span>
-              </div>
-              <h1 className="text-xl md:text-2xl font-extrabold text-slate-900 tracking-tight">
-                Kiểm Tra Tồn Kho Thực Tế
-              </h1>
-              <p className="text-slate-500 text-xs md:text-sm mt-0.5">
-                Theo dõi số lượng tồn, ngưỡng cảnh báo và đối soát kho theo từng cơ sở
-              </p>
-            </div>
-
-            <div className="flex items-center space-x-3">
-              <button
-                onClick={loadData}
-                className="flex items-center space-x-1.5 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition cursor-pointer"
-              >
-                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                <span>Làm Mới Dữ Liệu</span>
-              </button>
-            </div>
+    <div className="max-w-7xl mx-auto w-full space-y-6">
+      {/* Top Banner Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+        <div>
+          <div className="flex items-center space-x-2 text-orange-600 mb-1">
+            <PackageCheck className="w-6 h-6" />
+            <span className="font-extrabold text-sm uppercase tracking-wider">Vận Hành Kho Chi Nhánh</span>
           </div>
+          <h1 className="text-xl md:text-2xl font-extrabold text-slate-900 tracking-tight">
+            Kiểm Tra Tồn Kho Thực Tế
+          </h1>
+          <p className="text-slate-500 text-xs md:text-sm mt-0.5">
+            Theo dõi số lượng tồn, ngưỡng cảnh báo và đối soát kho theo từng cơ sở
+          </p>
+        </div>
 
-          {/* Stats Bar */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
-            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center space-x-3">
-              <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center font-bold">
-                <Boxes className="w-5 h-5" />
-              </div>
-              <div>
-                <span className="text-[11px] font-bold text-slate-400 block uppercase">Tổng Mặt Hàng</span>
-                <span className="text-xl font-extrabold text-slate-900">{stats.total}</span>
-              </div>
-            </div>
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={loadData}
+            className="flex items-center space-x-1.5 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition cursor-pointer"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            <span>Làm Mới Dữ Liệu</span>
+          </button>
+        </div>
+      </div>
 
-            <div className="bg-white p-4 rounded-2xl border border-emerald-100 shadow-xs flex items-center space-x-3">
-              <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
-                <CheckCircle2 className="w-5 h-5" />
-              </div>
-              <div>
-                <span className="text-[11px] font-bold text-emerald-600 block uppercase">🟢 Đủ Hàng</span>
-                <span className="text-xl font-extrabold text-emerald-700">{stats.inStock}</span>
-              </div>
-            </div>
-
-            <div className="bg-white p-4 rounded-2xl border border-amber-100 shadow-xs flex items-center space-x-3">
-              <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
-                <AlertTriangle className="w-5 h-5" />
-              </div>
-              <div>
-                <span className="text-[11px] font-bold text-amber-600 block uppercase">🟡 Sắp Hết</span>
-                <span className="text-xl font-extrabold text-amber-700">{stats.lowStock}</span>
-              </div>
-            </div>
-
-            <div className="bg-white p-4 rounded-2xl border border-rose-100 shadow-xs flex items-center space-x-3">
-              <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center font-bold">
-                <XCircle className="w-5 h-5" />
-              </div>
-              <div>
-                <span className="text-[11px] font-bold text-rose-600 block uppercase">🔴 Hết Hàng</span>
-                <span className="text-xl font-extrabold text-rose-700">{stats.outOfStock}</span>
-              </div>
-            </div>
+      {/* Stats Bar */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center space-x-3">
+          <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center font-bold">
+            <Boxes className="w-5 h-5" />
           </div>
-
-          {/* Filter Controls Row */}
-          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row items-center justify-between gap-4">
-            {/* Branch Filter */}
-            <div className="flex items-center space-x-2 w-full md:w-auto">
-              <Building2 className="w-4 h-4 text-slate-400 shrink-0" />
-              <span className="text-xs font-bold text-slate-600 whitespace-nowrap">Chi Nhánh:</span>
-              <select
-                value={selectedBranchId}
-                onChange={(e) => setSelectedBranchId(e.target.value)}
-                className="w-full md:w-64 bg-slate-50 border border-slate-200 text-slate-800 text-xs font-bold rounded-xl px-3 py-2 focus:ring-2 focus:ring-orange-500 focus:outline-hidden transition"
-              >
-                <option value="all">-- Tất cả chi nhánh --</option>
-                {(branches || []).map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Search Input */}
-            <div className="relative w-full md:w-80">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Tìm kiếm theo tên món / nguyên liệu..."
-                className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 text-slate-800 text-xs font-semibold rounded-xl focus:ring-2 focus:ring-orange-500 focus:outline-hidden transition"
-              />
-            </div>
+          <div>
+            <span className="text-[11px] font-bold text-slate-400 block uppercase">Tổng Mặt Hàng</span>
+            <span className="text-xl font-extrabold text-slate-900">{stats.total}</span>
           </div>
+        </div>
 
-          {/* Safe Inventory Data Table */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-            {loading ? (
-              <div className="py-16 text-center text-slate-500 text-xs font-semibold">
-                Đang tải dữ liệu tồn kho...
-              </div>
-            ) : (filteredItems || []).length === 0 ? (
-              <div className="py-16 text-center text-slate-400 text-xs font-semibold">
-                Chưa có mặt hàng nào trong kho. Dữ liệu kho đang ở trạng thái sẵn sàng cho đợt nhập hàng đầu tiên.
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-extrabold uppercase tracking-wider">
-                      <th className="py-3.5 px-4">Tên Món / Mặt Hàng</th>
-                      <th className="py-3.5 px-4">Đơn Vị</th>
-                      <th className="py-3.5 px-4 text-center">Tồn Kho Hiện Tại</th>
-                      <th className="py-3.5 px-4 text-center">Cảnh Báo (Tối Thiểu)</th>
-                      <th className="py-3.5 px-4 text-center">Trạng Thái Kho</th>
-                      <th className="py-3.5 px-4 text-center">Thao Tác</th>
+        <div className="bg-white p-4 rounded-2xl border border-emerald-100 shadow-xs flex items-center space-x-3">
+          <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+            <CheckCircle2 className="w-5 h-5" />
+          </div>
+          <div>
+            <span className="text-[11px] font-bold text-emerald-600 block uppercase">🟢 Đủ Hàng</span>
+            <span className="text-xl font-extrabold text-emerald-700">{stats.inStock}</span>
+          </div>
+        </div>
+
+        <div className="bg-white p-4 rounded-2xl border border-amber-100 shadow-xs flex items-center space-x-3">
+          <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
+            <AlertTriangle className="w-5 h-5" />
+          </div>
+          <div>
+            <span className="text-[11px] font-bold text-amber-600 block uppercase">🟡 Sắp Hết</span>
+            <span className="text-xl font-extrabold text-amber-700">{stats.lowStock}</span>
+          </div>
+        </div>
+
+        <div className="bg-white p-4 rounded-2xl border border-rose-100 shadow-xs flex items-center space-x-3">
+          <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center font-bold">
+            <XCircle className="w-5 h-5" />
+          </div>
+          <div>
+            <span className="text-[11px] font-bold text-rose-600 block uppercase">🔴 Hết Hàng</span>
+            <span className="text-xl font-extrabold text-rose-700">{stats.outOfStock}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Filter Controls Row */}
+      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row items-center justify-between gap-4">
+        {/* Branch Filter */}
+        <div className="flex items-center space-x-2 w-full md:w-auto">
+          <Building2 className="w-4 h-4 text-slate-400 shrink-0" />
+          <span className="text-xs font-bold text-slate-600 whitespace-nowrap">Chi Nhánh:</span>
+          <select
+            value={selectedBranchId}
+            onChange={(e) => setSelectedBranchId(e.target.value)}
+            className="w-full md:w-64 bg-slate-50 border border-slate-200 text-slate-800 text-xs font-bold rounded-xl px-3 py-2 focus:ring-2 focus:ring-orange-500 focus:outline-none transition"
+          >
+            <option value="all">-- Tất cả chi nhánh --</option>
+            {(branches || []).map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Search Input */}
+        <div className="relative w-full md:w-80">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Tìm kiếm theo tên món / nguyên liệu..."
+            className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 text-slate-800 text-xs font-semibold rounded-xl focus:ring-2 focus:ring-orange-500 focus:outline-none transition"
+          />
+        </div>
+      </div>
+
+      {/* Safe Inventory Data Table */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+        {loading ? (
+          <div className="py-16 text-center text-slate-500 text-xs font-semibold">
+            Đang tải dữ liệu tồn kho...
+          </div>
+        ) : (filteredItems || []).length === 0 ? (
+          <div className="py-16 text-center text-slate-400 text-xs font-semibold">
+            Chưa có mặt hàng nào trong kho. Dữ liệu kho đang ở trạng thái sẵn sàng cho đợt nhập hàng đầu tiên.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-extrabold uppercase tracking-wider">
+                  <th className="py-3.5 px-4">Tên Món / Mặt Hàng</th>
+                  <th className="py-3.5 px-4">Đơn Vị</th>
+                  <th className="py-3.5 px-4 text-center">Tồn Kho Hiện Tại</th>
+                  <th className="py-3.5 px-4 text-center">Cảnh Báo (Tối Thiểu)</th>
+                  <th className="py-3.5 px-4 text-center">Trạng Thái Kho</th>
+                  <th className="py-3.5 px-4 text-center">Thao Tác</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {(filteredItems || []).map((item) => {
+                  if (!item) return null;
+                  const qty = item.stock_quantity ?? 0;
+                  const minAlert = item.min_alert_threshold ?? 10;
+                  const isOutOfStock = qty <= 0;
+                  const isLowStock = !isOutOfStock && qty <= minAlert;
+
+                  return (
+                    <tr key={item.id} className="hover:bg-slate-50/80 transition">
+                      <td className="py-3.5 px-4 font-bold text-slate-900">
+                        <div>{item.name}</div>
+                        {item.sku && <span className="text-[10px] text-slate-400 font-normal">{item.sku}</span>}
+                      </td>
+                      <td className="py-3.5 px-4 font-semibold text-slate-600">
+                        {item.unit || 'Phần'}
+                      </td>
+                      <td className="py-3.5 px-4 text-center font-extrabold text-sm text-slate-900">
+                        {qty} <span className="text-slate-400 text-xs font-normal">{item.unit || 'Phần'}</span>
+                      </td>
+                      <td className="py-3.5 px-4 text-center text-slate-500 font-semibold">
+                        {minAlert} {item.unit || 'Phần'}
+                      </td>
+                      <td className="py-3.5 px-4 text-center">
+                        {isOutOfStock ? (
+                          <span className="inline-flex items-center px-3 py-1 text-xs rounded-full bg-rose-100 text-rose-700 font-bold animate-pulse">
+                            Hết hàng
+                          </span>
+                        ) : isLowStock ? (
+                          <span className="inline-flex items-center px-3 py-1 text-xs rounded-full bg-amber-100 text-amber-700 font-bold">
+                            Sắp hết
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-3 py-1 text-xs rounded-full bg-emerald-100 text-emerald-700 font-bold">
+                            Đủ hàng
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3.5 px-4 text-center">
+                        <button
+                          onClick={() => handleOpenAuditModal(item)}
+                          className="inline-flex items-center space-x-1 px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-700 font-bold rounded-lg text-xs transition cursor-pointer border border-orange-200"
+                        >
+                          <Edit className="w-3.5 h-3.5" />
+                          <span>Cập Nhật Số Tồn</span>
+                        </button>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {(filteredItems || []).map((item) => {
-                      if (!item) return null;
-                      const qty = item.stock_quantity ?? 0;
-                      const minAlert = item.min_alert_threshold ?? 10;
-                      const isOutOfStock = qty <= 0;
-                      const isLowStock = !isOutOfStock && qty <= minAlert;
-
-                      return (
-                        <tr key={item.id} className="hover:bg-slate-50/80 transition">
-                          <td className="py-3.5 px-4 font-bold text-slate-900">
-                            <div>{item.name}</div>
-                            {item.sku && <span className="text-[10px] text-slate-400 font-normal">{item.sku}</span>}
-                          </td>
-                          <td className="py-3.5 px-4 font-semibold text-slate-600">
-                            {item.unit || 'Phần'}
-                          </td>
-                          <td className="py-3.5 px-4 text-center font-extrabold text-sm text-slate-900">
-                            {qty} <span className="text-slate-400 text-xs font-normal">{item.unit || 'Phần'}</span>
-                          </td>
-                          <td className="py-3.5 px-4 text-center text-slate-500 font-semibold">
-                            {minAlert} {item.unit || 'Phần'}
-                          </td>
-                          <td className="py-3.5 px-4 text-center">
-                            {isOutOfStock ? (
-                              <span className="inline-flex items-center px-3 py-1 text-xs rounded-full bg-rose-100 text-rose-700 font-bold animate-pulse">
-                                Hết hàng
-                              </span>
-                            ) : isLowStock ? (
-                              <span className="inline-flex items-center px-3 py-1 text-xs rounded-full bg-amber-100 text-amber-700 font-bold">
-                                Sắp hết
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center px-3 py-1 text-xs rounded-full bg-emerald-100 text-emerald-700 font-bold">
-                                Đủ hàng
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-3.5 px-4 text-center">
-                            <button
-                              onClick={() => handleOpenAuditModal(item)}
-                              className="inline-flex items-center space-x-1 px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-700 font-bold rounded-lg text-xs transition cursor-pointer border border-orange-200"
-                            >
-                              <Edit className="w-3.5 h-3.5" />
-                              <span>Cập Nhật Số Tồn</span>
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-        </main>
+        )}
       </div>
 
       {/* Edit Stock Audit Modal */}
@@ -500,7 +489,7 @@ export default function InventoryCheckPage() {
                       min="0"
                       value={newStockVal}
                       onChange={(e) => setNewStockVal(e.target.value)}
-                      className="w-full p-2.5 bg-orange-50 border-2 border-orange-400 text-slate-900 font-extrabold text-center rounded-xl text-sm focus:outline-hidden focus:ring-2 focus:ring-orange-500"
+                      className="w-full p-2.5 bg-orange-50 border-2 border-orange-400 text-slate-900 font-extrabold text-center rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
                     />
                   </div>
                 </div>
@@ -512,7 +501,7 @@ export default function InventoryCheckPage() {
                     value={note}
                     onChange={(e) => setNote(e.target.value)}
                     placeholder="VD: Đếm thực tế giao ca, hàng hủy hỏng..."
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 font-semibold rounded-xl text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-orange-500"
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 font-semibold rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-orange-500"
                   />
                 </div>
 
