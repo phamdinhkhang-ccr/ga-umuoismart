@@ -866,10 +866,10 @@ export default function PublicStorefrontHome() {
           
           <div className="text-center max-w-2xl mx-auto space-y-2">
             <h2 className="text-2xl md:text-4xl font-extrabold text-slate-900 tracking-tight">
-              Hệ Thống 6 Cơ Sở Phủ Sóng Hà Nội &amp; TP.HCM
+              Hệ Thống {activeBranches.length || 6} Cơ Sở Phủ Sóng Hà Nội &amp; TP.HCM
             </h2>
             <p className="mt-3 text-sm md:text-base text-slate-600">
-              Sẵn sàng phục vụ hỏa tốc trong 30-40 phút
+              Sẵn sàng phục vụ hỏa tốc trong 30-40 phút tại các quận nội thành
             </p>
           </div>
 
@@ -895,24 +895,33 @@ export default function PublicStorefrontHome() {
 
                   <div className="flex items-center space-x-2">
                     <Phone className="w-3.5 h-3.5 text-orange-600 shrink-0" />
-                    <span className="font-bold text-slate-900">{b.phone}</span>
+                    <a href={`tel:${(b.phone || '').replace(/\s+/g, '').replace(/\./g, '')}`} className="font-bold text-slate-900 hover:text-orange-600 transition">
+                      {b.phone}
+                    </a>
                   </div>
 
                   <div className="flex items-center space-x-2 text-[11px]">
                     <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                    <span>Giờ mở cửa: {b.hours}</span>
+                    <span>Giờ mở cửa: {b.hours || '08:00 - 22:00'}</span>
                   </div>
                 </div>
 
                 <div className="pt-2 flex space-x-2">
                   <a
-                    href={b.maps_url}
+                    href={`tel:${(b.phone || '').replace(/\s+/g, '').replace(/\./g, '')}`}
+                    className="bg-orange-600 hover:bg-orange-700 text-white text-[11px] font-bold py-2 px-3 rounded-xl transition flex items-center justify-center space-x-1 shadow-2xs"
+                  >
+                    <Phone className="w-3.5 h-3.5" />
+                    <span>Gọi Hotline</span>
+                  </a>
+                  <a
+                    href={b.maps_url || `https://maps.google.com/?q=${encodeURIComponent(b.address || b.name)}`}
                     target="_blank"
                     rel="noreferrer"
                     className="flex-1 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 text-[11px] font-bold py-2 rounded-xl text-center transition flex items-center justify-center space-x-1"
                   >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                    <span>Xem Chỉ Đường Google Maps</span>
+                    <ExternalLink className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Chỉ Đường Google Maps</span>
                   </a>
                 </div>
               </div>

@@ -350,10 +350,112 @@ export function calculateInventoryAudit(ordersList: Order[]): InventoryAuditItem
 // -------------------------------------------------------------
 // BRANCHES MANAGEMENT FUNCTIONS & DATA
 // -------------------------------------------------------------
-const DEFAULT_BRANCHES: Branch[] = [];
+export const INITIAL_DEFAULT_BRANCHES: Branch[] = [
+  {
+    id: 'b1111111-1111-1111-1111-111111111111',
+    name: 'CƠ SỞ VIN SMART CITY',
+    address: 'Tòa S2.01 Vin Smart City, Phường Tây Mỗ',
+    district: 'Quận Nam Từ Liêm',
+    city: 'Hà Nội',
+    phone: '0984.263.340',
+    manager: 'Nguyễn Văn Đức',
+    status: 'ACTIVE',
+    hours: '08:00 - 22:30',
+    display_order: 1,
+    maps_url: 'https://maps.google.com/?q=Vin+Smart+City+Ha+Noi',
+    is_active: true,
+    capacity_per_hour: 40,
+    main_stock: 120
+  },
+  {
+    id: 'b2222222-2222-2222-2222-222222222222',
+    name: 'Chi Nhánh Gà Ủ Muối Cầu Giấy',
+    address: '88 Đường Cầu Giấy, Phường Quan Hoa',
+    district: 'Quận Cầu Giấy',
+    city: 'Hà Nội',
+    phone: '0902.345.678',
+    manager: 'Hoàng Văn Nam',
+    status: 'ACTIVE',
+    hours: '08:00 - 22:00',
+    display_order: 2,
+    maps_url: 'https://maps.google.com/?q=Cau+Giay+Ha+Noi',
+    is_active: true,
+    capacity_per_hour: 35,
+    main_stock: 95
+  },
+  {
+    id: 'b3333333-3333-3333-3333-333333333333',
+    name: 'Chi Nhánh Gà Ủ Muối Đống Đa',
+    address: '12 Phố Đặng Văn Ngữ, Phường Trung Tự',
+    district: 'Quận Đống Đa',
+    city: 'Hà Nội',
+    phone: '0903.456.789',
+    manager: 'Trần Văn Hải',
+    status: 'ACTIVE',
+    hours: '08:00 - 22:00',
+    display_order: 3,
+    maps_url: 'https://maps.google.com/?q=Dang+Van+Ngu+Dong+Da',
+    is_active: true,
+    capacity_per_hour: 30,
+    main_stock: 80
+  },
+  {
+    id: 'b4444444-4444-4444-4444-444444444444',
+    name: 'Chi Nhánh Gà Ủ Muối Quận 1 (TP.HCM)',
+    address: '145 Đường Lê Thị Riêng, Phường Bến Thành',
+    district: 'Quận 1',
+    city: 'Hồ Chí Minh',
+    phone: '0283.811.1111',
+    manager: 'Lê Văn Cơ Sở 1',
+    status: 'ACTIVE',
+    hours: '08:30 - 22:30',
+    display_order: 4,
+    maps_url: 'https://maps.google.com/?q=Le+Thi+Rieng+Quan+1',
+    is_active: true,
+    capacity_per_hour: 45,
+    main_stock: 110
+  },
+  {
+    id: 'b5555555-5555-5555-5555-555555555555',
+    name: 'Chi Nhánh Gà Ủ Muối Quận 3 (TP.HCM)',
+    address: '456 Điện Biên Phủ, Phường 11',
+    district: 'Quận 3',
+    city: 'Hồ Chí Minh',
+    phone: '0283.822.2222',
+    manager: 'Phạm Thị Cơ Sở 2',
+    status: 'ACTIVE',
+    hours: '08:00 - 22:00',
+    display_order: 5,
+    maps_url: 'https://maps.google.com/?q=Dien+Bien+Phu+Quan+3',
+    is_active: true,
+    capacity_per_hour: 35,
+    main_stock: 75
+  },
+  {
+    id: 'b6666666-6666-6666-6666-666666666666',
+    name: 'Chi Nhánh Gà Ủ Muối Thanh Trì',
+    address: 'Số 25 Tựu Liệt, Phụ Khánh',
+    district: 'Huyện Thanh Trì',
+    city: 'Hà Nội',
+    phone: '0977.888.999',
+    manager: 'Nguyễn Thị Hương',
+    status: 'ACTIVE',
+    hours: '08:00 - 22:00',
+    display_order: 6,
+    maps_url: 'https://maps.google.com/?q=Tuu+Liet+Thanh+Tri',
+    is_active: true,
+    capacity_per_hour: 25,
+    main_stock: 60
+  }
+];
 
 export function getBranches(): Branch[] {
-  return getItem<Branch[]>(KEYS.BRANCHES, DEFAULT_BRANCHES);
+  const stored = getItem<Branch[]>(KEYS.BRANCHES, INITIAL_DEFAULT_BRANCHES);
+  if (!stored || !Array.isArray(stored) || stored.length === 0) {
+    setItem(KEYS.BRANCHES, INITIAL_DEFAULT_BRANCHES);
+    return INITIAL_DEFAULT_BRANCHES;
+  }
+  return stored;
 }
 
 export function saveBranch(branchData: Partial<Branch> & { name: string }): Branch[] {
@@ -363,6 +465,7 @@ export function saveBranch(branchData: Partial<Branch> & { name: string }): Bran
     setItem(KEYS.BRANCHES, updated);
     return updated;
   } else {
+    const nextOrder = current.length + 1;
     const newBranch: Branch = {
       id: `b-${Date.now()}`,
       name: branchData.name,
@@ -372,6 +475,10 @@ export function saveBranch(branchData: Partial<Branch> & { name: string }): Bran
       phone: branchData.phone || '',
       manager: branchData.manager || 'Quản lý cơ sở',
       status: branchData.status || 'ACTIVE',
+      hours: branchData.hours || '08:00 - 22:00',
+      display_order: branchData.display_order || nextOrder,
+      maps_url: branchData.maps_url || `https://maps.google.com/?q=${encodeURIComponent(branchData.address || branchData.name)}`,
+      is_active: branchData.is_active !== undefined ? branchData.is_active : true,
       coverage_zones: branchData.coverage_zones || [branchData.district || 'Hà Nội'],
       capacity_per_hour: branchData.capacity_per_hour || 35,
       bank_name: branchData.bank_name || 'MB Bank',
@@ -390,7 +497,21 @@ export function saveBranch(branchData: Partial<Branch> & { name: string }): Bran
 
 export function updateBranchStatus(id: string, status: 'ACTIVE' | 'PAUSED' | 'OVERLOADED'): Branch[] {
   const current = getBranches();
-  const updated = current.map(b => b.id === id ? { ...b, status } : b);
+  const updated = current.map(b => b.id === id ? { ...b, status, is_active: status === 'ACTIVE' } : b);
+  setItem(KEYS.BRANCHES, updated);
+  return updated;
+}
+
+export function toggleBranchActive(id: string, is_active: boolean): Branch[] {
+  const current = getBranches();
+  const updated = current.map(b => b.id === id ? { ...b, is_active, status: is_active ? ('ACTIVE' as const) : ('PAUSED' as const) } : b);
+  setItem(KEYS.BRANCHES, updated);
+  return updated;
+}
+
+export function deleteBranch(id: string): Branch[] {
+  const current = getBranches();
+  const updated = current.filter(b => b.id !== id);
   setItem(KEYS.BRANCHES, updated);
   return updated;
 }
@@ -854,10 +975,23 @@ const DEFAULT_CMS_SETTINGS: StorefrontCmsSettings = {
 
 export function getCmsSettings(): StorefrontCmsSettings {
   const loaded = getItem<StorefrontCmsSettings>(KEYS.CMS, DEFAULT_CMS_SETTINGS);
+  const branchList = getBranches();
+  const cmsBranches: CmsBranchItem[] = branchList.map(b => ({
+    id: b.id,
+    name: b.name,
+    address: b.address,
+    phone: b.phone,
+    hours: b.hours || '08:00 - 22:00',
+    maps_url: b.maps_url || `https://maps.google.com/?q=${encodeURIComponent(b.address || b.name)}`,
+    is_active: b.is_active !== false && b.status !== 'PAUSED',
+    district: b.district,
+    city: b.city
+  }));
+
   return {
     ...DEFAULT_CMS_SETTINGS,
     ...loaded,
-    branches: Array.isArray(loaded?.branches) ? loaded.branches : [],
+    branches: cmsBranches,
     bankInfo: loaded?.bankInfo || DEFAULT_CMS_SETTINGS.bankInfo
   };
 }

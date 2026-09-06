@@ -18,6 +18,10 @@ export interface Branch {
   created_at?: string;
   manager?: string;
   status?: 'ACTIVE' | 'PAUSED' | 'OVERLOADED';
+  hours?: string;
+  display_order?: number;
+  maps_url?: string;
+  is_active?: boolean;
   coverage_zones?: string[];
   capacity_per_hour?: number;
   bank_name?: string;

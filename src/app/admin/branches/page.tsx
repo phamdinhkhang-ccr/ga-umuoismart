@@ -1,44 +1,51 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { 
   Building2, MapPin, Phone, Plus, Store, 
   TrendingUp, PackageCheck, ShoppingBag, 
   ArrowLeftRight, Settings, BarChart3, X, 
-  CreditCard, Navigation, ShieldCheck, Check, Users, Sparkles
+  CreditCard, Navigation, ShieldCheck, Check, Users, Sparkles,
+  Edit3, Trash2, Power, ExternalLink, Clock, Search, AlertTriangle, AlertCircle, RotateCcw
 } from 'lucide-react';
 import { Branch } from '@/types/database';
 import { 
-  getBranches, saveBranch, updateBranchStatus, 
-  transferInventoryBetweenBranches 
+  getBranches, saveBranch, updateBranchStatus, toggleBranchActive, deleteBranch,
+  transferInventoryBetweenBranches, getCmsSettings, saveCmsSettings
 } from '@/lib/store';
 import { useAuth } from '@/context/AuthContext';
-import { AlertCircle } from 'lucide-react';
+import { supabase } from '@/lib/supabaseClient';
 
 export default function BranchesPage() {
   const { user } = useAuth();
   const [branches, setBranches] = useState<Branch[]>([]);
-  const [activeModal, setActiveModal] = useState<'CONFIG' | 'TRANSFER' | 'REPORT' | null>(null);
   
-  // Selected Branch state for edit/transfer/report
+  // Filter & Search state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCity, setSelectedCity] = useState<string>('ALL');
+  const [statusTab, setStatusTab] = useState<'ALL' | 'ACTIVE' | 'PAUSED'>('ALL');
+
+  // Modals state
+  const [activeModal, setActiveModal] = useState<'CONFIG' | 'TRANSFER' | 'DELETE_CONFIRM' | null>(null);
   const [selectedBranch, setSelectedBranch] = useState<Branch | null>(null);
 
-  // Form State for Add / Edit Branch Config
+  // Form State for Add / Edit Branch
   const [formData, setFormData] = useState<Partial<Branch>>({
     name: '',
-    manager: '',
-    status: 'ACTIVE',
-    phone: '',
-    capacity_per_hour: 40,
-    city: 'Hà Nội',
-    district: '',
     address: '',
-    coverage_zones: [],
+    phone: '',
+    hours: '08:00 - 22:30',
+    display_order: 1,
+    city: 'Hà Nội',
+    district: 'Cầu Giấy',
+    manager: 'Quản lý cơ sở',
+    status: 'ACTIVE',
+    is_active: true,
+    maps_url: '',
     bank_name: 'MB Bank',
-    bank_account: '',
+    bank_account: '0988123456',
     bank_holder: ''
   });
-  const [newZoneInput, setNewZoneInput] = useState('');
 
   // Form State for Transfer Inventory
   const [transferData, setTransferData] = useState({
@@ -48,8 +55,54 @@ export default function BranchesPage() {
     note: ''
   });
 
-  // Success Notification state
+  // Toast message
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3500);
+  };
+
+  // Sync to Supabase Storefront Settings
+  const syncBranchesToSupabase = async (branchList: Branch[]) => {
+    try {
+      const cmsBranches = branchList.map(b => ({
+        id: b.id,
+        name: b.name,
+        address: b.address,
+        phone: b.phone,
+        hours: b.hours || '08:00 - 22:00',
+        maps_url: b.maps_url || `https://maps.google.com/?q=${encodeURIComponent(b.address || b.name)}`,
+        is_active: b.is_active !== false && b.status !== 'PAUSED',
+        district: b.district,
+        city: b.city
+      }));
+
+      // 1. Update CMS settings local
+      saveCmsSettings({ branches: cmsBranches });
+
+      // 2. Fetch current config and update Supabase
+      const { data } = await supabase
+        .from('storefront_settings')
+        .select('*')
+        .eq('id', 'default_config')
+        .maybeSingle();
+
+      const existingConfig = data?.data || {};
+      const updatedConfig = {
+        ...existingConfig,
+        branches: cmsBranches
+      };
+
+      await supabase.from('storefront_settings').upsert({
+        id: 'default_config',
+        data: updatedConfig,
+        updated_at: new Date().toISOString()
+      });
+    } catch (e) {
+      console.warn('Lỗi đồng bộ Supabase branches:', e);
+    }
+  };
 
   const reloadBranches = () => {
     const list = getBranches();
@@ -75,34 +128,54 @@ export default function BranchesPage() {
     );
   }
 
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3500);
-  };
+  // Filtered Branches List
+  const filteredBranches = useMemo(() => {
+    return branches.filter((b) => {
+      const q = searchQuery.toLowerCase().trim();
+      const nameMatch = (b.name || '').toLowerCase().includes(q);
+      const addrMatch = (b.address || '').toLowerCase().includes(q);
+      const phoneMatch = (b.phone || '').includes(q);
+      const distMatch = (b.district || '').toLowerCase().includes(q);
 
-  // Status Change Handler
-  const handleStatusChange = (branchId: string, newStatus: 'ACTIVE' | 'PAUSED' | 'OVERLOADED') => {
-    const updated = updateBranchStatus(branchId, newStatus);
+      const matchSearch = !q || nameMatch || addrMatch || phoneMatch || distMatch;
+      const matchCity = selectedCity === 'ALL' || b.city === selectedCity;
+      
+      const isActive = b.is_active !== false && b.status !== 'PAUSED';
+      const matchStatus = 
+        statusTab === 'ALL' || 
+        (statusTab === 'ACTIVE' && isActive) || 
+        (statusTab === 'PAUSED' && !isActive);
+
+      return matchSearch && matchCity && matchStatus;
+    }).sort((a, b) => (a.display_order || 99) - (b.display_order || 99));
+  }, [branches, searchQuery, selectedCity, statusTab]);
+
+  // Toggle Branch Active State
+  const handleToggleActive = async (branch: Branch) => {
+    const newActiveState = !(branch.is_active !== false && branch.status !== 'PAUSED');
+    const updated = toggleBranchActive(branch.id, newActiveState);
     setBranches(updated);
-    const b = updated.find(x => x.id === branchId);
-    showToast(`Đã cập nhật trạng thái chi nhánh "${b?.name}" thành ${newStatus === 'ACTIVE' ? 'Đang hoạt động' : newStatus === 'PAUSED' ? 'Tạm dừng nhận đơn' : 'Quá tải'}`);
+    await syncBranchesToSupabase(updated);
+    showToast(`Đã ${newActiveState ? 'BẬT' : 'TẮT'} trạng thái hoạt động của cơ sở "${branch.name}"`);
   };
 
-  // Open Config Modal (Create or Edit)
+  // Open Add / Edit Modal
   const openConfigModal = (branch?: Branch) => {
     if (branch) {
       setSelectedBranch(branch);
       setFormData({
         id: branch.id,
         name: branch.name,
-        manager: branch.manager || '',
-        status: branch.status || 'ACTIVE',
-        phone: branch.phone || '',
-        capacity_per_hour: branch.capacity_per_hour || 40,
-        city: branch.city || 'Hà Nội',
-        district: branch.district || '',
         address: branch.address || '',
-        coverage_zones: branch.coverage_zones ? [...branch.coverage_zones] : [],
+        phone: branch.phone || '',
+        hours: branch.hours || '08:00 - 22:30',
+        display_order: branch.display_order || 1,
+        city: branch.city || 'Hà Nội',
+        district: branch.district || 'Cầu Giấy',
+        manager: branch.manager || 'Quản lý cơ sở',
+        status: branch.status || 'ACTIVE',
+        is_active: branch.is_active !== false && branch.status !== 'PAUSED',
+        maps_url: branch.maps_url || '',
         bank_name: branch.bank_name || 'MB Bank',
         bank_account: branch.bank_account || '',
         bank_holder: branch.bank_holder || ''
@@ -111,53 +184,63 @@ export default function BranchesPage() {
       setSelectedBranch(null);
       setFormData({
         name: '',
-        manager: 'Quản lý cơ sở',
-        status: 'ACTIVE',
+        address: '',
         phone: '',
-        capacity_per_hour: 40,
+        hours: '08:00 - 22:30',
+        display_order: branches.length + 1,
         city: 'Hà Nội',
         district: 'Cầu Giấy',
-        address: '',
-        coverage_zones: ['Cầu Giấy', 'Đống Đa', 'Thanh Xuân'],
+        manager: 'Quản lý cơ sở',
+        status: 'ACTIVE',
+        is_active: true,
+        maps_url: '',
         bank_name: 'MB Bank',
         bank_account: '0988123456',
-        bank_holder: 'CHU TAI KHOAN CHI NHANH'
+        bank_holder: 'GA U MUOI SMART'
       });
     }
     setActiveModal('CONFIG');
   };
 
-  // Coverage Zone Tag Handlers
-  const handleAddZone = () => {
-    if (!newZoneInput.trim()) return;
-    const currentZones = formData.coverage_zones || [];
-    if (!currentZones.includes(newZoneInput.trim())) {
-      setFormData({ ...formData, coverage_zones: [...currentZones, newZoneInput.trim()] });
-    }
-    setNewZoneInput('');
-  };
-
-  const handleRemoveZone = (zoneToRemove: string) => {
-    const currentZones = formData.coverage_zones || [];
-    setFormData({
-      ...formData,
-      coverage_zones: currentZones.filter(z => z !== zoneToRemove)
-    });
-  };
-
-  // Save Branch Handler
-  const handleSaveBranch = (e: React.FormEvent) => {
+  // Submit Add / Edit Form
+  const handleSaveBranchForm = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name?.trim()) return;
+    if (!formData.name?.trim() || !formData.address?.trim()) {
+      showToast('⚠️ Vui lòng điền đầy đủ Tên cơ sở và Địa chỉ chi tiết!');
+      return;
+    }
 
     const updatedList = saveBranch({
       ...formData,
-      name: formData.name.trim()
+      name: formData.name.trim(),
+      address: formData.address.trim(),
+      phone: formData.phone?.trim() || '0988.xxx.xxx',
+      hours: formData.hours?.trim() || '08:00 - 22:00',
+      display_order: Number(formData.display_order || 1),
+      is_active: formData.is_active ?? true,
+      status: formData.is_active ? 'ACTIVE' : 'PAUSED'
     } as Partial<Branch> & { name: string });
 
     setBranches(updatedList);
+    await syncBranchesToSupabase(updatedList);
     setActiveModal(null);
-    showToast(selectedBranch ? `Đã cập nhật cấu hình "${formData.name}"` : `Đã thêm chi nhánh mới "${formData.name}"`);
+    showToast(selectedBranch ? `Đã cập nhật thông tin cơ sở "${formData.name}"` : `Đã thêm thành công cơ sở mới "${formData.name}"`);
+  };
+
+  // Open Delete Confirmation Modal
+  const openDeleteModal = (branch: Branch) => {
+    setSelectedBranch(branch);
+    setActiveModal('DELETE_CONFIRM');
+  };
+
+  // Confirm Delete Branch
+  const handleConfirmDelete = async () => {
+    if (!selectedBranch) return;
+    const updatedList = deleteBranch(selectedBranch.id);
+    setBranches(updatedList);
+    await syncBranchesToSupabase(updatedList);
+    setActiveModal(null);
+    showToast(`Đã xóa cơ sở "${selectedBranch.name}" khỏi hệ thống!`);
   };
 
   // Open Inventory Transfer Modal
@@ -177,7 +260,6 @@ export default function BranchesPage() {
   const handleExecuteTransfer = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedBranch || !transferData.targetBranchId) return;
-
     const targetBranch = branches.find(b => b.id === transferData.targetBranchId);
 
     const updatedList = transferInventoryBetweenBranches(
@@ -193,318 +275,378 @@ export default function BranchesPage() {
     showToast(`Đã điều chuyển ${transferData.quantity} ${transferData.itemName} từ "${selectedBranch.name}" tới "${targetBranch?.name}"`);
   };
 
-  // Open Branch Report Modal
-  const openReportModal = (branch: Branch) => {
-    setSelectedBranch(branch);
-    setActiveModal('REPORT');
-  };
-
-  // Overall Stats
-  const activeCount = branches.filter(b => b.status === 'ACTIVE').length;
-  const totalCapacity = branches.reduce((sum, b) => sum + (b.capacity_per_hour || 35), 0);
+  // Stats
+  const totalBranches = branches.length;
+  const activeCount = branches.filter(b => b.is_active !== false && b.status !== 'PAUSED').length;
+  const pausedCount = totalBranches - activeCount;
 
   return (
-    <div className="space-y-6">
+    <div className="min-h-screen bg-slate-50 text-slate-900 p-4 sm:p-6 lg:p-8 space-y-6">
+      
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed top-5 right-5 z-50 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-xl flex items-center gap-3 text-xs font-semibold animate-bounce border border-slate-700">
-          <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+        <div className="fixed top-5 right-5 z-50 bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-xl flex items-center gap-3 text-xs font-semibold animate-bounce border border-slate-700">
+          <Sparkles className="w-4 h-4 text-orange-400 shrink-0" />
           <span>{toastMessage}</span>
         </div>
       )}
 
-      {/* Top Banner & Header Navigation */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        <div className="flex items-center space-x-3.5">
-          <div className="p-3.5 bg-sky-50 text-sky-600 rounded-2xl border border-sky-100 shrink-0">
-            <Building2 className="w-7 h-7" />
-          </div>
-          <div>
-            <h1 className="text-xl font-extrabold text-slate-900 flex items-center gap-2">
-              Trung Tâm Điều Phối Chi Nhánh
-              <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-sky-100 text-sky-800">
-                {branches.length} Cơ sở
-              </span>
-            </h1>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Quản lý mạng lưới chi nhánh, năng lực phục vụ, địa bàn tự động &amp; điều phối tồn kho.
-            </p>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center justify-between lg:justify-end gap-3 border-t lg:border-t-0 pt-3 lg:pt-0 border-slate-100">
-          {/* Quick Stats Tags */}
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-              {activeCount}/{branches.length} Chi nhánh đang mở ca
-            </span>
-            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-semibold bg-sky-50 text-sky-700 border border-sky-200/60">
-              <Sparkles className="w-3.5 h-3.5 text-sky-600" />
-              Năng lực: {totalCapacity} đơn/giờ
-            </span>
-          </div>
-
-          {/* Top Right Action Button */}
-          <button
-            onClick={() => openConfigModal()}
-            className="bg-sky-600 hover:bg-sky-700 active:scale-98 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition flex items-center gap-2 shadow-xs cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Thêm Chi Nhánh Mới</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Rich Branch Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-xs">
-        {branches.map((b) => {
-          const isSelected = selectedBranch?.id === b.id;
-
-          return (
-            <div
-              key={b.id}
-              className={`bg-white border rounded-2xl p-5 shadow-xs space-y-4 transition flex flex-col justify-between ${
-                isSelected ? 'border-sky-500 ring-2 ring-sky-500/10' : 'border-slate-200 hover:border-slate-300'
-              }`}
-            >
-              <div className="space-y-3.5">
-                {/* Header Card: Store Name, Manager & Status Dropdown */}
-                <div className="flex justify-between items-start gap-3">
-                  <div>
-                    <h3 className="font-extrabold text-base text-slate-900 flex items-center gap-2">
-                      <Store className="w-4 h-4 text-amber-600 shrink-0" />
-                      {b.name}
-                    </h3>
-                    <span className="text-xs text-slate-500 font-medium mt-0.5 block flex items-center gap-1">
-                      <Users className="w-3 h-3 text-slate-400" /> Quản lý: <strong className="text-slate-700">{b.manager || 'Chưa gán'}</strong>
-                    </span>
-                  </div>
-
-                  {/* Quick Status Dropdown */}
-                  <div className="relative shrink-0">
-                    <select
-                      value={b.status || 'ACTIVE'}
-                      onChange={(e) => handleStatusChange(b.id, e.target.value as any)}
-                      className={`text-[11px] font-extrabold px-3 py-1 rounded-xl border appearance-none pr-7 cursor-pointer outline-none transition ${
-                        b.status === 'ACTIVE'
-                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
-                          : b.status === 'PAUSED'
-                          ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
-                          : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
-                      }`}
-                    >
-                      <option value="ACTIVE">🟢 Đang hoạt động</option>
-                      <option value="PAUSED">🟡 Tạm dừng nhận đơn</option>
-                      <option value="OVERLOADED">🔴 Quá tải đơn</option>
-                    </select>
-                    <div className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400">
-                      ▼
-                    </div>
-                  </div>
-                </div>
-
-                {/* Body Card: Realtime Operational Metrics (3 Boxes) */}
-                <div className="grid grid-cols-3 gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-100 text-center">
-                  <div className="space-y-0.5">
-                    <span className="text-[10px] text-slate-500 font-medium flex items-center justify-center gap-1">
-                      <ShoppingBag className="w-3 h-3 text-sky-600" /> Đơn hôm nay
-                    </span>
-                    <p className="font-extrabold text-xs text-slate-800">
-                      <span className="text-sky-600 font-bold">{b.orders_pending || 0}</span> / {b.orders_total_today || 0}
-                    </p>
-                  </div>
-
-                  <div className="space-y-0.5 border-x border-slate-200/60 px-1">
-                    <span className="text-[10px] text-slate-500 font-medium flex items-center justify-center gap-1">
-                      <TrendingUp className="w-3 h-3 text-emerald-600" /> Doanh thu ngày
-                    </span>
-                    <p className="font-extrabold text-xs text-emerald-700">
-                      {(b.revenue_today || 0).toLocaleString('vi-VN')}đ
-                    </p>
-                  </div>
-
-                  <div className="space-y-0.5">
-                    <span className="text-[10px] text-slate-500 font-medium flex items-center justify-center gap-1">
-                      <PackageCheck className="w-3 h-3 text-amber-600" /> Tồn kho chính
-                    </span>
-                    <p className="font-extrabold text-xs text-amber-800">
-                      {b.main_stock || 0} con
-                    </p>
-                  </div>
-                </div>
-
-                {/* Contact Info & Coverage Zones */}
-                <div className="space-y-2 text-slate-700">
-                  <p className="flex items-start gap-2">
-                    <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
-                    <span>{b.address}, {b.district}, {b.city}</span>
-                  </p>
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="flex items-center gap-1.5 font-semibold text-emerald-700">
-                      <Phone className="w-3.5 h-3.5 shrink-0" />
-                      <span>Hotline: {b.phone}</span>
-                    </p>
-                    {b.bank_name && (
-                      <p className="flex items-center gap-1 text-[11px] text-slate-500">
-                        <CreditCard className="w-3 h-3 text-slate-400" />
-                        <span>{b.bank_name}: <strong className="text-slate-700 font-semibold">{b.bank_account}</strong></span>
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Coverage Zones Tags */}
-                  <div className="pt-2 border-t border-slate-100">
-                    <span className="text-[11px] text-slate-600 font-bold flex items-center gap-1 mb-1.5">
-                      <Navigation className="w-3 h-3 text-sky-600" /> Địa bàn phụ trách (Routing):
-                    </span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {b.coverage_zones && b.coverage_zones.length > 0 ? (
-                        b.coverage_zones.map((zone, idx) => (
-                          <span
-                            key={idx}
-                            className="px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-sky-50 text-sky-800 border border-sky-100"
-                          >
-                            📍 {zone}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="text-[10px] text-slate-400 italic">Chưa gán địa bàn</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
+      <div className="max-w-7xl mx-auto space-y-6">
+        
+        {/* Top Banner & Quick Action Header */}
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+            <div className="flex items-center space-x-3.5">
+              <div className="p-3 bg-orange-50 text-orange-600 rounded-2xl border border-orange-200 shrink-0">
+                <Store className="w-7 h-7" />
               </div>
-
-              {/* Footer Card: Quick Action Buttons */}
-              <div className="pt-3 border-t border-slate-100 flex items-center gap-2">
-                <button
-                  onClick={() => openTransferModal(b)}
-                  className="flex-1 bg-slate-100 hover:bg-slate-200 active:scale-98 text-slate-700 font-bold px-3 py-2 rounded-xl text-xs transition flex items-center justify-center gap-1.5 cursor-pointer"
-                >
-                  <ArrowLeftRight className="w-3.5 h-3.5 text-slate-600" />
-                  <span>Chuyển Kho</span>
-                </button>
-
-                <button
-                  onClick={() => openConfigModal(b)}
-                  className="flex-1 bg-sky-50 hover:bg-sky-100 active:scale-98 text-sky-700 font-bold px-3 py-2 rounded-xl text-xs transition flex items-center justify-center gap-1.5 border border-sky-200/60 cursor-pointer"
-                >
-                  <Settings className="w-3.5 h-3.5 text-sky-600" />
-                  <span>Cấu Hình</span>
-                </button>
-
-                <button
-                  onClick={() => openReportModal(b)}
-                  className="flex-1 bg-emerald-50 hover:bg-emerald-100 active:scale-98 text-emerald-700 font-bold px-3 py-2 rounded-xl text-xs transition flex items-center justify-center gap-1.5 border border-emerald-200/60 cursor-pointer"
-                >
-                  <BarChart3 className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Báo Cáo</span>
-                </button>
+              <div>
+                <h1 className="text-xl font-extrabold text-slate-900 flex items-center gap-2">
+                  Quản Lý Hệ Thống Cơ Sở / Chi Nhánh
+                  <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-orange-100 text-orange-800 border border-orange-200">
+                    {totalBranches} Điểm bán
+                  </span>
+                </h1>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Thêm, sửa, xóa, bật/tắt trạng thái hoạt động của cơ sở &amp; tự động đồng bộ ra Landing Page.
+                </p>
               </div>
             </div>
-          );
-        })}
-      </div>
 
-      {/* ------------------------------------------------------------- */}
-      {/* MODAL 1: THÊM / CẤU HÌNH CHI NHÁNH */}
-      {/* ------------------------------------------------------------- */}
-      {activeModal === 'CONFIG' && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-xl w-full p-6 space-y-5 border border-slate-100 animate-in fade-in zoom-in-95 my-8">
-            <div className="flex justify-between items-center pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 bg-sky-50 text-sky-600 rounded-xl">
-                  <Building2 className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-base text-slate-900">
-                    {selectedBranch ? `Cấu Hình Chi Nhánh: ${selectedBranch.name}` : 'Thêm Chi Nhánh Mới'}
-                  </h3>
-                  <p className="text-xs text-slate-500">Cập nhật địa bàn phủ sóng &amp; tài khoản VietQR nhận tiền.</p>
-                </div>
+            {/* Prominent Orange "+ Thêm Cơ Sở Mới" Button */}
+            <button
+              onClick={() => openConfigModal()}
+              className="bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-extrabold px-5 py-3 rounded-xl text-xs shadow-md hover:shadow-lg transition flex items-center justify-center space-x-2 cursor-pointer shrink-0"
+            >
+              <Plus className="w-4 h-4 bg-white/20 rounded-full p-0.5" />
+              <span>+ Thêm Cơ Sở Mới</span>
+            </button>
+          </div>
+
+          {/* Quick Metrics Bar */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1 text-xs">
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Building2 className="w-4 h-4 text-slate-500" />
+                <span className="font-semibold text-slate-700">Tổng Số Cơ Sở:</span>
               </div>
-              <button
-                onClick={() => setActiveModal(null)}
-                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition"
+              <span className="font-extrabold text-slate-900 text-sm">{totalBranches}</span>
+            </div>
+
+            <div className="bg-emerald-50/60 border border-emerald-200 rounded-xl p-3 flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Power className="w-4 h-4 text-emerald-600" />
+                <span className="font-semibold text-emerald-800">Đang Hoạt Động:</span>
+              </div>
+              <span className="font-extrabold text-emerald-700 text-sm">{activeCount} điểm</span>
+            </div>
+
+            <div className="bg-amber-50/60 border border-amber-200 rounded-xl p-3 flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <AlertTriangle className="w-4 h-4 text-amber-600" />
+                <span className="font-semibold text-amber-800">Tạm Đóng Cửa:</span>
+              </div>
+              <span className="font-extrabold text-amber-700 text-sm">{pausedCount} điểm</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Filter Controls Row */}
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 text-xs">
+            
+            {/* Search Input */}
+            <div className="sm:col-span-6 relative">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Tìm tên cơ sở, địa chỉ, số điện thoại hotline..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold outline-none focus:border-orange-500 transition"
+              />
+            </div>
+
+            {/* City Select Filter */}
+            <div className="sm:col-span-3">
+              <select
+                value={selectedCity}
+                onChange={(e) => setSelectedCity(e.target.value)}
+                className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none cursor-pointer"
               >
-                <X className="w-5 h-5" />
+                <option value="ALL">Tất cả Thành phố</option>
+                <option value="Hà Nội">Hà Nội</option>
+                <option value="Hồ Chí Minh">Hồ Chí Minh</option>
+              </select>
+            </div>
+
+            {/* Status Tabs Filter */}
+            <div className="sm:col-span-3 flex bg-slate-100 p-1 rounded-xl font-semibold text-slate-600">
+              <button
+                onClick={() => setStatusTab('ALL')}
+                className={`flex-1 py-1 text-center rounded-lg transition cursor-pointer text-[11px] ${
+                  statusTab === 'ALL' ? 'bg-white text-orange-600 shadow-2xs font-bold' : ''
+                }`}
+              >
+                Tất cả ({branches.length})
+              </button>
+              <button
+                onClick={() => setStatusTab('ACTIVE')}
+                className={`flex-1 py-1 text-center rounded-lg transition cursor-pointer text-[11px] ${
+                  statusTab === 'ACTIVE' ? 'bg-white text-emerald-600 shadow-2xs font-bold' : ''
+                }`}
+              >
+                🟢 Mở ({activeCount})
+              </button>
+              <button
+                onClick={() => setStatusTab('PAUSED')}
+                className={`flex-1 py-1 text-center rounded-lg transition cursor-pointer text-[11px] ${
+                  statusTab === 'PAUSED' ? 'bg-white text-amber-600 shadow-2xs font-bold' : ''
+                }`}
+              >
+                🔴 Đóng ({pausedCount})
               </button>
             </div>
 
-            <form onSubmit={handleSaveBranch} className="space-y-4 text-xs">
+          </div>
+        </div>
+
+        {/* Branches Data Table / Cards (Responsive) */}
+        <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs whitespace-nowrap">
+              <thead className="bg-slate-50 border-b border-slate-200 text-slate-700 font-bold uppercase text-[10px] tracking-wider">
+                <tr>
+                  <th className="p-3.5 text-center">Thứ tự</th>
+                  <th className="p-3.5">Tên Cơ Sở</th>
+                  <th className="p-3.5">Địa Chỉ Chi Tiết</th>
+                  <th className="p-3.5">Hotline Cơ Sở</th>
+                  <th className="p-3.5">Giờ Hoạt Động</th>
+                  <th className="p-3.5">Quản Lý Phụ Trách</th>
+                  <th className="p-3.5 text-center">Trạng Thái</th>
+                  <th className="p-3.5 text-center">Thao Tác Quản Trị</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
+                {filteredBranches.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="p-8 text-center text-slate-400">
+                      Không tìm thấy cơ sở nào phù hợp với bộ lọc.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredBranches.map((b, idx) => {
+                    const isActive = b.is_active !== false && b.status !== 'PAUSED';
+
+                    return (
+                      <tr key={b.id} className="hover:bg-slate-50 transition">
+                        
+                        {/* Display Order */}
+                        <td className="p-3.5 text-center font-extrabold text-slate-400">
+                          #{b.display_order || idx + 1}
+                        </td>
+
+                        {/* Name */}
+                        <td className="p-3.5">
+                          <div className="font-extrabold text-slate-900 flex items-center gap-1.5">
+                            <Store className="w-4 h-4 text-orange-600 shrink-0" />
+                            <span>{b.name}</span>
+                          </div>
+                        </td>
+
+                        {/* Address */}
+                        <td className="p-3.5 text-slate-600 max-w-xs truncate" title={b.address}>
+                          <div className="flex items-center space-x-1">
+                            <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                            <span>{b.address}</span>
+                          </div>
+                        </td>
+
+                        {/* Phone */}
+                        <td className="p-3.5 font-bold text-slate-900">
+                          <a 
+                            href={`tel:${(b.phone || '').replace(/\s+/g, '')}`} 
+                            className="flex items-center space-x-1 text-slate-900 hover:text-orange-600 transition"
+                          >
+                            <Phone className="w-3.5 h-3.5 text-orange-600 shrink-0" />
+                            <span>{b.phone || '0988.xxx.xxx'}</span>
+                          </a>
+                        </td>
+
+                        {/* Operating Hours */}
+                        <td className="p-3.5 font-semibold text-slate-700">
+                          <div className="flex items-center space-x-1">
+                            <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                            <span>{b.hours || '08:00 - 22:00'}</span>
+                          </div>
+                        </td>
+
+                        {/* Manager */}
+                        <td className="p-3.5 font-medium text-slate-700">
+                          {b.manager || 'Quản lý cơ sở'}
+                        </td>
+
+                        {/* Active Toggle Status Button */}
+                        <td className="p-3.5 text-center">
+                          <button
+                            onClick={() => handleToggleActive(b)}
+                            title="Click để Bật / Tắt trạng thái hoạt động"
+                            className={`inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-[11px] font-extrabold border cursor-pointer transition ${
+                              isActive
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                                : 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100'
+                            }`}
+                          >
+                            <Power className={`w-3 h-3 ${isActive ? 'text-emerald-600' : 'text-amber-600'}`} />
+                            <span>{isActive ? '🟢 Đang hoạt động' : '🔴 Tạm đóng cửa'}</span>
+                          </button>
+                        </td>
+
+                        {/* Action Buttons */}
+                        <td className="p-3.5 text-center">
+                          <div className="flex items-center justify-center space-x-1.5">
+                            {/* Edit Button */}
+                            <button
+                              onClick={() => openConfigModal(b)}
+                              title="Sửa thông tin cơ sở"
+                              className="p-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition cursor-pointer border border-blue-200"
+                            >
+                              <Edit3 className="w-4 h-4" />
+                            </button>
+
+                            {/* Google Maps External Link */}
+                            {b.maps_url && (
+                              <a
+                                href={b.maps_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                title="Xem chỉ đường Google Maps"
+                                className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition cursor-pointer border border-slate-200"
+                              >
+                                <ExternalLink className="w-4 h-4" />
+                              </a>
+                            )}
+
+                            {/* Inventory Transfer Button */}
+                            <button
+                              onClick={() => openTransferModal(b)}
+                              title="Điều chuyển hàng kho"
+                              className="p-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-lg transition cursor-pointer border border-purple-200"
+                            >
+                              <ArrowLeftRight className="w-4 h-4" />
+                            </button>
+
+                            {/* Delete Button (Super Admin) */}
+                            <button
+                              onClick={() => openDeleteModal(b)}
+                              title="Xóa cơ sở"
+                              className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-lg transition cursor-pointer border border-rose-200"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
+      {/* ------------------------------------------------------------- */}
+      {/* 1. MODAL THÊM & SỬA THÔNG TIN CƠ SỞ (ADD / EDIT FORM MODAL) */}
+      {/* ------------------------------------------------------------- */}
+      {activeModal === 'CONFIG' && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl space-y-5 animate-in zoom-in-95 duration-150 my-auto">
+            
+            {/* Modal Header */}
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+                <Store className="w-5 h-5 text-orange-600" />
+                {selectedBranch ? `Chỉnh Sửa Cơ Sở: ${selectedBranch.name}` : 'Thêm Cơ Sở Mới Vào Hệ Thống'}
+              </h3>
+              <button onClick={() => setActiveModal(null)} className="text-slate-400 hover:text-slate-600 font-bold text-sm cursor-pointer">
+                ✕
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleSaveBranchForm} className="space-y-4 text-xs">
+              
+              <div className="space-y-1">
+                <label className="block text-slate-700 font-bold">Tên Cơ Sở / Chi Nhánh (*)</label>
+                <input
+                  type="text"
+                  required
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="Ví dụ: Cơ Sở 1 - Cầu Giấy, Cơ Sở Vin Smart City..."
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-slate-900 font-bold outline-none focus:ring-2 focus:ring-orange-500"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-slate-700 font-bold">Địa Chỉ Giao Hàng Chi Tiết (*)</label>
+                <input
+                  type="text"
+                  required
+                  value={formData.address}
+                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                  placeholder="Ví dụ: Tòa S2.01 Vin Smart City, Phường Tây Mỗ"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-slate-900 font-semibold outline-none focus:ring-2 focus:ring-orange-500"
+                />
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <label className="font-bold text-slate-700">Tên chi nhánh / Cơ sở *</label>
+                  <label className="block text-slate-700 font-bold">Hotline Cơ Sở (*)</label>
                   <input
-                    type="text"
+                    type="tel"
                     required
-                    placeholder="VD: Chi Nhánh Cầu Giấy"
-                    value={formData.name || ''}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-500 focus:border-transparent outline-none font-semibold text-slate-800"
+                    value={formData.phone}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    placeholder="Ví dụ: 0984.263.340"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-slate-900 font-bold outline-none focus:ring-2 focus:ring-orange-500"
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="font-bold text-slate-700">Quản lý cơ sở</label>
+                  <label className="block text-slate-700 font-bold">Thời Gian Mở Cửa (*)</label>
                   <input
                     type="text"
-                    placeholder="VD: Hoàng Văn Nam"
-                    value={formData.manager || ''}
-                    onChange={(e) => setFormData({ ...formData, manager: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none text-slate-800"
+                    required
+                    value={formData.hours}
+                    onChange={(e) => setFormData({ ...formData, hours: e.target.value })}
+                    placeholder="Ví dụ: 08:00 - 22:30"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-slate-900 font-semibold outline-none focus:ring-2 focus:ring-orange-500"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="space-y-1">
-                  <label className="font-bold text-slate-700">Hotline chi nhánh *</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="VD: 0977.888.999"
-                    value={formData.phone || ''}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none text-slate-800 font-semibold"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700">Trạng thái vận hành</label>
-                  <select
-                    value={formData.status || 'ACTIVE'}
-                    onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none text-slate-800 font-medium"
-                  >
-                    <option value="ACTIVE">🟢 Đang hoạt động</option>
-                    <option value="PAUSED">🟡 Tạm dừng nhận đơn</option>
-                    <option value="OVERLOADED">🔴 Quá tải đơn</option>
-                  </select>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700">Năng lực (đơn/giờ)</label>
+                  <label className="block text-slate-700 font-bold">Thứ Tự Hiển Thị</label>
                   <input
                     type="number"
-                    min={10}
-                    max={200}
-                    value={formData.capacity_per_hour || 40}
-                    onChange={(e) => setFormData({ ...formData, capacity_per_hour: Number(e.target.value) })}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none text-slate-800 font-semibold"
+                    value={formData.display_order}
+                    onChange={(e) => setFormData({ ...formData, display_order: Number(e.target.value) })}
+                    placeholder="1, 2, 3..."
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 font-bold outline-none"
                   />
                 </div>
-              </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="space-y-1 sm:col-span-1">
-                  <label className="font-bold text-slate-700">Tỉnh / Thành phố</label>
+                <div className="space-y-1">
+                  <label className="block text-slate-700 font-bold">Thành Phố</label>
                   <select
-                    value={formData.city || 'Hà Nội'}
+                    value={formData.city}
                     onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none text-slate-800"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 font-bold outline-none cursor-pointer"
                   >
                     <option value="Hà Nội">Hà Nội</option>
                     <option value="Hồ Chí Minh">Hồ Chí Minh</option>
@@ -512,253 +654,185 @@ export default function BranchesPage() {
                   </select>
                 </div>
 
-                <div className="space-y-1 sm:col-span-2">
-                  <label className="font-bold text-slate-700">Quận / Huyện chính *</label>
+                <div className="space-y-1">
+                  <label className="block text-slate-700 font-bold">Quận / Huyện</label>
                   <input
                     type="text"
-                    required
-                    placeholder="VD: Cầu Giấy hoặc Nam Từ Liêm"
-                    value={formData.district || ''}
+                    value={formData.district}
                     onChange={(e) => setFormData({ ...formData, district: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none text-slate-800"
+                    placeholder="Cầu Giấy, Quận 1..."
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 font-semibold outline-none"
                   />
                 </div>
               </div>
 
               <div className="space-y-1">
-                <label className="font-bold text-slate-700">Địa chỉ chi tiết cơ sở *</label>
+                <label className="block text-slate-700 font-bold">Đường Dẫn Google Maps (Chỉ đường)</label>
                 <input
                   type="text"
-                  required
-                  placeholder="VD: 102 Trần Thái Tông, Dịch Vọng"
-                  value={formData.address || ''}
-                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none text-slate-800"
+                  value={formData.maps_url}
+                  onChange={(e) => setFormData({ ...formData, maps_url: e.target.value })}
+                  placeholder="https://maps.google.com/?q=..."
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-slate-900 font-medium outline-none"
                 />
               </div>
 
-              {/* Coverage Zones Tags Input */}
-              <div className="space-y-2 p-3 bg-sky-50/50 rounded-xl border border-sky-100">
-                <label className="font-bold text-slate-800 flex items-center justify-between">
-                  <span className="flex items-center gap-1 text-sky-900">
-                    <Navigation className="w-3.5 h-3.5 text-sky-600" /> Địa bàn phụ trách (AI Định tuyến tự động)
-                  </span>
-                  <span className="text-[10px] text-slate-500 font-normal">Nhập quận/huyện rồi ấn Thêm</span>
-                </label>
-
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="Thêm quận/huyện phụ trách (VD: Đống Đa)"
-                    value={newZoneInput}
-                    onChange={(e) => setNewZoneInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        handleAddZone();
-                      }
-                    }}
-                    className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-800 outline-none focus:ring-2 focus:ring-sky-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAddZone}
-                    className="bg-sky-600 hover:bg-sky-700 text-white font-bold px-3 py-1.5 rounded-lg transition shrink-0"
-                  >
-                    + Thêm Tag
-                  </button>
-                </div>
-
-                <div className="flex flex-wrap gap-1.5 pt-1">
-                  {formData.coverage_zones && formData.coverage_zones.length > 0 ? (
-                    formData.coverage_zones.map((zone, idx) => (
-                      <span
-                        key={idx}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-white text-sky-800 border border-sky-200 shadow-2xs"
-                      >
-                        📍 {zone}
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveZone(zone)}
-                          className="text-slate-400 hover:text-rose-600 transition"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      </span>
-                    ))
-                  ) : (
-                    <span className="text-[11px] text-slate-400 italic">Chưa có quận/huyện nào được thêm</span>
-                  )}
-                </div>
+              <div className="space-y-1">
+                <label className="block text-slate-700 font-bold">Quản Lý Phụ Trách</label>
+                <input
+                  type="text"
+                  value={formData.manager}
+                  onChange={(e) => setFormData({ ...formData, manager: e.target.value })}
+                  placeholder="Họ tên quản lý chi nhánh"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-slate-900 font-semibold outline-none"
+                />
               </div>
 
-              {/* VietQR Bank Payment Info */}
-              <div className="space-y-2 p-3 bg-amber-50/40 rounded-xl border border-amber-200/60">
-                <label className="font-bold text-slate-800 flex items-center gap-1.5 text-amber-900">
-                  <CreditCard className="w-3.5 h-3.5 text-amber-600" /> Thông tin VietQR Ngân Hàng Chi Nhánh
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                <label className="flex items-center space-x-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.is_active}
+                    onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
+                    className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500"
+                  />
+                  <span className="font-extrabold text-slate-900 text-xs">
+                    🟢 Cho phép cơ sở hoạt động &amp; đồng bộ hiển thị ngoài Trang Chủ (Landing Page)
+                  </span>
                 </label>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  <div>
-                    <label className="text-[11px] text-slate-600 font-medium">Ngân hàng</label>
-                    <select
-                      value={formData.bank_name || 'MB Bank'}
-                      onChange={(e) => setFormData({ ...formData, bank_name: e.target.value })}
-                      className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-800 font-medium outline-none"
-                    >
-                      <option value="MB Bank">MB Bank</option>
-                      <option value="Vietcombank">Vietcombank</option>
-                      <option value="Techcombank">Techcombank</option>
-                      <option value="VPBank">VPBank</option>
-                      <option value="ACB">ACB</option>
-                      <option value="BIDV">BIDV</option>
-                      <option value="VietinBank">VietinBank</option>
-                      <option value="TPBank">TPBank</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="text-[11px] text-slate-600 font-medium">Số tài khoản</label>
-                    <input
-                      type="text"
-                      placeholder="0988123456"
-                      value={formData.bank_account || ''}
-                      onChange={(e) => setFormData({ ...formData, bank_account: e.target.value })}
-                      className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-800 font-bold outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[11px] text-slate-600 font-medium">Tên chủ tài khoản</label>
-                    <input
-                      type="text"
-                      placeholder="CHI NHANH CAU GIAY"
-                      value={formData.bank_holder || ''}
-                      onChange={(e) => setFormData({ ...formData, bank_holder: e.target.value })}
-                      className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-800 font-semibold outline-none uppercase"
-                    />
-                  </div>
-                </div>
               </div>
 
               {/* Form Buttons */}
-              <div className="pt-3 border-t border-slate-100 flex justify-end gap-2">
+              <div className="flex justify-end space-x-2 pt-2 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setActiveModal(null)}
-                  className="px-4 py-2 rounded-xl text-slate-600 font-bold hover:bg-slate-100 transition"
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition cursor-pointer"
                 >
-                  Hủy Bỏ
+                  Hủy
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold transition shadow-xs flex items-center gap-1.5"
+                  className="px-5 py-2.5 bg-orange-600 hover:bg-orange-700 text-white font-extrabold rounded-xl shadow-sm transition cursor-pointer"
                 >
-                  <Check className="w-4 h-4" />
-                  <span>{selectedBranch ? 'Lưu Cấu Hình' : 'Tạo Chi Nhánh'}</span>
+                  Lưu Thông Tin Cơ Sở
                 </button>
               </div>
+
             </form>
           </div>
         </div>
       )}
 
       {/* ------------------------------------------------------------- */}
-      {/* MODAL 2: CHUYỂN KHO GIỮA CÁC CHI NHÁNH */}
+      {/* 2. MODAL XÁC NHẬN XÓA CƠ SỞ (DELETE CONFIRMATION MODAL) */}
+      {/* ------------------------------------------------------------- */}
+      {activeModal === 'DELETE_CONFIRM' && selectedBranch && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in zoom-in-95">
+            <div className="flex items-center space-x-3 text-rose-600 border-b border-slate-100 pb-3">
+              <AlertTriangle className="w-6 h-6 shrink-0" />
+              <h3 className="font-extrabold text-slate-900 text-base">Xác Nhận Xóa Cơ Sở</h3>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Bạn có chắc chắn muốn xóa cơ sở <strong className="text-slate-900 font-bold">"{selectedBranch.name}"</strong> khỏi hệ thống? 
+              Hành động này sẽ xóa cơ sở khỏi danh sách quản trị và trang chủ.
+            </p>
+
+            <div className="flex justify-end space-x-2 pt-2">
+              <button
+                onClick={() => setActiveModal(null)}
+                className="px-4 py-2 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200 transition"
+              >
+                Hủy Bỏ
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                className="px-4 py-2 bg-rose-600 text-white font-extrabold rounded-xl hover:bg-rose-700 shadow-sm transition"
+              >
+                Xác Nhận Xóa
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------- */}
+      {/* 3. MODAL ĐIỀU CHUYỂN HÀNG KHO (INVENTORY TRANSFER MODAL) */}
       {/* ------------------------------------------------------------- */}
       {activeModal === 'TRANSFER' && selectedBranch && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4 border border-slate-100 animate-in fade-in zoom-in-95">
-            <div className="flex justify-between items-center pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <div className="p-2 bg-amber-50 text-amber-600 rounded-xl">
-                  <ArrowLeftRight className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-base text-slate-900">Điều Chuyển Kho Hàng</h3>
-                  <p className="text-xs text-slate-500">Từ: <strong className="text-amber-800">{selectedBranch.name}</strong></p>
-                </div>
-              </div>
-              <button onClick={() => setActiveModal(null)} className="p-1 text-slate-400 hover:text-slate-600">
-                <X className="w-5 h-5" />
-              </button>
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in zoom-in-95">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <h3 className="font-extrabold text-slate-900 text-sm flex items-center gap-1.5">
+                <ArrowLeftRight className="w-4 h-4 text-purple-600" />
+                Điều Chuyển Kho Từ "{selectedBranch.name}"
+              </h3>
+              <button onClick={() => setActiveModal(null)} className="text-slate-400 hover:text-slate-600 font-bold">✕</button>
             </div>
 
-            <form onSubmit={handleExecuteTransfer} className="space-y-3.5 text-xs">
+            <form onSubmit={handleExecuteTransfer} className="space-y-3 text-xs">
               <div className="space-y-1">
-                <label className="font-bold text-slate-700">Cơ sở nhận chuyển hàng *</label>
+                <label className="block font-bold text-slate-700">Chọn Chi Nhánh Nhận Hàng (*)</label>
                 <select
-                  required
                   value={transferData.targetBranchId}
                   onChange={(e) => setTransferData({ ...transferData, targetBranchId: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none font-semibold text-slate-800"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 outline-none"
                 >
-                  {branches
-                    .filter(b => b.id !== selectedBranch.id)
-                    .map(b => (
-                      <option key={b.id} value={b.id}>
-                        🏢 {b.name} (Tồn hiện tại: {b.main_stock || 0} con)
-                      </option>
-                    ))}
+                  <option value="">-- Chọn cơ sở nhận --</option>
+                  {branches.filter(b => b.id !== selectedBranch.id).map(b => (
+                    <option key={b.id} value={b.id}>{b.name}</option>
+                  ))}
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700">Mặt hàng điều chuyển</label>
-                  <select
-                    value={transferData.itemName}
-                    onChange={(e) => setTransferData({ ...transferData, itemName: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none text-slate-800 font-medium"
-                  >
-                    <option value="Gà Ủ Muối Nguyên Con">Gà Ủ Muối Nguyên Con</option>
-                    <option value="Gà Ủ Muối Nửa Con">Gà Ủ Muối Nửa Con</option>
-                    <option value="Chân Gà Rút Xương Sốt Thái">Chân Gà Sốt Thái</option>
-                    <option value="Cánh Gà Ủ Muối">Cánh Gà Ủ Muối</option>
-                    <option value="Nước Chấm Thần Thánh">Nước Chấm Thần Thánh</option>
-                  </select>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700">Số lượng xuất (Con/Khay)</label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={selectedBranch.main_stock || 50}
-                    required
-                    value={transferData.quantity}
-                    onChange={(e) => setTransferData({ ...transferData, quantity: Number(e.target.value) })}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none font-bold text-slate-900"
-                  />
-                  <span className="text-[10px] text-slate-500">Tồn tối đa: {selectedBranch.main_stock || 0} con</span>
-                </div>
-              </div>
-
               <div className="space-y-1">
-                <label className="font-bold text-slate-700">Ghi chú điều chuyển</label>
+                <label className="block font-bold text-slate-700">Sản Phẩm Điều Chuyển (*)</label>
                 <input
                   type="text"
-                  placeholder="VD: Hỗ trợ cơ sở quá tải đơn buổi trưa"
-                  value={transferData.note}
-                  onChange={(e) => setTransferData({ ...transferData, note: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none text-slate-800"
+                  required
+                  value={transferData.itemName}
+                  onChange={(e) => setTransferData({ ...transferData, itemName: e.target.value })}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 outline-none"
                 />
               </div>
 
-              <div className="pt-3 border-t border-slate-100 flex justify-end gap-2">
+              <div className="space-y-1">
+                <label className="block font-bold text-slate-700">Số Lượng Chuyển (*)</label>
+                <input
+                  type="number"
+                  min="1"
+                  required
+                  value={transferData.quantity}
+                  onChange={(e) => setTransferData({ ...transferData, quantity: Number(e.target.value) })}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 outline-none"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="block font-bold text-slate-700">Ghi Chú Phiếu Chuyển</label>
+                <input
+                  type="text"
+                  value={transferData.note}
+                  onChange={(e) => setTransferData({ ...transferData, note: e.target.value })}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-900 outline-none"
+                />
+              </div>
+
+              <div className="flex justify-end space-x-2 pt-2">
                 <button
                   type="button"
                   onClick={() => setActiveModal(null)}
-                  className="px-4 py-2 rounded-xl text-slate-600 font-bold hover:bg-slate-100"
+                  className="px-4 py-2 bg-slate-100 font-bold rounded-xl"
                 >
-                  Hủy Bỏ
+                  Hủy
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold shadow-xs flex items-center gap-1.5"
+                  className="px-4 py-2 bg-purple-600 text-white font-extrabold rounded-xl shadow-sm hover:bg-purple-700 transition"
                 >
-                  <ArrowLeftRight className="w-4 h-4" />
-                  <span>Xác Nhận Chuyển Kho</span>
+                  Xác Nhận Chuyển
                 </button>
               </div>
             </form>
@@ -766,94 +840,6 @@ export default function BranchesPage() {
         </div>
       )}
 
-      {/* ------------------------------------------------------------- */}
-      {/* MODAL 3: BÁO CÁO HIỆU SUẤT CHI NHÁNH */}
-      {/* ------------------------------------------------------------- */}
-      {activeModal === 'REPORT' && selectedBranch && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4 border border-slate-100 animate-in fade-in zoom-in-95">
-            <div className="flex justify-between items-center pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
-                  <BarChart3 className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-base text-slate-900">Báo Cáo Cơ Sở</h3>
-                  <p className="text-xs text-slate-500">{selectedBranch.name}</p>
-                </div>
-              </div>
-              <button onClick={() => setActiveModal(null)} className="p-1 text-slate-400 hover:text-slate-600">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-3.5 text-xs">
-              <div className="p-3.5 bg-emerald-50/70 border border-emerald-200/60 rounded-xl flex items-center justify-between">
-                <div>
-                  <span className="text-slate-600 text-[11px] font-semibold">Doanh Thu Gộp Hôm Nay</span>
-                  <p className="text-xl font-black text-emerald-800 mt-0.5">
-                    {(selectedBranch.revenue_today || 0).toLocaleString('vi-VN')} VNĐ
-                  </p>
-                </div>
-                <div className="text-right">
-                  <span className="text-[10px] text-emerald-700 bg-emerald-100 font-bold px-2 py-0.5 rounded-full">
-                    +14.2% hôm qua
-                  </span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 text-slate-700">
-                <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                  <span className="text-[10px] text-slate-500 font-medium">Tổng Đơn Hàng</span>
-                  <p className="text-base font-extrabold text-slate-900">{selectedBranch.orders_total_today || 0} đơn</p>
-                </div>
-                <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                  <span className="text-[10px] text-slate-500 font-medium">Đang Chờ Chế Biến</span>
-                  <p className="text-base font-extrabold text-sky-700">{selectedBranch.orders_pending || 0} đơn</p>
-                </div>
-              </div>
-
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 space-y-1.5">
-                <div className="flex justify-between font-bold text-slate-800">
-                  <span>Tải Năng Lực Phục Vụ</span>
-                  <span className="text-sky-700">
-                    {Math.round(((selectedBranch.orders_total_today || 10) / (selectedBranch.capacity_per_hour || 40)) * 100)}%
-                  </span>
-                </div>
-                <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
-                  <div
-                    className="bg-sky-600 h-full rounded-full transition-all"
-                    style={{
-                      width: `${Math.min(100, Math.round(((selectedBranch.orders_total_today || 10) / (selectedBranch.capacity_per_hour || 40)) * 100))}%`
-                    }}
-                  />
-                </div>
-              </div>
-
-              {selectedBranch.bank_name && (
-                <div className="p-3 bg-amber-50/50 rounded-xl border border-amber-200/60 text-slate-800 space-y-1">
-                  <span className="text-[11px] font-bold text-amber-900 flex items-center gap-1">
-                    <CreditCard className="w-3.5 h-3.5 text-amber-600" /> Mã VietQR Chuyển Khoản Riêng:
-                  </span>
-                  <p className="font-semibold text-xs">
-                    {selectedBranch.bank_name} - STK: <strong className="text-slate-900 font-extrabold">{selectedBranch.bank_account}</strong>
-                  </p>
-                  <p className="text-[11px] text-slate-600 uppercase font-medium">Chủ TK: {selectedBranch.bank_holder}</p>
-                </div>
-              )}
-            </div>
-
-            <div className="pt-2 border-t border-slate-100 flex justify-end">
-              <button
-                onClick={() => setActiveModal(null)}
-                className="px-4 py-2 rounded-xl bg-slate-800 text-white font-bold hover:bg-slate-900"
-              >
-                Đóng
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
