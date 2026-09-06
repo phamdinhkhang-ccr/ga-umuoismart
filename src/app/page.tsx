@@ -864,14 +864,13 @@ export default function PublicStorefrontHome() {
       <section id="branches" className="bg-slate-100/70 border-y border-slate-200 py-12 scroll-mt-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
           
-          <div className="text-center space-y-2">
-            <span className="bg-emerald-100 text-emerald-800 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-wider border border-emerald-200">
-              Phủ Sóng Toàn Quốc
-            </span>
-            <h2 className="text-2xl sm:text-4xl font-black text-slate-900">
-              Hệ Thống {activeBranches.length} Cơ Sở Phủ Sóng Hà Nội &amp; TP.HCM
+          <div className="text-center max-w-2xl mx-auto space-y-2">
+            <h2 className="text-2xl md:text-4xl font-extrabold text-slate-900 tracking-tight">
+              Hệ Thống 6 Cơ Sở Phủ Sóng Hà Nội &amp; TP.HCM
             </h2>
-            <p className="text-xs sm:text-sm text-slate-600 font-medium">Sẵn sàng phục vụ giao hỏa tốc trong 20-30 phút tại các quận nội thành.</p>
+            <p className="mt-3 text-sm md:text-base text-slate-600">
+              Sẵn sàng phục vụ hỏa tốc trong 30-40 phút
+            </p>
           </div>
 
           {/* Branch Cards Dynamic Sync */}
