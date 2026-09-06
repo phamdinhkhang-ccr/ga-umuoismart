@@ -14,8 +14,8 @@ function generateOrderCode(): string {
   return result;
 }
 
-// Strictly typed timeout helper
-async function withTimeout<T>(fn: () => Promise<T>, timeoutMs: number = 300): Promise<T> {
+// Strictly typed timeout helper (5s timeout for reliable Supabase operations)
+async function withTimeout<T>(fn: () => Promise<T>, timeoutMs: number = 5000): Promise<T> {
   let timeoutId: NodeJS.Timeout;
   const timeoutPromise = new Promise<T>((_, reject) => {
     timeoutId = setTimeout(() => reject(new Error('Network timeout')), timeoutMs);
@@ -148,12 +148,16 @@ export async function createOrder(params: CreateOrderParams) {
   const isRealSupabase = process.env.NEXT_PUBLIC_SUPABASE_URL && !process.env.NEXT_PUBLIC_SUPABASE_URL.includes('placeholder');
   if (isRealSupabase) {
     try {
-      const res: any = await withTimeout(() => supabaseServer.from('orders').insert(newOrder).select('*').single() as any, 300);
+      const res: any = await withTimeout(() => supabaseServer.from('orders').insert([newOrder]).select('*').single() as any, 5000);
       if (res?.data) {
         globalMockOrders.unshift(res.data as Order);
         return { success: true, order: res.data as Order };
+      } else if (res?.error) {
+        console.error('Lỗi khi lưu đơn hàng vào Supabase DB:', res.error);
       }
-    } catch (e) {}
+    } catch (e) {
+      console.error('Exception khi lưu đơn vào Supabase:', e);
+    }
   }
 
   globalMockOrders.unshift(newOrder);

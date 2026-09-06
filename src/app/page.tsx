@@ -400,28 +400,37 @@ export default function PublicStorefrontHome() {
 
     // 1b. Insert into Supabase Realtime Database (orders & notifications)
     try {
-      Promise.resolve(
-        supabase
-          .from('orders')
-          .insert([
-            {
-              id: orderId,
-              customer_name: fullName.trim() || 'Khách Vãng Lai',
-              phone: phone.trim(),
-              address: address.trim(),
-              branch_name: branchName,
-              items: selectedItemsList,
-              cut_option: cutPreference || 'Chặt sẵn ăn luôn',
-              note: formattedOrder.note || '',
-              total_amount: calculatedTotalAmount || 0,
-              status: 'PENDING',
-              source: 'Web Khách Đặt',
-              created_at: now
-            }
-          ])
-      ).then((res: any) => {
-        if (res?.error) console.warn('Supabase orders insert silent bypass:', res.error);
-      }).catch(() => {});
+      const orderPayload = {
+        id: orderId,
+        order_code: orderId,
+        customer_name: fullName.trim() || 'Khách Vãng Lai',
+        customer_phone: phone.trim(),
+        phone: phone.trim(),
+        customer_address: address.trim(),
+        shipping_address: address.trim(),
+        address: address.trim(),
+        branch_id: branchId,
+        branch_name: branchName,
+        branch: branchName,
+        items: selectedItemsList,
+        total_amount: calculatedTotalAmount || 0,
+        final_amount: calculatedTotalAmount || 0,
+        payment_method: paymentMethod || 'COD',
+        status: 'PENDING',
+        cut_option: cutPreference || 'Chặt sẵn ăn luôn',
+        note: formattedOrder.note || '',
+        source: 'Web Khách Đặt',
+        created_at: now
+      };
+
+      (async () => {
+        try {
+          const { error: dbErr } = await supabase.from('orders').insert([orderPayload]);
+          if (dbErr) console.error('Lỗi lưu đơn hàng vào Supabase DB:', dbErr);
+        } catch (err) {
+          console.error('Exception khi lưu đơn vào Supabase:', err);
+        }
+      })();
 
       Promise.resolve(
         supabase

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { getAnalyticsData, getBranches, updateOrderStatus } from '@/actions/orders';
 import { Branch, Order, OrderStatus } from '@/types/database';
-import { restoreInventoryForOrder, deductInventoryForOrder, getItem } from '@/lib/store';
+import { restoreInventoryForOrder, deductInventoryForOrder, getItem, playBeep } from '@/lib/store';
 import ReceiptModal from '@/components/ReceiptModal';
 import TransferBranchModal from '@/components/TransferBranchModal';
 import {
@@ -158,11 +158,30 @@ export default function CentralizedOrdersPage() {
       ]);
       setBranches(bList || []);
 
+      let supabaseOrders: any[] = [];
+      try {
+        let query = supabase
+          .from('orders')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if ((user?.role === 'STAFF' || user?.role === 'BRANCH_STAFF') && user?.branch_id) {
+          query = query.eq('branch_id', user.branch_id);
+        }
+
+        const { data: dbOrders, error: dbError } = await query;
+        if (!dbError && Array.isArray(dbOrders)) {
+          supabaseOrders = dbOrders;
+        }
+      } catch (e) {
+        console.warn('Supabase DB orders fetch exception:', e);
+      }
+
       let localOrders = getItem<any[]>('pos_orders_data', []);
       let cloudOrders: any[] = [];
 
       try {
-        const cloudRes = await fetch('/api/orders?limit=10', {
+        const cloudRes = await fetch('/api/orders?limit=20', {
           headers: { 'Accept': 'application/json' },
           cache: 'no-store'
         });
@@ -179,9 +198,13 @@ export default function CentralizedOrdersPage() {
         console.warn('Orders silent fetch bypass:', e);
       }
 
-      // Merge Cloud & Local Orders securely by ID / Code
+      // Merge Supabase DB, Cloud & Local Orders securely by ID / Code
       const mergedMap = new Map();
-      cloudOrders.forEach((o: any) => mergedMap.set(o.id || o.order_code, o));
+      supabaseOrders.forEach((o: any) => mergedMap.set(o.id || o.order_code, o));
+      cloudOrders.forEach((o: any) => {
+        const key = o.id || o.order_code;
+        if (!mergedMap.has(key)) mergedMap.set(key, o);
+      });
       (localOrders || []).forEach((o: any) => {
         const key = o.id || o.order_code;
         if (!mergedMap.has(key)) mergedMap.set(key, o);
@@ -248,40 +271,20 @@ export default function CentralizedOrdersPage() {
   useEffect(() => {
     loadData();
 
-    // Supabase Realtime Order Subscription
+    // Supabase Realtime Order Subscription ('orders-realtime')
     const orderSubscription = supabase
-      .channel('realtime_orders_channel')
+      .channel('orders-realtime')
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'orders' },
-        (payload) => {
-          if (payload.new) {
-            const raw = payload.new;
-            const normalized: Order = {
-              ...raw,
-              id: raw.id || `OD${Math.floor(1000 + Math.random() * 9000)}`,
-              order_code: raw.order_code || raw.id || `OD${Math.floor(1000 + Math.random() * 9000)}`,
-              code: `#${raw.order_code || raw.id}`,
-              customer_name: raw.customer_name || raw.customerName || 'Khách Vãng Lai',
-              customerName: raw.customer_name || raw.customerName || 'Khách Vãng Lai',
-              customer_phone: raw.phone || raw.customer_phone || '',
-              phone: raw.phone || raw.customer_phone || '',
-              shipping_address: raw.address || raw.shipping_address || '',
-              address: raw.address || raw.shipping_address || '',
-              branch_id: raw.branch_id || 'b1',
-              branch: typeof raw.branch === 'object' && raw.branch !== null ? raw.branch : { id: 'b1', name: raw.branch_name || 'CƠ SỞ VIN SMART CITY' },
-              items: Array.isArray(raw.items) ? raw.items : [],
-              subtotal: raw.total_amount || raw.totalAmount || 0,
-              final_amount: raw.total_amount || raw.totalAmount || 0,
-              totalAmount: raw.total_amount || raw.totalAmount || 0,
-              district: raw.district || 'Hà Nội',
-              city: raw.city || 'Hà Nội',
-              discount_amount: raw.discount_amount || 0,
-              estimated_profit: raw.estimated_profit || Math.round((raw.total_amount || raw.totalAmount || 0) * 0.45),
-              status: raw.status || 'RECEIVED',
-              created_at: raw.created_at || new Date().toISOString()
-            };
-            setOrders(prev => [normalized, ...prev.filter(o => o.id !== normalized.id)]);
+        { event: '*', schema: 'public', table: 'orders' },
+        (payload: any) => {
+          if (payload.eventType === 'INSERT') {
+            try {
+              playBeep();
+            } catch (e) {}
+            loadData();
+          } else {
+            loadData();
           }
         }
       )
