@@ -73,6 +73,9 @@ export default function PublicStorefrontHome() {
   });
 
   const [productsList, setProductsList] = useState<ProductRecord[]>([]);
+  const [menuItems, setMenuItems] = useState<any[]>([]);
+  const [isLoadingMenu, setIsLoadingMenu] = useState(true);
+  const [selectedItems, setSelectedItems] = useState<{ id: string; name: string; price: number; quantity: number }[]>([]);
 
   // Search & Order Tracking State
   const [searchQuery, setSearchQuery] = useState('');
@@ -116,22 +119,31 @@ export default function PublicStorefrontHome() {
       setDetectionSource('address');
     }
   }, [activeBranches, selectedBranchId]);
+
   useEffect(() => {
-    const fetchMenuAndSettings = async () => {
+    const loadActiveProducts = async () => {
       try {
+        setIsLoadingMenu(true);
         const { data: prodData, error: prodErr } = await supabase
           .from('products')
           .select('*')
           .eq('is_active', true);
 
         if (!prodErr && Array.isArray(prodData) && prodData.length > 0) {
+          setMenuItems(prodData);
           setProductsList(prodData);
         } else {
-          setProductsList(getProducts());
+          const fallback = getProducts();
+          setMenuItems(fallback);
+          setProductsList(fallback);
         }
       } catch (err) {
-        console.error('Lỗi nạp menu từ Supabase:', err);
-        setProductsList(getProducts());
+        console.error('Lỗi tải sản phẩm vào form checkout:', err);
+        const fallback = getProducts();
+        setMenuItems(fallback);
+        setProductsList(fallback);
+      } finally {
+        setIsLoadingMenu(false);
       }
 
       try {
@@ -147,7 +159,7 @@ export default function PublicStorefrontHome() {
       } catch (e) {}
     };
 
-    fetchMenuAndSettings();
+    loadActiveProducts();
   }, []);
 
   useEffect(() => {
@@ -302,38 +314,115 @@ export default function PublicStorefrontHome() {
     }
   }, [suggestedBranch]);
 
+  // Toggle Product Selection
+  const handleToggleProduct = (prod: any) => {
+    setSelectedItems((prev) => {
+      const existing = prev.find((item) => item.id === prod.id || item.name.toLowerCase() === (prod.name || '').toLowerCase());
+      if (existing) {
+        return prev.filter((item) => item.id !== prod.id && item.name.toLowerCase() !== (prod.name || '').toLowerCase());
+      } else {
+        return [
+          ...prev,
+          {
+            id: prod.id,
+            name: prod.name,
+            price: Number(prod.price || 0),
+            quantity: 1
+          }
+        ];
+      }
+    });
+
+    setSelectedComboIds((prev) => {
+      if (prev.includes(prod.id)) {
+        return prev.filter((x) => x !== prod.id);
+      } else {
+        return [...prev, prod.id];
+      }
+    });
+  };
+
+  // Update Product Quantity
+  const handleUpdateQty = (prodId: string, newQty: number) => {
+    if (newQty <= 0) {
+      setSelectedItems((prev) => prev.filter((item) => item.id !== prodId));
+      setSelectedComboIds((prev) => prev.filter((id) => id !== prodId));
+    } else {
+      setSelectedItems((prev) => {
+        const found = prev.find((item) => item.id === prodId);
+        if (found) {
+          return prev.map((item) => (item.id === prodId ? { ...item, quantity: newQty } : item));
+        } else {
+          const prodObj = menuItems.find((p) => p.id === prodId) || allSelectableItems.find((p) => p.id === prodId);
+          if (prodObj) {
+            return [
+              ...prev,
+              {
+                id: prodObj.id,
+                name: prodObj.name,
+                price: Number(prodObj.price || 0),
+                quantity: newQty
+              }
+            ];
+          }
+          return prev;
+        }
+      });
+      if (!selectedComboIds.includes(prodId)) {
+        setSelectedComboIds((prev) => [...prev, prodId]);
+      }
+    }
+  };
+
   // Total Order Amount Calculation
   const totalOrderAmount = useMemo(() => {
+    if (selectedItems.length > 0) {
+      return selectedItems.reduce((sum, i) => sum + (i.price * i.quantity), 0);
+    }
     let total = 0;
     selectedComboIds.forEach(id => {
       const item = allSelectableItems.find(c => c.id === id);
       if (item) total += item.price;
     });
     return total;
-  }, [selectedComboIds, allSelectableItems]);
+  }, [selectedItems, selectedComboIds, allSelectableItems]);
 
   // Open Order Modal & Pre-check item
-  const handleOpenOrderModal = (product?: ProductRecord | string) => {
+  const handleOpenOrderModal = (product?: ProductRecord | string | any) => {
     setFormError(null);
     setSuccessOrder(null);
     setIsOrderModalOpen(true);
 
     if (product) {
       const pName = typeof product === 'string' ? product : product.name;
-      const matched = allSelectableItems.find(item => item.name.toLowerCase().includes(pName.toLowerCase()));
+      const matched = menuItems.find((item) => item.name.toLowerCase().includes(pName.toLowerCase())) ||
+        allSelectableItems.find((item: any) => item.name.toLowerCase().includes(pName.toLowerCase())) ||
+        product;
+
       if (matched) {
-        setSelectedComboIds([matched.id]);
-      } else if (typeof product !== 'string') {
-        const customId = `custom-${product.id}`;
-        if (!allSelectableItems.some(i => i.id === customId)) {
-          allSelectableItems.push({
-            id: customId,
-            name: `${product.name} - ${formatPrice(product.price)}`,
-            price: product.price,
-            isHot: !!product.is_best_seller
-          });
+        setSelectedItems([
+          {
+            id: matched.id || `custom-${Date.now()}`,
+            name: matched.name,
+            price: Number(matched.price || 0),
+            quantity: 1
+          }
+        ]);
+        if (matched.id) {
+          setSelectedComboIds([matched.id]);
         }
-        setSelectedComboIds([customId]);
+      }
+    } else {
+      if (selectedItems.length === 0 && menuItems.length > 0) {
+        setSelectedItems([
+          {
+            id: menuItems[0].id,
+            name: menuItems[0].name,
+            price: Number(menuItems[0].price || 0),
+            quantity: 1
+          }
+        ]);
+        setSelectedComboIds([menuItems[0].id]);
       }
     }
   };
@@ -367,7 +456,7 @@ export default function PublicStorefrontHome() {
       setFormError('Vui lòng nhập Địa chỉ nhận hàng (*)!');
       return;
     }
-    if (selectedComboIds.length === 0) {
+    if (selectedItems.length === 0 && selectedComboIds.length === 0) {
       setFormError('Vui lòng chọn ít nhất 1 món ăn hoặc Combo!');
       return;
     }
@@ -375,41 +464,38 @@ export default function PublicStorefrontHome() {
     const chosenBranch = activeBranches.find(b => b.id === selectedBranchId) || suggestedBranch || activeBranches[0];
     const orderCode = `OD${Math.floor(1000 + Math.random() * 9000)}`;
 
-    const selectedItemsSummary = selectedComboIds.map(id => {
-      const item = allSelectableItems.find(c => c.id === id);
-      return {
-        menu_item_id: item?.id || id,
-        item_name: item?.name ? item.name.split(' - ')[0] : 'Gà Ủ Muối Đặc Sản',
-        quantity: 1,
-        unit_price: item?.price || 0,
-        cost_price: Math.round((item?.price || 0) * 0.55),
-        subtotal: item?.price || 0
-      };
-    });
-
-    const calculatedTotal = selectedItemsSummary.reduce((sum, i) => sum + i.subtotal, 0);
-
-    const orderId = `OD${Math.floor(1000 + Math.random() * 9000)}`;
-    const now = new Date().toISOString();
-    const branchName = chosenBranch.name || 'CƠ SỞ VIN SMART CITY';
-    const branchId = chosenBranch.id || 'b1';
-
-    const selectedItemsList = selectedComboIds.map(id => {
-      const item = allSelectableItems.find(c => c.id === id);
-      const nameStr = item?.name ? item.name.split(' - ')[0] : 'Gà Ủ Muối Đặc Sản';
-      return {
-        menu_item_id: item?.id || id,
-        item_name: nameStr,
-        name: nameStr,
-        quantity: 1,
-        unit_price: item?.price || 0,
-        price: item?.price || 0,
-        cost_price: Math.round((item?.price || 0) * 0.55),
-        subtotal: item?.price || 0
-      };
-    });
+    const selectedItemsList = selectedItems.length > 0
+      ? selectedItems.map(item => ({
+          menu_item_id: item.id,
+          item_name: item.name,
+          name: item.name,
+          quantity: item.quantity,
+          unit_price: item.price,
+          price: item.price,
+          cost_price: Math.round(item.price * 0.55),
+          subtotal: item.price * item.quantity
+        }))
+      : selectedComboIds.map(id => {
+          const item = allSelectableItems.find(c => c.id === id);
+          const nameStr = item?.name ? item.name.split(' - ')[0] : 'Gà Ủ Muối Đặc Sản';
+          return {
+            menu_item_id: item?.id || id,
+            item_name: nameStr,
+            name: nameStr,
+            quantity: 1,
+            unit_price: item?.price || 0,
+            price: item?.price || 0,
+            cost_price: Math.round((item?.price || 0) * 0.55),
+            subtotal: item?.price || 0
+          };
+        });
 
     const calculatedTotalAmount = selectedItemsList.reduce((sum, i) => sum + i.subtotal, 0);
+
+    const orderId = orderCode;
+    const now = new Date().toISOString();
+    const branchName = chosenBranch?.name || 'CƠ SỞ VIN SMART CITY';
+    const branchId = chosenBranch?.id || 'b1';
 
     const formattedOrder = {
       id: orderId,
@@ -1312,42 +1398,80 @@ export default function PublicStorefrontHome() {
                 </div>
 
                 {/* Combos & Items Checkbox List */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-amber-200 block">
+                <div className="mt-3">
+                  <label className="block text-xs md:text-sm font-bold text-amber-200 mb-2">
                     Danh sách Combo &amp; Món Ăn chọn mua (Bấm chọn thêm/bớt món):
                   </label>
 
-                  <div className="bg-white rounded-2xl p-3 text-slate-900 space-y-2 max-h-52 overflow-y-auto text-xs shadow-inner">
-                    {allSelectableItems.map((combo) => {
-                      const isChecked = selectedComboIds.includes(combo.id);
-                      return (
-                        <label
-                          key={combo.id}
-                          onClick={() => handleToggleComboCheckbox(combo.id)}
-                          className={`flex items-center justify-between p-2 rounded-xl border transition cursor-pointer ${
-                            isChecked
-                              ? 'bg-amber-50 border-amber-400 shadow-2xs font-extrabold'
-                              : 'bg-white border-slate-200 opacity-80 hover:opacity-100'
-                          }`}
-                        >
-                          <div className="flex items-center space-x-2.5">
-                            <input
-                              type="checkbox"
-                              checked={isChecked}
-                              onChange={() => {}}
-                              className="w-4 h-4 accent-amber-600 rounded cursor-pointer"
-                            />
-                            <span className="text-slate-900 font-bold">{combo.name}</span>
-                          </div>
+                  <div className="bg-neutral-900/90 border border-amber-500/30 rounded-2xl p-3 max-h-60 overflow-y-auto space-y-2">
+                    {isLoadingMenu ? (
+                      <div className="py-6 text-center text-xs text-amber-200/60">
+                        Đang nạp danh sách món ăn...
+                      </div>
+                    ) : (menuItems.length === 0 && allSelectableItems.length === 0) ? (
+                      <div className="py-6 text-center text-xs text-gray-400">
+                        Chưa có món ăn nào trong thực đơn. Vui lòng thêm sản phẩm trong Admin.
+                      </div>
+                    ) : (
+                      (menuItems.length > 0 ? menuItems : allSelectableItems).map((prod) => {
+                        const selected = selectedItems.find((item: any) => item.id === prod.id || item.name.toLowerCase() === (prod.name || '').toLowerCase());
+                        const isChecked = Boolean(selected && selected.quantity > 0) || selectedComboIds.includes(prod.id);
 
-                          {combo.isHot && (
-                            <span className="text-[10px] bg-rose-100 text-rose-700 border border-rose-300 font-black px-2 py-0.5 rounded-full shrink-0">
-                              ★ HOT ★
-                            </span>
-                          )}
-                        </label>
-                      );
-                    })}
+                        return (
+                          <div
+                            key={prod.id}
+                            onClick={() => handleToggleProduct(prod)}
+                            className={`flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer ${
+                              isChecked
+                                ? 'bg-amber-500/20 border-amber-500 text-white font-bold'
+                                : 'bg-neutral-800/60 border-neutral-700/60 text-gray-300 hover:border-neutral-500'
+                            }`}
+                          >
+                            {/* Checkbox + Tên món */}
+                            <div className="flex items-center gap-3 select-none flex-1 pr-2">
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={() => {}}
+                                className="w-4 h-4 rounded text-amber-500 focus:ring-0 focus:ring-offset-0 bg-neutral-800 border-neutral-600 cursor-pointer"
+                              />
+                              <div>
+                                <span className="text-xs md:text-sm font-semibold block">{prod.name}</span>
+                                <span className="text-xs text-amber-400 font-bold">
+                                  {Number(prod.price || 0).toLocaleString('vi-VN')}đ
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Cụm tăng giảm số lượng khi đã chọn */}
+                            {isChecked && (
+                              <div
+                                className="flex items-center gap-2 bg-neutral-900 border border-neutral-700 rounded-lg px-2 py-1"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateQty(prod.id, (selected?.quantity || 1) - 1)}
+                                  className="w-5 h-5 flex items-center justify-center text-amber-400 font-bold hover:bg-neutral-800 rounded cursor-pointer"
+                                >
+                                  -
+                                </button>
+                                <span className="text-xs font-bold text-white px-1">
+                                  {selected?.quantity || 1}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateQty(prod.id, (selected?.quantity || 1) + 1)}
+                                  className="w-5 h-5 flex items-center justify-center text-amber-400 font-bold hover:bg-neutral-800 rounded cursor-pointer"
+                                >
+                                  +
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
                   </div>
                 </div>
 
