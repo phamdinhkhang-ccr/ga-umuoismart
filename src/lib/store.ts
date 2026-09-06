@@ -4,6 +4,12 @@
 
 import { Order, OrderItem, OrderStatus, Branch } from '@/types/database';
 
+export const formatPrice = (price: any) => {
+  if (!price && price !== 0) return '0đ';
+  const cleanNumber = Number(String(price).replace(/[^0-9]/g, ''));
+  return new Intl.NumberFormat('vi-VN').format(cleanNumber) + 'đ';
+};
+
 export interface InventoryAuditItem {
   id: string;
   name: string;

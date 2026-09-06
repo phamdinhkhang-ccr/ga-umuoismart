@@ -7,7 +7,7 @@ import {
   Plus, RefreshCw, User, Check, Flame, ChevronRight, Headset, MessageSquareHeart
 } from 'lucide-react';
 import { createOrder } from '@/actions/orders';
-import { addNotification, addOrUpdateCustomerFromOrder, deductInventoryForOrder } from '@/lib/store';
+import { addNotification, addOrUpdateCustomerFromOrder, deductInventoryForOrder, formatPrice } from '@/lib/store';
 
 export interface ChatMessage {
   id: string;
@@ -430,7 +430,7 @@ export default function CustomerChatWidget() {
                       <span className="font-bold">Giỏ hàng ({chatCart.reduce((s, i) => s + i.quantity, 0)} món):</span>
                     </div>
                     <div className="flex items-center space-x-2">
-                      <span className="font-extrabold text-orange-600">{cartTotal.toLocaleString('vi-VN')}đ</span>
+                      <span className="font-extrabold text-orange-600">{formatPrice(cartTotal)}</span>
                       <button
                         onClick={() => handleQuickAction('checkout')}
                         className="bg-orange-600 hover:bg-orange-700 text-white text-[11px] font-bold px-2.5 py-1 rounded-xl shadow-xs transition cursor-pointer"
@@ -470,7 +470,7 @@ export default function CustomerChatWidget() {
                                   <h4 className="font-bold text-slate-900 text-xs">{item.name}</h4>
                                 </div>
                                 <span className="font-extrabold text-orange-600 text-xs shrink-0">
-                                  {item.price.toLocaleString('vi-VN')}đ
+                                  {formatPrice(item.price)}
                                 </span>
                               </div>
                               <p className="text-[10px] text-slate-500">{item.desc}</p>
@@ -588,7 +588,7 @@ export default function CustomerChatWidget() {
                             {chatCart.map((i) => (
                               <div key={i.id} className="flex justify-between text-slate-700">
                                 <span>{i.quantity}x {i.name}</span>
-                                <span>{(i.price * i.quantity).toLocaleString('vi-VN')}đ</span>
+                                <span>{formatPrice(i.price * i.quantity)}</span>
                               </div>
                             ))}
                           </div>
@@ -604,12 +604,12 @@ export default function CustomerChatWidget() {
                             {cartDiscount > 0 && (
                               <div className="flex justify-between text-rose-600 text-[11px]">
                                 <span>Khuyến mãi Freeship:</span>
-                                <span>-{cartDiscount.toLocaleString('vi-VN')}đ</span>
+                                <span>-{formatPrice(cartDiscount)}</span>
                               </div>
                             )}
                             <div className="flex justify-between font-extrabold text-slate-900 text-sm">
                               <span>TỔNG THANH TOÁN:</span>
-                              <span className="text-orange-600">{cartTotal.toLocaleString('vi-VN')}đ</span>
+                              <span className="text-orange-600">{formatPrice(cartTotal)}</span>
                             </div>
                           </div>
 

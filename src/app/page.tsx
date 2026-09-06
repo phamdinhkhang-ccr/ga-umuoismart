@@ -14,7 +14,7 @@ import {
 import { getAnalyticsData, addNewMockOrder } from '@/actions/orders';
 import { 
   getProducts, getCmsSettings, StorefrontCmsSettings, ProductRecord, 
-  addNotification, addOrUpdateCustomerFromOrder, getItem, setItem, savePosOrder, playBeep 
+  addNotification, addOrUpdateCustomerFromOrder, getItem, setItem, savePosOrder, playBeep, formatPrice 
 } from '@/lib/store';
 import { Order } from '@/types/database';
 import { supabase } from '@/lib/supabaseClient';
@@ -163,7 +163,7 @@ export default function PublicStorefrontHome() {
       if (!presets.some(item => item.name.toLowerCase().includes((p.name || '').toLowerCase()))) {
         presets.push({
           id: p.id,
-          name: `${p.name} - ${(p.price || 0).toLocaleString('vi-VN')}đ`,
+          name: `${p.name} - ${formatPrice(p.price || 0)}`,
           price: p.price || 0,
           isHot: !!p.is_best_seller
         });
@@ -239,7 +239,7 @@ export default function PublicStorefrontHome() {
         if (!allSelectableItems.some(i => i.id === customId)) {
           allSelectableItems.push({
             id: customId,
-            name: `${product.name} - ${product.price.toLocaleString('vi-VN')}đ`,
+            name: `${product.name} - ${formatPrice(product.price)}`,
             price: product.price,
             isHot: !!product.is_best_seller
           });
@@ -748,14 +748,14 @@ export default function PublicStorefrontHome() {
                     {searchedOrder.items?.map((item, idx) => (
                       <div key={idx} className="flex justify-between text-slate-900 border-b border-dashed border-slate-200 pb-1">
                         <span>{item.quantity}x {item.item_name}</span>
-                        <span>{item.subtotal.toLocaleString('vi-VN')}đ</span>
+                        <span>{formatPrice(item.subtotal)}</span>
                       </div>
                     ))}
                   </div>
 
                   <div className="flex justify-between items-center text-sm font-black text-slate-900 pt-1">
                     <span>TỔNG THANH TOÁN:</span>
-                    <span className="text-orange-600 text-base">{searchedOrder.final_amount.toLocaleString('vi-VN')} VNĐ</span>
+                    <span className="text-orange-600 text-base">{formatPrice(searchedOrder.final_amount)}</span>
                   </div>
                 </div>
               ) : null}
@@ -825,22 +825,30 @@ export default function PublicStorefrontHome() {
                     </div>
                   </div>
 
-                  <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+                  <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                    {/* Khối hiển thị giá */}
                     <div>
-                      <span className="text-[10px] text-slate-400 font-bold block">Giá bán:</span>
-                      <div className="flex items-baseline space-x-2">
-                        <span className="text-lg font-black text-orange-600">{(currentPrice).toLocaleString('vi-VN')}đ</span>
-                        {p.original_price && (
-                          <span className="line-through text-slate-400 font-semibold text-xs">{(p.original_price).toLocaleString('vi-VN')}đ</span>
+                      <span className="text-xs text-slate-400 block font-medium">Giá bán</span>
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-xl md:text-2xl font-black text-orange-600 tracking-tight">
+                          {formatPrice(p.price)}
+                        </span>
+                        {(p.original_price || p.originalPrice) && Number(p.original_price || p.originalPrice) > Number(p.price) && (
+                          <span className="text-xs text-slate-400 line-through">
+                            {formatPrice(p.original_price || p.originalPrice)}
+                          </span>
                         )}
                       </div>
                     </div>
 
+                    {/* Nút Đặt Món Ngay */}
                     <button
                       onClick={() => handleOpenOrderModal(p)}
-                      className="py-2 px-4 bg-orange-600 hover:bg-orange-700 text-white font-extrabold rounded-2xl text-xs shadow-sm transition flex items-center space-x-1 cursor-pointer"
+                      className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 active:scale-95 text-white font-bold text-sm shadow-md shadow-orange-500/20 transition-all duration-150 whitespace-nowrap cursor-pointer"
                     >
-                      <ShoppingBag className="w-3.5 h-3.5" />
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                      </svg>
                       <span>Đặt Món Ngay</span>
                     </button>
                   </div>
@@ -1223,7 +1231,7 @@ export default function PublicStorefrontHome() {
                     TỔNG TIỀN MÓN (TẠM TÍNH):
                   </span>
                   <span className="text-xl font-black text-amber-400">
-                    {totalOrderAmount.toLocaleString('vi-VN')} VNĐ
+                    {formatPrice(totalOrderAmount)}
                   </span>
                 </div>
 
