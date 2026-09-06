@@ -12,8 +12,11 @@ import {
   getBranches, saveBranch, updateBranchStatus, 
   transferInventoryBetweenBranches 
 } from '@/lib/store';
+import { useAuth } from '@/context/AuthContext';
+import { AlertCircle } from 'lucide-react';
 
 export default function BranchesPage() {
+  const { user } = useAuth();
   const [branches, setBranches] = useState<Branch[]>([]);
   const [activeModal, setActiveModal] = useState<'CONFIG' | 'TRANSFER' | 'REPORT' | null>(null);
   
@@ -59,6 +62,18 @@ export default function BranchesPage() {
     window.addEventListener('gum_store_update', handleStoreUpdate);
     return () => window.removeEventListener('gum_store_update', handleStoreUpdate);
   }, []);
+
+  if (user?.role !== 'SUPER_ADMIN') {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        <div className="bg-white border border-slate-200 rounded-2xl p-6 text-center space-y-3 max-w-md shadow-sm">
+          <AlertCircle className="w-8 h-8 text-rose-600 mx-auto" />
+          <h2 className="text-base font-bold text-slate-900">Truy Cập Bị Từ Chối</h2>
+          <p className="text-xs text-slate-600">Trang quản lý chi nhánh chỉ dành riêng cho Admin Tối Cao.</p>
+        </div>
+      </div>
+    );
+  }
 
   const showToast = (msg: string) => {
     setToastMessage(msg);

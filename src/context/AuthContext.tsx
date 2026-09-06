@@ -37,13 +37,13 @@ export const INITIAL_DEMO_ACCOUNTS: (UserAccount & { password?: string })[] = [
     username: 'tongdai',
     password: '123456',
     name: 'Trần Thị Tổng Đài',
-    role: 'OPERATOR',
+    role: 'BRANCH_MANAGER',
     phone: '0977.888.999',
     status: 'ACTIVE',
     email: 'tongdai@gaumuoismart.vn',
     dob: '15/09/1998',
     id_card: '001098005678',
-    position: 'Trưởng Ca Tổng Đài Lên Đơn',
+    position: 'Trưởng Ca / Quản Lý Chi Nhánh',
     date_joined: '15/03/2025',
     last_active: '2026-09-04 19:40',
     orders_count: 850,
@@ -63,7 +63,7 @@ export const INITIAL_DEMO_ACCOUNTS: (UserAccount & { password?: string })[] = [
     username: 'chinhanh1',
     password: '123456',
     name: 'Lê Văn Cơ Sở 1',
-    role: 'BRANCH_STAFF',
+    role: 'BRANCH_MANAGER',
     phone: '0283.811.1111',
     status: 'ACTIVE',
     email: 'quan1@gaumuoismart.vn',
@@ -77,7 +77,7 @@ export const INITIAL_DEMO_ACCOUNTS: (UserAccount & { password?: string })[] = [
     hourly_rate: 25000,
     commission_per_order: 1500,
     permissions: {
-      can_view_revenue: false,
+      can_view_revenue: true,
       can_create_expense: true,
       can_cancel_order: false,
       can_edit_price: false
@@ -90,7 +90,7 @@ export const INITIAL_DEMO_ACCOUNTS: (UserAccount & { password?: string })[] = [
     username: 'chinhanh2',
     password: '123456',
     name: 'Phạm Thị Cơ Sở 2',
-    role: 'BRANCH_STAFF',
+    role: 'STAFF',
     phone: '0283.822.2222',
     status: 'ACTIVE',
     email: 'quan3@gaumuoismart.vn',
@@ -105,7 +105,7 @@ export const INITIAL_DEMO_ACCOUNTS: (UserAccount & { password?: string })[] = [
     commission_per_order: 1500,
     permissions: {
       can_view_revenue: false,
-      can_create_expense: true,
+      can_create_expense: false,
       can_cancel_order: false,
       can_edit_price: false
     },
@@ -188,9 +188,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (e) {}
 
     let redirectUrl = '/admin/dashboard';
-    if (found.role === 'OPERATOR') redirectUrl = '/admin/create-order';
-    if (found.role === 'BRANCH_STAFF') redirectUrl = `/branch/${found.branch_id || 'b1111111-1111-1111-1111-111111111111'}`;
-    if (found.role === 'SUPER_ADMIN') redirectUrl = '/admin/dashboard';
+    if (found.role === 'STAFF' || found.role === 'BRANCH_STAFF') redirectUrl = '/admin/create-order';
+    else if (found.role === 'BRANCH_MANAGER' || found.role === 'OPERATOR') redirectUrl = '/admin/dashboard';
+    else if (found.role === 'SUPER_ADMIN') redirectUrl = '/admin/dashboard';
 
     return { success: true, redirectUrl };
   }, [accounts]);
@@ -253,17 +253,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     const role = user.role || 'SUPER_ADMIN';
+
     if (role === 'SUPER_ADMIN') return true;
 
-    if (role === 'OPERATOR') {
-      return path === '/' || path.startsWith('/track') || path.startsWith('/admin/');
+    if (role === 'BRANCH_MANAGER' || role === 'OPERATOR') {
+      if (path.startsWith('/admin/users') || path.startsWith('/admin/branches') || path.startsWith('/admin/cms')) {
+        return false;
+      }
+      return path === '/' || path.startsWith('/track') || path.startsWith('/admin/') || path.startsWith('/branch/');
     }
 
-    if (role === 'BRANCH_STAFF') {
-      if (path === '/' || path.startsWith('/track')) return true;
-      if (path.startsWith('/branch/')) {
-        const routeBranchId = path.split('/branch/')[1]?.split('/')[0];
-        return routeBranchId === user.branch_id;
+    if (role === 'STAFF' || role === 'BRANCH_STAFF') {
+      if (
+        path.startsWith('/admin/dashboard') ||
+        path.startsWith('/admin/analytics') ||
+        path.startsWith('/admin/expenses') ||
+        path.startsWith('/admin/cms') ||
+        path.startsWith('/admin/users') ||
+        path.startsWith('/admin/branches') ||
+        path.startsWith('/admin/product-analytics') ||
+        path.startsWith('/admin/customers')
+      ) {
+        return false;
+      }
+      if (path === '/' || path.startsWith('/track') || path.startsWith('/admin/') || path.startsWith('/branch/')) {
+        return true;
       }
       return false;
     }
@@ -279,13 +293,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!user && !isPublic) {
       router.push('/login');
     } else if (user && pathname === '/login') {
-      if (user.role === 'OPERATOR') router.push('/admin/create-order');
-      else if (user.role === 'BRANCH_STAFF') router.push(`/branch/${user.branch_id || 'b1111111-1111-1111-1111-111111111111'}`);
-      else router.push('/admin/orders');
+      if (user.role === 'STAFF' || user.role === 'BRANCH_STAFF') router.push('/admin/create-order');
+      else router.push('/admin/dashboard');
     } else if (user && !isAllowedRoute(pathname)) {
-      if (user.role === 'OPERATOR') router.push('/admin/create-order');
-      else if (user.role === 'BRANCH_STAFF') router.push(`/branch/${user.branch_id || 'b1111111-1111-1111-1111-111111111111'}`);
-      else router.push('/admin/orders');
+      if (user.role === 'STAFF' || user.role === 'BRANCH_STAFF') router.push('/admin/create-order');
+      else router.push('/admin/dashboard');
     }
   }, [pathname, user, isLoaded, isLoading, isAllowedRoute, router]);
 

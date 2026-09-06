@@ -514,13 +514,13 @@ export default function UserManagementPage() {
                     onChange={(e) => setRole(e.target.value as UserRole)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 font-bold focus:ring-2 focus:ring-purple-500 outline-none cursor-pointer"
                   >
-                    <option value="OPERATOR">☎️ Tổng Đài Lên Đơn (Operator)</option>
-                    <option value="BRANCH_STAFF">🏪 Nhân Viên Chi Nhánh / Bếp (Branch Staff)</option>
                     <option value="SUPER_ADMIN">👑 Admin Tối Cao (Super Admin)</option>
+                    <option value="BRANCH_MANAGER">🏢 Quản Lý Cơ Sở (Branch Manager)</option>
+                    <option value="STAFF">👨‍🍳 Nhân Viên Ca / Thu Ngân (Staff)</option>
                   </select>
                 </div>
 
-                {role === 'BRANCH_STAFF' ? (
+                {role === 'BRANCH_MANAGER' || role === 'STAFF' || role === 'BRANCH_STAFF' ? (
                   <div className="space-y-1 p-2.5 bg-purple-50/50 rounded-xl border border-purple-100">
                     <label className="block text-purple-900 font-bold flex items-center gap-1">
                       <MapPin className="w-3.5 h-3.5 text-purple-600" /> Gán Chi Nhánh Trực Thuộc
@@ -658,11 +658,15 @@ export default function UserManagementPage() {
                             <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border ${
                               acc.role === 'SUPER_ADMIN' 
                                 ? 'bg-purple-50 text-purple-800 border-purple-200' 
-                                : acc.role === 'OPERATOR' 
+                                : acc.role === 'BRANCH_MANAGER' || acc.role === 'OPERATOR' 
                                 ? 'bg-sky-50 text-sky-800 border-sky-200' 
                                 : 'bg-emerald-50 text-emerald-800 border-emerald-200'
                             }`}>
-                              {acc.role === 'SUPER_ADMIN' ? 'SUPER ADMIN' : acc.role === 'OPERATOR' ? 'TỔNG ĐÀI' : 'CHI NHÁNH'}
+                              {acc.role === 'SUPER_ADMIN' 
+                                ? 'SUPER ADMIN' 
+                                : acc.role === 'BRANCH_MANAGER' || acc.role === 'OPERATOR' 
+                                ? 'QUẢN LÝ CƠ SỞ' 
+                                : 'NHÂN VIÊN CA'}
                             </span>
                           </td>
 

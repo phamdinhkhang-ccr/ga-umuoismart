@@ -11,8 +11,10 @@ import {
   getProducts, saveProduct, deleteProduct, ProductRecord 
 } from '@/lib/store';
 import { supabase } from '@/lib/supabaseClient';
+import { useAuth } from '@/context/AuthContext';
 
 export default function AdminCmsPage() {
+  const { user } = useAuth();
   const [settings, setSettings] = useState<StorefrontCmsSettings>({
     hero_title: '',
     hero_slogan: '',
@@ -122,6 +124,18 @@ export default function AdminCmsPage() {
       window.removeEventListener('gum_store_update', handleStoreUpdate);
     };
   }, []);
+
+  if (user?.role !== 'SUPER_ADMIN') {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        <div className="bg-white border border-slate-200 rounded-2xl p-6 text-center space-y-3 max-w-md shadow-sm">
+          <AlertCircle className="w-8 h-8 text-rose-600 mx-auto" />
+          <h2 className="text-base font-bold text-slate-900">Truy Cập Bị Từ Chối</h2>
+          <p className="text-xs text-slate-600">Trang cấu hình CMS Storefront chỉ dành riêng cho Admin Tối Cao.</p>
+        </div>
+      </div>
+    );
+  }
 
   const showToast = (msg: string) => {
     setToastMsg(msg);

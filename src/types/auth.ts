@@ -1,4 +1,4 @@
-export type UserRole = 'SUPER_ADMIN' | 'OPERATOR' | 'BRANCH_STAFF' | 'PUBLIC';
+export type UserRole = 'SUPER_ADMIN' | 'BRANCH_MANAGER' | 'STAFF' | 'OPERATOR' | 'BRANCH_STAFF' | 'PUBLIC';
 
 export interface UserPermissions {
   can_view_revenue: boolean;

@@ -42,7 +42,9 @@ export default function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarPr
       ];
     }
 
-    if (user.role === 'SUPER_ADMIN' || user.role === 'OPERATOR') {
+    const role = user.role;
+
+    if (role === 'SUPER_ADMIN') {
       return [
         { href: '/admin/dashboard', label: 'Dashboard', icon: TrendingUp },
         { href: '/admin/shifts/active', label: 'Đóng / Mở Ca', icon: Clock },
@@ -60,13 +62,30 @@ export default function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarPr
       ];
     }
 
-    if (user.role === 'BRANCH_STAFF') {
-      const bId = user.branch_id || 'b1111111-1111-1111-1111-111111111111';
+    if (role === 'BRANCH_MANAGER' || role === 'OPERATOR') {
       return [
-        { href: `/branch/${bId}`, label: 'Điều Phối Bếp Chi Nhánh', icon: ClipboardList },
-        { href: '/admin/shifts/active', label: 'Đóng / Mở Ca Cửa Hàng', icon: Clock },
-        { href: '/admin/inventory/import', label: 'Phiếu Nhập Kho', icon: ArrowDownLeft },
-        { href: '/track', label: 'Tra Cứu Đơn Khách', icon: Search },
+        { href: '/admin/dashboard', label: 'Dashboard Cơ Sở', icon: TrendingUp },
+        { href: '/admin/shifts/active', label: 'Đóng / Mở Ca', icon: Clock },
+        { href: '/admin/shifts', label: 'Quản Lý Ca', icon: History },
+        { href: '/admin/orders', label: 'Đơn Hàng', icon: ClipboardList },
+        { href: '/admin/expenses', label: 'Chi Tiêu (Sổ Quỹ)', icon: Wallet },
+        { href: '/admin/product-analytics', label: 'Thống Kê Sản Phẩm', icon: BarChart3 },
+        { href: '/admin/products', label: 'Sản Phẩm (Menu)', icon: UtensilsCrossed },
+        { href: '/admin/customers', label: 'Khách Hàng (CRM)', icon: UserCheck },
+        { href: '/admin/inventory/import', label: 'Nhập Kho', icon: ArrowDownLeft },
+        { href: '/admin/inventory/export', label: 'Xuất Kho', icon: ArrowUpRight },
+      ];
+    }
+
+    if (role === 'STAFF' || role === 'BRANCH_STAFF') {
+      return [
+        { href: '/admin/create-order', label: 'Lên Đơn Mới (POS)', icon: PlusCircle },
+        { href: '/admin/orders', label: 'Đơn Hàng', icon: ClipboardList },
+        { href: '/admin/shifts/active', label: 'Đóng / Mở Ca', icon: Clock },
+        { href: '/admin/shifts', label: 'Quản Lý Ca', icon: History },
+        { href: '/admin/products', label: 'Sản Phẩm (Menu)', icon: UtensilsCrossed },
+        { href: '/admin/inventory/import', label: 'Nhập Kho', icon: ArrowDownLeft },
+        { href: '/admin/inventory/export', label: 'Xuất Kho', icon: ArrowUpRight },
       ];
     }
 
@@ -74,7 +93,7 @@ export default function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarPr
   };
 
   const navLinks = getNavLinks();
-  const canCreateOrder = user && (user.role === 'SUPER_ADMIN' || user.role === 'OPERATOR');
+  const canCreateOrder = !!user;
 
   const SidebarContent = (
     <div className="flex flex-col justify-between h-full bg-white text-slate-800">

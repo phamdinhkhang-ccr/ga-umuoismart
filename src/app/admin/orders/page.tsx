@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
+import { useAuth } from '@/context/AuthContext';
 import { getAnalyticsData, getBranches, updateOrderStatus } from '@/actions/orders';
 import { Branch, Order, OrderStatus } from '@/types/database';
 import { restoreInventoryForOrder, deductInventoryForOrder, getItem } from '@/lib/store';
@@ -130,6 +131,7 @@ const RICH_MOCK_ORDERS: Order[] = [
 ];
 
 export default function CentralizedOrdersPage() {
+  const { user } = useAuth();
   const [orders, setOrders] = useState<Order[]>(RICH_MOCK_ORDERS);
   const [branches, setBranches] = useState<Branch[]>([]);
   
@@ -322,6 +324,11 @@ export default function CentralizedOrdersPage() {
 
   // Handle Quick Status Change with automatic Inventory restoration/deduction
   const handleStatusChange = async (orderId: string, newStatus: OrderStatus) => {
+    if ((user?.role === 'STAFF' || user?.role === 'BRANCH_STAFF') && newStatus === 'CANCELLED') {
+      alert('⚠️ Nhân viên ca không có quyền hủy đơn hàng. Vui lòng liên hệ Quản Lý Chi Nhánh hoặc Admin!');
+      return;
+    }
+
     const targetOrder = orders.find(o => o.id === orderId);
     if (targetOrder) {
       if (newStatus === 'CANCELLED') {
@@ -419,8 +426,11 @@ export default function CentralizedOrdersPage() {
         (paymentMethod === 'CASH' && o.status === 'SHIPPING') ||
         (paymentMethod === 'UNPAID' && o.status === 'RECEIVED');
 
-      // 4. Branch Filter
-      const matchBranch = selectedBranch === 'ALL' || o.branch_id === selectedBranch;
+      // 4. Branch Filter (Enforce role-based branch scoping for Branch Manager & Staff)
+      let matchBranch = selectedBranch === 'ALL' || o.branch_id === selectedBranch;
+      if (user && user.role !== 'SUPER_ADMIN' && user.branch_id) {
+        matchBranch = o.branch_id === user.branch_id || o.branch_id.includes(user.branch_id.substring(0, 8));
+      }
 
       // 5. Date Filters
       const orderDate = o.created_at.split('T')[0];
@@ -429,7 +439,7 @@ export default function CentralizedOrdersPage() {
 
       return matchSearch && matchTab && matchPayment && matchBranch && matchStart && matchEnd;
     });
-  }, [orders, searchQuery, statusTab, paymentMethod, selectedBranch, startDate, endDate]);
+  }, [orders, searchQuery, statusTab, paymentMethod, selectedBranch, startDate, endDate, user]);
 
   const handleResetFilters = () => {
     setSearchQuery('');
@@ -827,7 +837,7 @@ export default function CentralizedOrdersPage() {
               </div>
 
               {/* Quick Status Action Buttons */}
-              <div className="grid grid-cols-3 gap-2 pt-2">
+              <div className={`grid ${user?.role === 'STAFF' || user?.role === 'BRANCH_STAFF' ? 'grid-cols-2' : 'grid-cols-3'} gap-2 pt-2`}>
                 <button
                   onClick={() => handleStatusChange(selectedOrder.id, 'PAID')}
                   className="py-2.5 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 transition cursor-pointer text-center text-[11px]"
@@ -843,12 +853,14 @@ export default function CentralizedOrdersPage() {
                 >
                   ⇄ Chuyển Cơ Sở
                 </button>
-                <button
-                  onClick={() => handleStatusChange(selectedOrder.id, 'CANCELLED')}
-                  className="py-2.5 bg-rose-600 text-white font-bold rounded-xl hover:bg-rose-700 transition cursor-pointer text-center text-[11px]"
-                >
-                  ✕ Hủy Đơn &amp; Hoàn Kho
-                </button>
+                {user?.role !== 'STAFF' && user?.role !== 'BRANCH_STAFF' && (
+                  <button
+                    onClick={() => handleStatusChange(selectedOrder.id, 'CANCELLED')}
+                    className="py-2.5 bg-rose-600 text-white font-bold rounded-xl hover:bg-rose-700 transition cursor-pointer text-center text-[11px]"
+                  >
+                    ✕ Hủy Đơn &amp; Hoàn Kho
+                  </button>
+                )}
               </div>
             </div>
           </div>

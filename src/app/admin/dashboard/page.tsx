@@ -33,6 +33,8 @@ import {
 import { getAnalyticsData } from '@/actions/orders';
 import { getTotalPettyExpenses } from '@/lib/store';
 import { Order } from '@/types/database';
+import { useAuth } from '@/context/AuthContext';
+import { AlertCircle } from 'lucide-react';
 
 // Custom Tooltip component for Recharts
 const CustomFinancialTooltip = ({ active, payload, label }: any) => {
@@ -61,6 +63,7 @@ const CustomFinancialTooltip = ({ active, payload, label }: any) => {
 };
 
 export default function DashboardPage() {
+  const { user } = useAuth();
   const [data, setData] = useState<any>(null);
   const [pettyExpenses, setPettyExpenses] = useState<number>(0);
   const [isMounted, setIsMounted] = useState(false);
@@ -88,6 +91,18 @@ export default function DashboardPage() {
     window.addEventListener('gum_store_update', handleStoreUpdate);
     return () => window.removeEventListener('gum_store_update', handleStoreUpdate);
   }, []);
+
+  if (user?.role === 'STAFF' || user?.role === 'BRANCH_STAFF') {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        <div className="bg-white border border-slate-200 rounded-2xl p-6 text-center space-y-3 max-w-md shadow-sm">
+          <AlertCircle className="w-8 h-8 text-rose-600 mx-auto" />
+          <h2 className="text-base font-bold text-slate-900">Truy Cập Bị Từ Chối</h2>
+          <p className="text-xs text-slate-600">Báo cáo doanh thu &amp; Dashboard chỉ dành riêng cho Quản Lý Cơ Sở và Admin Tối Cao.</p>
+        </div>
+      </div>
+    );
+  }
 
   // Sync 6 KPI cards strictly with filtered orders & dates
   const metrics = useMemo(() => {
