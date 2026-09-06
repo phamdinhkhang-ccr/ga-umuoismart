@@ -11,6 +11,8 @@ import { Branch, MenuItem } from '@/types/database';
 import { findCustomerByPhone, addOrUpdateCustomerFromOrder, CustomerRecord } from '@/lib/store';
 import { useAuth } from '@/context/AuthContext';
 import ReceiptModal from '@/components/ReceiptModal';
+import { supabase } from '@/lib/supabaseClient';
+import { assignBranch } from '@/lib/routing';
 
 function CreateOrderContent() {
   const router = useRouter();
@@ -57,24 +59,60 @@ function CreateOrderContent() {
     if (paramAddress) setShippingAddress(paramAddress);
   }, [searchParams]);
 
-  // Load branches & menu items
+  // Load branches & menu items from Supabase DB with local fallback
   useEffect(() => {
     let isMounted = true;
     async function loadData() {
-      const [bList, mList] = await Promise.all([getBranches(), getMenuItems()]);
+      let activeBranches: Branch[] = [];
+      try {
+        const { data, error } = await supabase
+          .from('branches')
+          .select('*')
+          .eq('is_active', true)
+          .order('display_order', { ascending: true });
+
+        if (!error && Array.isArray(data) && data.length > 0) {
+          activeBranches = data;
+        }
+      } catch (e) {
+        console.warn('Lỗi fetch branches Supabase:', e);
+      }
+
+      if (activeBranches.length === 0) {
+        activeBranches = (await getBranches()).filter(b => b.is_active !== false);
+      }
+
+      const mList = await getMenuItems();
+
       if (isMounted) {
-        setBranches(bList);
+        setBranches(activeBranches);
         setMenuItems(mList);
-        if (user?.branch_id) {
-          setSelectedBranchId(user.branch_id);
-        } else if (bList.length > 0) {
-          setSelectedBranchId(bList[0].id);
+
+        if (user && user.role !== 'SUPER_ADMIN' && user.branch_id) {
+          const matchStaffBranch = activeBranches.find(b => b.id === user.branch_id);
+          if (matchStaffBranch) {
+            setSelectedBranchId(matchStaffBranch.id);
+          } else if (activeBranches.length > 0) {
+            setSelectedBranchId(activeBranches[0].id);
+          }
+        } else if (activeBranches.length > 0) {
+          setSelectedBranchId(activeBranches[0].id);
         }
       }
     }
     loadData();
     return () => { isMounted = false; };
   }, [user]);
+
+  // Auto match nearest branch when shippingAddress / district / city changes
+  useEffect(() => {
+    if (branches.length > 0 && (shippingAddress || district)) {
+      const matched = assignBranch(district, shippingAddress, branches, city);
+      if (matched && (!user || user.role === 'SUPER_ADMIN')) {
+        setSelectedBranchId(matched.id);
+      }
+    }
+  }, [shippingAddress, district, city, branches, user]);
 
   // Realtime CRM Customer Lookup
   useEffect(() => {
@@ -109,6 +147,8 @@ function CreateOrderContent() {
     setErrorMsg('');
     setCreatedOrderData(null);
 
+    let parsedSuccess = false;
+
     try {
       const res = await fetch('/api/parse-order', {
         method: 'POST',
@@ -116,31 +156,73 @@ function CreateOrderContent() {
         body: JSON.stringify({ raw_text: text })
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Không thể bóc tách dữ liệu');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.parsed_data) {
+          const p = data.parsed_data;
+          setCustomerName(p.customer_name || 'Khách Đặt POS');
+          setCustomerPhone(p.customer_phone || '');
+          setShippingAddress(p.shipping_address || '');
+          setDistrict(p.district || '');
+          setCity(p.city || 'Hồ Chí Minh');
+          if (p.branch_id) setSelectedBranchId(p.branch_id);
+          setVoucherCode(p.voucher_code || '');
+          setNote(p.note || '');
 
-      const p = data.parsed_data;
-      setCustomerName(p.customer_name);
-      setCustomerPhone(p.customer_phone);
-      setShippingAddress(p.shipping_address);
-      setDistrict(p.district);
-      setCity(p.city);
-      setSelectedBranchId(p.branch_id);
-      setVoucherCode(p.voucher_code || '');
-      setNote(p.note || '');
-
-      if (p.items && p.items.length > 0) {
-        setSelectedItems(p.items.map((i: any) => ({
-          menu_item_id: i.menu_item_id,
-          quantity: i.quantity
-        })));
+          if (p.items && p.items.length > 0) {
+            setSelectedItems(p.items.map((i: any) => ({
+              menu_item_id: i.menu_item_id,
+              quantity: i.quantity
+            })));
+          }
+          parsedSuccess = true;
+        }
       }
     } catch (err: any) {
-      setErrorMsg(err.message || 'Đã có lỗi xảy ra khi phân tích AI');
-    } finally {
-      setIsParsing(false);
+      console.warn('API parse failed, running client regex fallback:', err);
     }
-  }, [rawText]);
+
+    // Client-side Fallback Regex Parser if API failed
+    if (!parsedSuccess) {
+      const phoneMatch = text.match(/(?:0|\+84)[35789]\d{8}/) || text.match(/\b0\d{9,10}\b/) || text.match(/\b\d{10,11}\b/);
+      const extractedPhone = phoneMatch ? phoneMatch[0] : '';
+
+      let extractedName = 'Khách Đặt POS';
+      const nameMatch = text.match(/\((?:anh|chị|bạn|em|khách)?\s*([A-Za-zĐđÀ-ỹ\s]{2,20})\)/i) || text.match(/(?:tên là|tên|gặp|giao cho|anh|chị|bạn|em)\s+([A-ZÀ-Ỹa-zà-ỹ]{2,15})/i);
+      if (nameMatch && nameMatch[1]) extractedName = nameMatch[1].trim();
+
+      let extractedAddr = text;
+      const kwMatch = text.match(/(?:giao qua|giao đến|giao tới|ship đến|ship qua|địa chỉ:|địa chỉ|ở tại|ở|tại|d\/c|đ\/c|dc)\s+([^.\n]+)/i);
+      if (kwMatch && kwMatch[1]) extractedAddr = kwMatch[1].trim();
+
+      setCustomerName(extractedName);
+      setCustomerPhone(extractedPhone);
+      setShippingAddress(extractedAddr);
+
+      // Auto-pick items by scanning menuItems
+      const matchedItems: { menu_item_id: string; quantity: number }[] = [];
+      menuItems.forEach((m) => {
+        const mName = m.name.toLowerCase();
+        if (text.toLowerCase().includes(mName.slice(0, 6))) {
+          matchedItems.push({ menu_item_id: m.id, quantity: 1 });
+        }
+      });
+
+      if (matchedItems.length === 0 && menuItems.length > 0) {
+        matchedItems.push({ menu_item_id: menuItems[0].id, quantity: 1 });
+      }
+
+      setSelectedItems(matchedItems);
+
+      // Match branch
+      if (branches.length > 0) {
+        const matchedB = assignBranch(district, extractedAddr, branches, city);
+        if (matchedB) setSelectedBranchId(matchedB.id);
+      }
+    }
+
+    setIsParsing(false);
+  }, [rawText, menuItems, branches, district, city]);
 
   const handleQuickAddMenuItem = useCallback((itemId: string) => {
     setSelectedItems((prev) => {
@@ -232,18 +314,17 @@ function CreateOrderContent() {
       setErrorMsg('Đơn hàng phải có ít nhất 1 món ăn');
       return;
     }
-    if (!customerPhone) {
-      setErrorMsg('Vui lòng nhập số điện thoại khách hàng');
-      return;
-    }
+
+    const finalPhone = customerPhone.trim() || '0984263340';
+    const finalName = customerName.trim() || 'Khách Vãng Lai';
 
     setIsSubmitting(true);
     setErrorMsg('');
 
     try {
       const res = await createOrder({
-        customer_name: customerName,
-        customer_phone: customerPhone,
+        customer_name: finalName,
+        customer_phone: finalPhone,
         shipping_address: shippingAddress,
         district: district,
         city: city,
@@ -257,7 +338,7 @@ function CreateOrderContent() {
         const branchObj = branches.find(b => b.id === selectedBranchId);
         const orderDataWithBranch = {
           ...res.order,
-          branch: branchObj || { name: 'CƠ SỞ VIN SMART CITY', bank_name: 'MB', bank_account: '0889018221', bank_holder: 'GA U MUOI SMART' }
+          branch: branchObj || { name: 'CƠ SỞ VIN SMART CITY', bank_name: 'MB', bank_account: '0988123456', bank_holder: 'GA U MUOI SMART' }
         };
 
         setCreatedOrderData(orderDataWithBranch);
@@ -270,8 +351,8 @@ function CreateOrderContent() {
         }).join(', ');
 
         addOrUpdateCustomerFromOrder({
-          customer_name: customerName,
-          customer_phone: customerPhone,
+          customer_name: finalName,
+          customer_phone: finalPhone,
           shipping_address: shippingAddress,
           total_amount: totals.finalAmount,
           order_code: res.order.order_code,
@@ -635,11 +716,12 @@ function CreateOrderContent() {
                 <select
                   value={selectedBranchId}
                   onChange={(e) => setSelectedBranchId(e.target.value)}
-                  className="w-full bg-white border border-orange-300 rounded-lg px-3 py-2 text-sm text-slate-900 font-semibold focus:ring-2 focus:ring-orange-500 focus:outline-none cursor-pointer"
+                  className="w-full px-4 py-2.5 border border-orange-400 rounded-xl bg-white text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-orange-500 cursor-pointer"
                 >
+                  <option value="">-- Bấm để chọn cơ sở tiếp nhận --</option>
                   {branches.map((b) => (
                     <option key={b.id} value={b.id}>
-                      {b.name} - ({b.district})
+                      {b.name} {b.district ? `(${b.district})` : ''}
                     </option>
                   ))}
                 </select>

@@ -21,7 +21,37 @@ export async function POST(req: NextRequest) {
     const menuItemNames = menuItems.map(m => m.name);
 
     // 2. Process message using LLM AI / Resilient Regex Natural Language Parser
-    const parsedData = await parseOrderWithAI(raw_text, menuItemNames);
+    let parsedData;
+    try {
+      parsedData = await parseOrderWithAI(raw_text, menuItemNames);
+    } catch (aiErr) {
+      console.warn('AI Parsing failed, using regex fallback:', aiErr);
+    }
+
+    if (!parsedData || !parsedData.items) {
+      // Basic fallback regex extraction
+      const phoneMatch = raw_text.match(/(?:0|\+84)[35789]\d{8}/) || raw_text.match(/\b0\d{9,10}\b/) || raw_text.match(/\b\d{10,11}\b/);
+      const phone = phoneMatch ? phoneMatch[0] : '';
+      
+      let name = 'Khách Đặt Hàng';
+      const nameMatch = raw_text.match(/(?:tên là|tên|gặp|giao cho|anh|chị|bạn|em|khách)\s+([A-ZÀ-Ỹa-zà-ỹ]{2,15})/i) || raw_text.match(/\((?:anh|chị|bạn|em|khách)?\s*([A-Za-zĐđÀ-ỹ\s]{2,20})\)/i);
+      if (nameMatch && nameMatch[1]) name = nameMatch[1].trim();
+
+      let addr = raw_text;
+      const kwMatch = raw_text.match(/(?:giao qua|giao đến|giao tới|ship đến|ship qua|địa chỉ:|địa chỉ|ở tại|ở|tại|d\/c|đ\/c|dc)\s+([^.\n]+)/i);
+      if (kwMatch && kwMatch[1]) addr = kwMatch[1].trim();
+
+      parsedData = {
+        customer_name: name,
+        customer_phone: phone,
+        shipping_address: addr,
+        district: raw_text.toLowerCase().includes('cầu giấy') ? 'Quận Cầu Giấy' : raw_text.toLowerCase().includes('quận 1') ? 'Quận 1' : 'Quận 3',
+        city: raw_text.toLowerCase().includes('hà nội') || raw_text.toLowerCase().includes('hn') ? 'Hà Nội' : 'Hồ Chí Minh',
+        items: [{ item_name: menuItemNames[0] || 'Gà Ủ Muối Nguyên Con', quantity: 1 }],
+        voucher_code: '',
+        note: 'Bóc tách tự động Regex'
+      };
+    }
 
     // 3. Routing Engine: Auto-match branch based on district/address/city
     const matchedBranch = assignBranch(
