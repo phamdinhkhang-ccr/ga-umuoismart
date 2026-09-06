@@ -116,6 +116,39 @@ export default function PublicStorefrontHome() {
       setDetectionSource('address');
     }
   }, [activeBranches, selectedBranchId]);
+  useEffect(() => {
+    const fetchMenuAndSettings = async () => {
+      try {
+        const { data: prodData, error: prodErr } = await supabase
+          .from('products')
+          .select('*')
+          .eq('is_active', true);
+
+        if (!prodErr && Array.isArray(prodData) && prodData.length > 0) {
+          setProductsList(prodData);
+        } else {
+          setProductsList(getProducts());
+        }
+      } catch (err) {
+        console.error('Lỗi nạp menu từ Supabase:', err);
+        setProductsList(getProducts());
+      }
+
+      try {
+        const { data: cmsData } = await supabase
+          .from('storefront_settings')
+          .select('data')
+          .eq('id', 'default_config')
+          .maybeSingle();
+
+        if (cmsData?.data) {
+          setCmsSettings(prev => ({ ...prev, ...cmsData.data }));
+        }
+      } catch (e) {}
+    };
+
+    fetchMenuAndSettings();
+  }, []);
 
   useEffect(() => {
     if (!address || address.trim().length < 3) return;
@@ -578,12 +611,15 @@ export default function PublicStorefrontHome() {
             <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-500 via-orange-500 to-rose-500 flex items-center justify-center text-white shadow-md group-hover:scale-105 transition">
               <Store className="w-5 h-5" />
             </div>
-            <div>
-              <span className="text-lg font-black text-slate-900 tracking-tight flex items-center gap-1.5">
-                {cmsSettings.hero_title || cmsSettings.brandName || ''}
+            <div className="flex flex-col">
+              <span className="text-lg md:text-xl font-black text-slate-900 tracking-tight flex items-center gap-1.5 leading-tight">
+                {(cmsSettings as any)?.brand_name || (cmsSettings as any)?.site_title || cmsSettings?.brandName || cmsSettings?.hero_title || 'Gà Ủ Muối Smart'}
                 <Sparkles className="w-4 h-4 text-orange-500 animate-pulse" />
               </span>
-              <p className="text-[10px] text-slate-500 font-semibold hidden sm:block">Đặc Sản Da Giòn Sần Sật • Giao Hỏa Tốc</p>
+              <div className="flex items-center gap-1 text-[11px] text-slate-500 font-semibold hidden sm:flex">
+                <span className="text-orange-500">✨</span>
+                <span>{(cmsSettings as any)?.slogan || cmsSettings?.hero_slogan || cmsSettings?.heroSubtitle || 'Đặc Sản Da Giòn Sần Sật • Giao Hỏa Tốc'}</span>
+              </div>
             </div>
           </Link>
 
@@ -671,12 +707,23 @@ export default function PublicStorefrontHome() {
             </p>
           )}
 
-          {/* Banner Hero Image if Uploaded */}
-          {cmsSettings.hero_banner_image && (
-            <div className="max-w-3xl mx-auto my-4 overflow-hidden rounded-3xl border-2 border-orange-200 shadow-xl">
-              <img src={cmsSettings.hero_banner_image} alt="Hero Banner" className="w-full max-h-80 object-cover" />
-            </div>
-          )}
+          {/* Banner Hero Image */}
+          <div className="relative w-full max-w-lg mx-auto rounded-3xl overflow-hidden shadow-2xl border-4 border-white/90 aspect-[4/3] bg-orange-100 my-4">
+            <img
+              src={
+                (cmsSettings as any)?.banner_url || 
+                (cmsSettings as any)?.hero_banner || 
+                (cmsSettings as any)?.hero_image || 
+                cmsSettings?.hero_banner_image || 
+                'https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?q=80&w=800&auto=format&fit=crop'
+              }
+              alt="Banner Gà Ủ Muối Smart"
+              className="w-full h-full object-cover object-center"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?q=80&w=800&auto=format&fit=crop';
+              }}
+            />
+          </div>
 
           {/* Badges / Feature Tags */}
           {(() => {

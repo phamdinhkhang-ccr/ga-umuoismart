@@ -60,7 +60,7 @@ export default function Navbar() {
             <div className="w-10 h-10 rounded-xl bg-orange-600 flex items-center justify-center text-white font-bold shadow-sm">
               <Store className="w-5 h-5" />
             </div>
-            <div>
+            <div className="flex flex-col">
               <span className="font-bold text-lg tracking-tight text-slate-900 block">
                 Gà Ủ Muối Smart
               </span>

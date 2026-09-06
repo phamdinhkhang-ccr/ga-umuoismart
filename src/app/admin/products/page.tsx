@@ -66,22 +66,16 @@ export default function ProductsPage() {
     setBranches(getBranches());
 
     try {
-      const res = await fetch('/api/products', {
-        headers: { 'Accept': 'application/json' },
-        cache: 'no-store'
-      });
-      if (res.ok) {
-        const contentType = res.headers.get('content-type') || '';
-        if (contentType.includes('application/json')) {
-          const data = await res.json();
-          if (data && data.success && Array.isArray(data.products) && data.products.length > 0) {
-            setProducts(data.products);
-            return;
-          }
-        }
+      const { data, error } = await supabase
+        .from('products')
+        .select('*');
+
+      if (!error && Array.isArray(data) && data.length > 0) {
+        setProducts(data);
+        return;
       }
     } catch (e) {
-      console.warn('Products silent fetch bypass:', e);
+      console.warn('Products Supabase fetch bypass:', e);
     }
 
     setProducts(local);
@@ -314,7 +308,7 @@ export default function ProductsPage() {
   };
 
   // Save Product Handler
-  const handleSaveProduct = (e: React.FormEvent) => {
+  const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name.trim() || formData.price === '') return;
 
@@ -322,6 +316,31 @@ export default function ProductsPage() {
       .split(',')
       .map(k => k.trim())
       .filter(Boolean);
+
+    const productPayload = {
+      name: formData.name.trim(),
+      price: Number(formData.price),
+      original_price: Number(formData.cost_price || 0),
+      category: formData.category,
+      image_url: formData.image_url || '',
+      is_active: true,
+      stock_quantity: 100
+    };
+
+    try {
+      if (formData.id) {
+        await supabase
+          .from('products')
+          .update(productPayload)
+          .eq('id', formData.id);
+      } else {
+        await supabase
+          .from('products')
+          .insert([productPayload]);
+      }
+    } catch (err) {
+      console.error('Lỗi lưu Supabase products:', err);
+    }
 
     const updatedList = saveProduct({
       id: formData.id,
@@ -349,6 +368,7 @@ export default function ProductsPage() {
     } catch (e) {}
 
     syncProductsToSupabase(updatedList);
+    reloadData();
 
     setActiveModal(null);
     showToast(selectedProduct ? `Đã cập nhật món "${formData.name}"` : `Đã thêm món mới "${formData.name}" vào menu`);
@@ -361,15 +381,19 @@ export default function ProductsPage() {
   };
 
   // Confirm Delete
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!selectedProduct) return;
+    try {
+      await supabase.from('products').delete().eq('id', selectedProduct.id);
+    } catch (e) {}
+
     const updated = deleteProduct(selectedProduct.id);
     setProducts(updated);
-
     syncProductsToSupabase(updated);
+    reloadData();
 
     setActiveModal(null);
-    showToast(`Đã xóa món "${selectedProduct.name}" khỏi thực đơn`);
+    showToast(`Đã xóa món "${selectedProduct.name}" khỏi hệ thống`);
   };
 
   // Live Profit & Margin Calculation for Form Preview
