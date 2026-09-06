@@ -20,6 +20,7 @@ import {
 import { Order } from '@/types/database';
 import { supabase } from '@/lib/supabaseClient';
 import { calculateDistanceKm } from '@/lib/routing';
+import { findBestBranchForAddress } from '@/utils/branchMatcher';
 
 const PRESET_COMBOS: any[] = [];
 
@@ -97,6 +98,7 @@ export default function PublicStorefrontHome() {
   const [paymentMethod, setPaymentMethod] = useState<'COD' | 'VIETQR'>('COD');
   const [isLocating, setIsLocating] = useState(false);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [detectionSource, setDetectionSource] = useState<'address' | 'gps' | 'manual'>('address');
 
   // Filter active branches only (using contextActiveBranches if available)
   const activeBranches = useMemo(() => {
@@ -108,24 +110,25 @@ export default function PublicStorefrontHome() {
 
   const autoDetectBranchFromAddress = useCallback((addressText: string) => {
     if (!addressText || activeBranches.length === 0) return;
-    const lower = addressText.toLowerCase();
-
-    for (const branch of activeBranches) {
-      const keywords = Object.entries(BRANCH_KEYWORDS).find(
-        ([bName]) => branch.name.toLowerCase().includes(bName.toLowerCase()) || bName.toLowerCase().includes(branch.name.toLowerCase())
-      )?.[1] || [];
-
-      const isMatch = keywords.some(kw => lower.includes(kw));
-      if (isMatch) {
-        setSelectedBranchId(branch.id);
-        return;
-      }
+    const matched = findBestBranchForAddress(addressText, activeBranches);
+    if (matched && matched.id !== selectedBranchId) {
+      setSelectedBranchId(matched.id);
+      setDetectionSource('address');
     }
-  }, [activeBranches]);
+  }, [activeBranches, selectedBranchId]);
+
+  useEffect(() => {
+    if (!address || address.trim().length < 3) return;
+    const matched = findBestBranchForAddress(address, activeBranches);
+    if (matched && matched.id !== selectedBranchId) {
+      setSelectedBranchId(matched.id);
+      setDetectionSource('address');
+    }
+  }, [address, activeBranches, selectedBranchId]);
 
   const handleFindNearestBranchByGeo = () => {
     if (typeof window === 'undefined' || !navigator.geolocation) {
-      alert('Vui lòng bật quyền truy cập vị trí trên trình duyệt để tìm cơ sở gần nhất!');
+      alert('Trình duyệt không hỗ trợ định vị vị trí!');
       return;
     }
     setIsLocating(true);
@@ -135,6 +138,7 @@ export default function PublicStorefrontHome() {
         const userLat = position.coords.latitude;
         const userLng = position.coords.longitude;
         setUserLocation({ lat: userLat, lng: userLng });
+        setDetectionSource('gps');
 
         let minDistance = Infinity;
         let closestBranch: any = null;
@@ -160,7 +164,7 @@ export default function PublicStorefrontHome() {
         if (closestBranch) {
           setSelectedBranchId(closestBranch.id);
           const distLabel = minDistance !== Infinity ? ` (Cách ${closestBranch.distance || (Math.round(minDistance * 10) / 10)} km)` : '';
-          alert(`📍 Đã phát hiện cơ sở gần bạn nhất: ${closestBranch.name}${distLabel}`);
+          alert(`📍 Đã chọn cơ sở gần vị trí hiện tại của thiết bị: ${closestBranch.name}${distLabel}`);
         }
       },
       (error) => {
@@ -1176,7 +1180,7 @@ export default function PublicStorefrontHome() {
                         className="px-3.5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-full text-xs shadow-sm transition whitespace-nowrap cursor-pointer flex items-center gap-1 shrink-0"
                       >
                         <MapPin className="w-3.5 h-3.5" />
-                        <span>{isLocating ? 'Đang vị trí...' : '📍 Tìm cơ sở gần tôi nhất'}</span>
+                        <span>{isLocating ? 'Đang vị trí...' : '📍 Vị trí hiện tại của tôi'}</span>
                       </button>
                     </div>
                   </div>
@@ -1188,7 +1192,12 @@ export default function PublicStorefrontHome() {
                     <div className="font-black text-amber-300 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
                       <span className="flex items-center gap-1.5 text-xs sm:text-sm flex-wrap">
                         <MapPin className="w-4 h-4 text-amber-400 shrink-0" />
-                        <span>📍 Đơn hàng được phục vụ bởi: <strong className="text-white uppercase tracking-tight">{suggestedBranch.name}</strong></span>
+                        <span>
+                          {detectionSource === 'gps'
+                            ? '📍 Đã chọn cơ sở gần vị trí hiện tại của thiết bị: '
+                            : '📍 Đề xuất cơ sở gần địa chỉ giao nhất: '}
+                          <strong className="text-white uppercase tracking-tight">{suggestedBranch.name}</strong>
+                        </span>
                         {suggestedBranch.distance !== undefined && suggestedBranch.distance < 999 && (
                           <span className="ml-1 px-2 py-0.5 rounded-md bg-orange-500/20 text-orange-400 font-semibold text-xs border border-orange-400/40">
                             Cách bạn {suggestedBranch.distance} km
@@ -1205,7 +1214,10 @@ export default function PublicStorefrontHome() {
                       <label className="text-[11px] text-amber-200/80 block mb-1 font-semibold">Thay đổi cơ sở nhận đơn:</label>
                       <select
                         value={selectedBranchId || suggestedBranch.id}
-                        onChange={(e) => setSelectedBranchId(e.target.value)}
+                        onChange={(e) => {
+                          setSelectedBranchId(e.target.value);
+                          setDetectionSource('manual');
+                        }}
                         className="w-full bg-slate-900 border border-amber-500/40 rounded-lg text-amber-200 px-3 py-1.5 text-xs outline-none font-bold cursor-pointer"
                       >
                         {availableBranchesWithDistance.map((b: any) => (
