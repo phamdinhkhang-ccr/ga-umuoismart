@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { useBranches } from '@/context/BranchContext';
@@ -22,6 +22,36 @@ import { supabase } from '@/lib/supabaseClient';
 import { calculateDistanceKm } from '@/lib/routing';
 
 const PRESET_COMBOS: any[] = [];
+
+const BRANCH_KEYWORDS: Record<string, string[]> = {
+  'CHI NHÁNH GÀ Ủ MUỐI QUẬN 1 (TP.HCM)': [
+    'quận 1', 'q1', 'q.1', 'bến thành', 'bến nghé', 'đằng lữ', 'phạm ngũ lão', 'tân định', 'hồ chí minh', 'sài gòn', 'hcm', 'lê lợi'
+  ],
+  'CHI NHÁNH GÀ Ủ MUỐI QUẬN 3 (TP.HCM)': [
+    'quận 3', 'q3', 'q.3', 'võ thị sáu', 'cách mạng tháng 8', 'cmt8', 'nam kỳ khởi nghĩa', 'điện biên phủ', 'phú nhuận', 'bình thạnh'
+  ],
+  'CHI NHÁNH BÁN ĐẢO LINH ĐÀM': [
+    'linh đàm', 'hoàng mai', 'định công', 'giáp bát', 'bạch mai', 'thanh xuân nam', 'hoàng liệt', 'thanh trì', 'đại thanh', 'thượng phúc'
+  ],
+  'CHI NHÁNH CẦU GIẤY': [
+    'cầu giấy', 'dịch vọng', 'nghĩa tân', 'nghĩa đô', 'xuân thủy', 'mai dịch', 'trần thái tông', 'trung hòa', 'tây hồ', 'thanh xuân'
+  ],
+  'CHI NHÁNH ĐỐNG ĐA': [
+    'đống đa', 'xã đàn', 'chùa bộc', 'ô chợ dừa', 'láng hạ', 'thái hà', 'tôn đức thắng', 'nguyễn lương bằng'
+  ],
+  'CƠ SỞ VIN SMART CITY (NAM TỪ LIÊM)': [
+    'vin smart', 'vinsmart', 'smart city', 'tây mỗ', 'đại mỗ', 'nam từ liêm', 'bắc từ liêm', 'an khánh', 'hoài đức', 'hà đông'
+  ]
+};
+
+const BRANCH_COORDINATES: Record<string, { lat: number; lng: number }> = {
+  'vinsmart': { lat: 21.0028, lng: 105.7485 },
+  'linhdam': { lat: 20.9702, lng: 105.8275 },
+  'caugiay': { lat: 21.0362, lng: 105.7906 },
+  'dongda': { lat: 21.0181, lng: 105.8272 },
+  'q1': { lat: 10.7769, lng: 106.7009 },
+  'q3': { lat: 10.7844, lng: 106.6844 }
+};
 
 export default function PublicStorefrontHome() {
   const { user } = useAuth();
@@ -68,6 +98,31 @@ export default function PublicStorefrontHome() {
   const [isLocating, setIsLocating] = useState(false);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
 
+  // Filter active branches only (using contextActiveBranches if available)
+  const activeBranches = useMemo(() => {
+    if (contextActiveBranches && contextActiveBranches.length > 0) {
+      return contextActiveBranches;
+    }
+    return cmsSettings.branches?.filter((b) => b.is_active !== false) || [];
+  }, [contextActiveBranches, cmsSettings.branches]);
+
+  const autoDetectBranchFromAddress = useCallback((addressText: string) => {
+    if (!addressText || activeBranches.length === 0) return;
+    const lower = addressText.toLowerCase();
+
+    for (const branch of activeBranches) {
+      const keywords = Object.entries(BRANCH_KEYWORDS).find(
+        ([bName]) => branch.name.toLowerCase().includes(bName.toLowerCase()) || bName.toLowerCase().includes(branch.name.toLowerCase())
+      )?.[1] || [];
+
+      const isMatch = keywords.some(kw => lower.includes(kw));
+      if (isMatch) {
+        setSelectedBranchId(branch.id);
+        return;
+      }
+    }
+  }, [activeBranches]);
+
   const handleFindNearestBranchByGeo = () => {
     if (typeof window === 'undefined' || !navigator.geolocation) {
       alert('Vui lòng bật quyền truy cập vị trí trên trình duyệt để tìm cơ sở gần nhất!');
@@ -81,24 +136,31 @@ export default function PublicStorefrontHome() {
         const userLng = position.coords.longitude;
         setUserLocation({ lat: userLat, lng: userLng });
 
-        const branchesWithDistance = activeBranches.map((b: any) => {
-          const lat = Number(b.latitude);
-          const lng = Number(b.longitude);
-          const dist = (lat && lng)
-            ? calculateDistanceKm(userLat, userLng, lat, lng)
-            : 9999;
-          return { ...b, distance: dist };
+        let minDistance = Infinity;
+        let closestBranch: any = null;
+
+        activeBranches.forEach((b: any) => {
+          const coords = (b.latitude && b.longitude) 
+            ? { lat: Number(b.latitude), lng: Number(b.longitude) } 
+            : Object.entries(BRANCH_COORDINATES).find(([k]) => b.name.toLowerCase().includes(k) || (b.address || '').toLowerCase().includes(k))?.[1];
+
+          if (coords) {
+            const dist = calculateDistanceKm(userLat, userLng, coords.lat, coords.lng);
+            if (dist < minDistance) {
+              minDistance = dist;
+              closestBranch = { ...b, distance: Math.round(dist * 10) / 10 };
+            }
+          }
         });
 
-        branchesWithDistance.sort((a, b) => a.distance - b.distance);
+        if (!closestBranch && activeBranches.length > 0) {
+          closestBranch = activeBranches[0];
+        }
 
-        const nearestBranch = branchesWithDistance[0];
-        if (nearestBranch) {
-          setSelectedBranchId(nearestBranch.id);
-          const distLabel = nearestBranch.distance !== undefined && nearestBranch.distance < 999 
-            ? ` (Cách ${nearestBranch.distance} km)` 
-            : '';
-          alert(`📍 Đã tìm thấy cơ sở gần bạn nhất: ${nearestBranch.name}${distLabel}`);
+        if (closestBranch) {
+          setSelectedBranchId(closestBranch.id);
+          const distLabel = minDistance !== Infinity ? ` (Cách ${closestBranch.distance || (Math.round(minDistance * 10) / 10)} km)` : '';
+          alert(`📍 Đã phát hiện cơ sở gần bạn nhất: ${closestBranch.name}${distLabel}`);
         }
       },
       (error) => {
@@ -109,88 +171,6 @@ export default function PublicStorefrontHome() {
       { enableHighAccuracy: true, timeout: 8000 }
     );
   };
-
-  const loadStorefrontData = async () => {
-    const localCms = getCmsSettings();
-    try {
-      const savedBackup = localStorage.getItem('storefront_settings');
-      if (savedBackup) {
-        const parsed = JSON.parse(savedBackup);
-        if (parsed) setCmsSettings(parsed);
-      }
-    } catch (e) {}
-
-    setProductsList(getProducts());
-
-    try {
-      const { data, error } = await supabase
-        .from('storefront_settings')
-        .select('*')
-        .eq('id', 'default_config')
-        .maybeSingle();
-
-      if (error) {
-        console.warn('Lỗi đọc cấu hình storefront:', error.message);
-      }
-
-      const configData = data?.data;
-      if (configData) {
-        setCmsSettings(configData);
-        try {
-          localStorage.setItem('storefront_settings', JSON.stringify(configData));
-        } catch (e) {}
-      }
-    } catch (e) {
-      console.error('Lỗi fetch:', e);
-    }
-  };
-
-  useEffect(() => {
-    loadStorefrontData();
-
-    // Supabase Realtime Listener for Storefront Settings (Live Cross-Device Update)
-    const storefrontChannel = supabase
-      .channel('realtime_storefront_landing')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'storefront_settings' },
-        (payload: any) => {
-          if (payload.new) {
-            const newConfig = payload.new.data || payload.new.settings;
-            if (newConfig) {
-              setCmsSettings(newConfig);
-              try {
-                localStorage.setItem('storefront_settings', JSON.stringify(newConfig));
-              } catch (e) {}
-            }
-          }
-        }
-      )
-      .subscribe();
-
-    const handleStoreUpdate = () => {
-      loadStorefrontData();
-    };
-
-    window.addEventListener('gum_store_update', handleStoreUpdate);
-    window.addEventListener('storage', handleStoreUpdate);
-
-    return () => {
-      try {
-        supabase.removeChannel(storefrontChannel);
-      } catch (e) {}
-      window.removeEventListener('gum_store_update', handleStoreUpdate);
-      window.removeEventListener('storage', handleStoreUpdate);
-    };
-  }, []);
-
-  // Filter active branches only (using contextActiveBranches if available)
-  const activeBranches = useMemo(() => {
-    if (contextActiveBranches && contextActiveBranches.length > 0) {
-      return contextActiveBranches;
-    }
-    return cmsSettings.branches?.filter((b) => b.is_active !== false) || [];
-  }, [contextActiveBranches, cmsSettings.branches]);
 
   // Dynamic display products priority: cmsSettings.menuItems -> cmsSettings.products -> productsList
   const displayProducts = useMemo(() => {
@@ -223,52 +203,51 @@ export default function PublicStorefrontHome() {
     return presets;
   }, [displayProducts]);
 
-  // Computed Branches List with Distance (Haversine formula)
+  // Computed Branches List with Distance (Haversine formula + fallback coordinates)
   const availableBranchesWithDistance = useMemo(() => {
     if (!activeBranches || activeBranches.length === 0) return [];
     return activeBranches.map((b: any) => {
       let dist: number | undefined = undefined;
-      if (userLocation && b.latitude && b.longitude) {
-        dist = calculateDistanceKm(userLocation.lat, userLocation.lng, Number(b.latitude), Number(b.longitude));
+      let lat = Number(b.latitude);
+      let lng = Number(b.longitude);
+
+      if (!lat || !lng) {
+        const fallback = Object.entries(BRANCH_COORDINATES).find(
+          ([k]) => b.name.toLowerCase().includes(k) || (b.address || '').toLowerCase().includes(k)
+        )?.[1];
+        if (fallback) {
+          lat = fallback.lat;
+          lng = fallback.lng;
+        }
       }
-      return { ...b, distance: dist };
+
+      if (userLocation && lat && lng) {
+        dist = Math.round(calculateDistanceKm(userLocation.lat, userLocation.lng, lat, lng) * 10) / 10;
+      }
+      return { ...b, distance: dist, latitude: lat || b.latitude, longitude: lng || b.longitude };
     });
   }, [activeBranches, userLocation]);
 
-  // Auto Nearest Branch Suggestion Logic based on Coordinates & Address
+  // Auto Nearest Branch Suggestion Logic based on Coordinates & Address Keywords
   const suggestedBranch = useMemo(() => {
     if (!availableBranchesWithDistance || availableBranchesWithDistance.length === 0) return null;
 
     if (userLocation) {
-      if (selectedBranchId) {
-        const found = availableBranchesWithDistance.find(b => b.id === selectedBranchId);
-        if (found) return found;
-      }
       const sorted = [...availableBranchesWithDistance].sort((a, b) => (a.distance ?? 9999) - (b.distance ?? 9999));
       return sorted[0];
     }
 
-    const addr = address.toLowerCase();
-    
-    if (addr.includes('thanh trì') || addr.includes('đại thanh') || addr.includes('hoàng mai') || addr.includes('thượng phúc')) {
-      const b = availableBranchesWithDistance.find(x => x.name.includes('Thanh Trì') || x.address.includes('Thanh Trì'));
-      if (b) return b;
-    }
-    if (addr.includes('cầu giấy') || addr.includes('đống đa') || addr.includes('trần thái tông') || addr.includes('dịch vọng') || addr.includes('tây hồ') || addr.includes('thanh xuân')) {
-      const b = availableBranchesWithDistance.find(x => x.name.includes('Cầu Giấy') || x.address.includes('Cầu Giấy'));
-      if (b) return b;
-    }
-    if (addr.includes('quận 1') || addr.includes('lê lợi') || addr.includes('bến thành') || addr.includes('quận 4')) {
-      const b = availableBranchesWithDistance.find(x => x.name.includes('Quận 1') || x.address.includes('Quận 1'));
-      if (b) return b;
-    }
-    if (addr.includes('quận 3') || addr.includes('điện biên phủ') || addr.includes('phú nhuận') || addr.includes('bình thạnh')) {
-      const b = availableBranchesWithDistance.find(x => x.name.includes('Quận 3') || x.address.includes('Quận 3'));
-      if (b) return b;
-    }
-    if (addr.includes('smart city') || addr.includes('tây mỗ') || addr.includes('nam từ liêm') || addr.includes('hà đông') || addr.includes('hoài đức')) {
-      const b = availableBranchesWithDistance.find(x => x.name.includes('SMART CITY') || x.address.includes('Smart City'));
-      if (b) return b;
+    const addr = address.toLowerCase().trim();
+    if (addr) {
+      for (const branch of availableBranchesWithDistance) {
+        const keywords = Object.entries(BRANCH_KEYWORDS).find(
+          ([bName]) => branch.name.toLowerCase().includes(bName.toLowerCase()) || bName.toLowerCase().includes(branch.name.toLowerCase())
+        )?.[1] || [];
+
+        if (keywords.some(kw => addr.includes(kw))) {
+          return branch;
+        }
+      }
     }
 
     if (selectedBranchId) {
@@ -279,12 +258,12 @@ export default function PublicStorefrontHome() {
     return availableBranchesWithDistance[0];
   }, [address, availableBranchesWithDistance, selectedBranchId, userLocation]);
 
-  // Sync selectedBranchId when suggestedBranch updates if not explicitly selected
+  // Sync selectedBranchId when suggestedBranch updates
   useEffect(() => {
-    if (suggestedBranch && !selectedBranchId) {
+    if (suggestedBranch) {
       setSelectedBranchId(suggestedBranch.id);
     }
-  }, [suggestedBranch, selectedBranchId]);
+  }, [suggestedBranch]);
 
   // Total Order Amount Calculation
   const totalOrderAmount = useMemo(() => {
@@ -1184,7 +1163,10 @@ export default function PublicStorefrontHome() {
                         required
                         placeholder="Địa chỉ nhận hàng (*): Số nhà, tên đường, Phường/Xã, Quận/Huyện..."
                         value={address}
-                        onChange={(e) => setAddress(e.target.value)}
+                        onChange={(e) => {
+                          setAddress(e.target.value);
+                          autoDetectBranchFromAddress(e.target.value);
+                        }}
                         className="flex-1 px-4 py-2.5 bg-white rounded-full text-slate-900 font-bold text-xs outline-none focus:ring-2 focus:ring-amber-400 transition placeholder:text-slate-400"
                       />
                       <button
