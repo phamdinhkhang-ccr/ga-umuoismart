@@ -109,7 +109,7 @@ export const INITIAL_DEMO_ACCOUNTS: (UserAccount & { password?: string })[] = [
       can_cancel_order: false,
       can_edit_price: false
     },
-    branch_id: 'b2222222-2222-2222-2222-222222222222',
+    branch_id: 'b5555555-5555-5555-5555-555555555555',
     branch_name: 'Chi Nhánh Gà Ủ Muối Quận 3'
   }
 ];
@@ -148,6 +148,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           || safeGetJSON<UserAccount | null>('auth_user', null);
         
         if (stored && typeof stored === 'object' && (stored as any).id) {
+          if (stored.username === 'chinhanh2') {
+            stored.branch_id = 'b5555555-5555-5555-5555-555555555555';
+            stored.branch_name = 'Chi Nhánh Gà Ủ Muối Quận 3';
+          }
           setUser(stored);
         }
 

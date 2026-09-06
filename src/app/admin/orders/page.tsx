@@ -165,8 +165,18 @@ export default function CentralizedOrdersPage() {
           .select('*')
           .order('created_at', { ascending: false });
 
-        if ((user?.role === 'STAFF' || user?.role === 'BRANCH_STAFF') && user?.branch_id) {
-          query = query.eq('branch_id', user.branch_id);
+        if (user && user.role !== 'SUPER_ADMIN') {
+          const userBId = user.branch_id;
+          const userBName = user.branch_name;
+          const conds: string[] = [];
+          if (userBId) conds.push(`branch_id.eq.${userBId}`);
+          if (userBName) {
+            conds.push(`branch_name.ilike.%${userBName}%`);
+            conds.push(`branch.ilike.%${userBName}%`);
+          }
+          if (conds.length > 0) {
+            query = query.or(conds.join(','));
+          }
         }
 
         const { data: dbOrders, error: dbError } = await query;
@@ -271,9 +281,9 @@ export default function CentralizedOrdersPage() {
   useEffect(() => {
     loadData();
 
-    // Supabase Realtime Order Subscription ('orders-realtime')
+    // Supabase Realtime Order Subscription ('orders-realtime-staff')
     const orderSubscription = supabase
-      .channel('orders-realtime')
+      .channel('orders-realtime-staff')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'orders' },
@@ -432,8 +442,24 @@ export default function CentralizedOrdersPage() {
 
       // 4. Branch Filter (Enforce role-based branch scoping for Branch Manager & Staff)
       let matchBranch = selectedBranch === 'ALL' || o.branch_id === selectedBranch;
-      if (user && user.role !== 'SUPER_ADMIN' && user.branch_id) {
-        matchBranch = o.branch_id === user.branch_id || o.branch_id.includes(user.branch_id.substring(0, 8));
+      if (user && user.role !== 'SUPER_ADMIN') {
+        const userBId = (user.branch_id || '').toLowerCase();
+        const userBName = (user.branch_name || '').toLowerCase();
+
+        const orderBId = (o.branch_id || (o as any).branchId || '').toLowerCase();
+        const orderBName = (typeof o.branch === 'object' && o.branch?.name ? o.branch.name : (o.branch || (o as any).branchName || '')).toLowerCase();
+
+        const matchId = Boolean(userBId && (orderBId === userBId || (orderBId.length >= 8 && userBId.includes(orderBId.substring(0, 8)))));
+        const matchName = Boolean(userBName && (
+          orderBName.includes(userBName) || 
+          userBName.includes(orderBName) ||
+          (userBName.includes('quận 3') && (orderBName.includes('quận 3') || orderBName.includes('q3'))) ||
+          (userBName.includes('quận 1') && (orderBName.includes('quận 1') || orderBName.includes('q1'))) ||
+          (userBName.includes('cầu giấy') && orderBName.includes('cầu giấy')) ||
+          (userBName.includes('smart city') && orderBName.includes('smart city'))
+        ));
+
+        matchBranch = matchId || matchName;
       }
 
       // 5. Date Filters
@@ -519,11 +545,12 @@ export default function CentralizedOrdersPage() {
             {/* Cửa hàng */}
             <div className="sm:col-span-4">
               <select
-                value={selectedBranch}
+                value={user && user.role !== 'SUPER_ADMIN' ? (user.branch_id || selectedBranch) : selectedBranch}
                 onChange={(e) => setSelectedBranch(e.target.value)}
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none cursor-pointer"
+                disabled={Boolean(user && user.role !== 'SUPER_ADMIN')}
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none cursor-pointer disabled:opacity-80 disabled:bg-slate-100"
               >
-                <option value="ALL">Tất cả cửa hàng / chi nhánh</option>
+                {user?.role === 'SUPER_ADMIN' && <option value="ALL">Tất cả cửa hàng / chi nhánh</option>}
                 {branches.map((b) => (
                   <option key={b.id} value={b.id}>{b.name}</option>
                 ))}

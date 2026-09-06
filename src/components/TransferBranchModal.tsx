@@ -71,6 +71,7 @@ export default function TransferBranchModal({ order, onClose, onSuccess }: Trans
         .from('orders')
         .update({
           branch_id: selectedBranchId,
+          branch_name: targetBranchName,
           branch: targetBranchName,
           note: updatedNote,
           updated_at: new Date().toISOString()
