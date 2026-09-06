@@ -75,7 +75,9 @@ export default function BranchesPage() {
         maps_url: b.maps_url || `https://maps.google.com/?q=${encodeURIComponent(b.address || b.name)}`,
         is_active: b.is_active !== false && b.status !== 'PAUSED',
         district: b.district,
-        city: b.city
+        city: b.city,
+        latitude: b.latitude,
+        longitude: b.longitude
       }));
 
       // 1. Update CMS settings local
@@ -178,7 +180,9 @@ export default function BranchesPage() {
         maps_url: branch.maps_url || '',
         bank_name: branch.bank_name || 'MB Bank',
         bank_account: branch.bank_account || '',
-        bank_holder: branch.bank_holder || ''
+        bank_holder: branch.bank_holder || '',
+        latitude: branch.latitude,
+        longitude: branch.longitude
       });
     } else {
       setSelectedBranch(null);
@@ -196,7 +200,9 @@ export default function BranchesPage() {
         maps_url: '',
         bank_name: 'MB Bank',
         bank_account: '0988123456',
-        bank_holder: 'GA U MUOI SMART'
+        bank_holder: 'GA U MUOI SMART',
+        latitude: undefined,
+        longitude: undefined
       });
     }
     setActiveModal('CONFIG');
@@ -218,7 +224,9 @@ export default function BranchesPage() {
       hours: formData.hours?.trim() || '08:00 - 22:00',
       display_order: Number(formData.display_order || 1),
       is_active: formData.is_active ?? true,
-      status: formData.is_active ? 'ACTIVE' : 'PAUSED'
+      status: formData.is_active ? 'ACTIVE' : 'PAUSED',
+      latitude: formData.latitude !== undefined && (formData.latitude as any) !== '' ? Number(formData.latitude) : undefined,
+      longitude: formData.longitude !== undefined && (formData.longitude as any) !== '' ? Number(formData.longitude) : undefined
     } as Partial<Branch> & { name: string });
 
     setBranches(updatedList);
@@ -675,6 +683,43 @@ export default function BranchesPage() {
                   placeholder="https://maps.google.com/?q=..."
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-slate-900 font-medium outline-none"
                 />
+              </div>
+
+              {/* Tọa độ Định Vị GPS (Haversine Distance) */}
+              <div className="p-3 bg-amber-50/70 border border-amber-200/90 rounded-2xl space-y-2">
+                <div className="space-y-0.5">
+                  <label className="block text-slate-900 font-extrabold text-[11px] flex items-center gap-1.5">
+                    <Navigation className="w-3.5 h-3.5 text-orange-600" />
+                    <span>Tọa Độ Định Vị GPS (Dùng để đo khoảng cách Haversine tới khách)</span>
+                  </label>
+                  <p className="text-[10px] text-amber-800 font-semibold">
+                    💡 Mở Google Maps, click chuột phải vào vị trí cơ sở để copy số Tọa độ dán vào đây.
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div className="space-y-1">
+                    <label className="block text-slate-700 font-bold text-[11px]">Vĩ độ (Latitude)</label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={formData.latitude ?? ''}
+                      onChange={(e) => setFormData({ ...formData, latitude: e.target.value as any })}
+                      placeholder="Ví dụ: 21.0028"
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-900 font-bold outline-none focus:ring-2 focus:ring-orange-500"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-slate-700 font-bold text-[11px]">Kinh độ (Longitude)</label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={formData.longitude ?? ''}
+                      onChange={(e) => setFormData({ ...formData, longitude: e.target.value as any })}
+                      placeholder="Ví dụ: 105.7485"
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-900 font-bold outline-none focus:ring-2 focus:ring-orange-500"
+                    />
+                  </div>
+                </div>
               </div>
 
               <div className="space-y-1">

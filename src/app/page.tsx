@@ -18,6 +18,7 @@ import {
 } from '@/lib/store';
 import { Order } from '@/types/database';
 import { supabase } from '@/lib/supabaseClient';
+import { calculateDistanceKm } from '@/lib/routing';
 
 const PRESET_COMBOS: any[] = [];
 
@@ -63,26 +64,47 @@ export default function PublicStorefrontHome() {
   const [extraNote, setExtraNote] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'COD' | 'VIETQR'>('COD');
   const [isLocating, setIsLocating] = useState(false);
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
 
   const handleFindNearestBranchByGeo = () => {
     if (typeof window === 'undefined' || !navigator.geolocation) {
-      alert('Trình duyệt không hỗ trợ Geolocation tự động. Vui lòng gõ địa chỉ để tìm cơ sở!');
+      alert('Vui lòng bật quyền truy cập vị trí trên trình duyệt để tìm cơ sở gần nhất!');
       return;
     }
     setIsLocating(true);
     navigator.geolocation.getCurrentPosition(
       (position) => {
         setIsLocating(false);
-        if (activeBranches.length > 0) {
-          setSelectedBranchId(activeBranches[0].id);
-          alert(`📍 Định vị thành công! Đã gán cơ sở phục vụ gần bạn nhất: ${activeBranches[0].name}`);
+        const userLat = position.coords.latitude;
+        const userLng = position.coords.longitude;
+        setUserLocation({ lat: userLat, lng: userLng });
+
+        const branchesWithDistance = activeBranches.map((b: any) => {
+          const lat = Number(b.latitude);
+          const lng = Number(b.longitude);
+          const dist = (lat && lng)
+            ? calculateDistanceKm(userLat, userLng, lat, lng)
+            : 9999;
+          return { ...b, distance: dist };
+        });
+
+        branchesWithDistance.sort((a, b) => a.distance - b.distance);
+
+        const nearestBranch = branchesWithDistance[0];
+        if (nearestBranch) {
+          setSelectedBranchId(nearestBranch.id);
+          const distLabel = nearestBranch.distance !== undefined && nearestBranch.distance < 999 
+            ? ` (Cách ${nearestBranch.distance} km)` 
+            : '';
+          alert(`📍 Đã tìm thấy cơ sở gần bạn nhất: ${nearestBranch.name}${distLabel}`);
         }
       },
-      (err) => {
+      (error) => {
         setIsLocating(false);
-        alert('Không lấy được vị trí GPS. Hệ thống sẽ tự động phân tích theo Tên Quận/Địa chỉ nhận hàng bạn gõ!');
+        console.warn('Không thể lấy tọa độ:', error);
+        alert('Vui lòng bật quyền truy cập vị trí trên trình duyệt để tìm cơ sở gần nhất!');
       },
-      { timeout: 7000 }
+      { enableHighAccuracy: true, timeout: 8000 }
     );
   };
 
@@ -196,39 +218,61 @@ export default function PublicStorefrontHome() {
     return presets;
   }, [displayProducts]);
 
-  // Auto Nearest Branch Suggestion Logic based on Address
+  // Computed Branches List with Distance (Haversine formula)
+  const availableBranchesWithDistance = useMemo(() => {
+    if (!activeBranches || activeBranches.length === 0) return [];
+    return activeBranches.map((b: any) => {
+      let dist: number | undefined = undefined;
+      if (userLocation && b.latitude && b.longitude) {
+        dist = calculateDistanceKm(userLocation.lat, userLocation.lng, Number(b.latitude), Number(b.longitude));
+      }
+      return { ...b, distance: dist };
+    });
+  }, [activeBranches, userLocation]);
+
+  // Auto Nearest Branch Suggestion Logic based on Coordinates & Address
   const suggestedBranch = useMemo(() => {
-    if (!activeBranches || activeBranches.length === 0) return null;
+    if (!availableBranchesWithDistance || availableBranchesWithDistance.length === 0) return null;
+
+    if (userLocation) {
+      if (selectedBranchId) {
+        const found = availableBranchesWithDistance.find(b => b.id === selectedBranchId);
+        if (found) return found;
+      }
+      const sorted = [...availableBranchesWithDistance].sort((a, b) => (a.distance ?? 9999) - (b.distance ?? 9999));
+      return sorted[0];
+    }
+
     const addr = address.toLowerCase();
     
     if (addr.includes('thanh trì') || addr.includes('đại thanh') || addr.includes('hoàng mai') || addr.includes('thượng phúc')) {
-      const b = activeBranches.find(x => x.name.includes('Thanh Trì') || x.address.includes('Thanh Trì'));
+      const b = availableBranchesWithDistance.find(x => x.name.includes('Thanh Trì') || x.address.includes('Thanh Trì'));
       if (b) return b;
     }
     if (addr.includes('cầu giấy') || addr.includes('đống đa') || addr.includes('trần thái tông') || addr.includes('dịch vọng') || addr.includes('tây hồ') || addr.includes('thanh xuân')) {
-      const b = activeBranches.find(x => x.name.includes('Cầu Giấy') || x.address.includes('Cầu Giấy'));
+      const b = availableBranchesWithDistance.find(x => x.name.includes('Cầu Giấy') || x.address.includes('Cầu Giấy'));
       if (b) return b;
     }
     if (addr.includes('quận 1') || addr.includes('lê lợi') || addr.includes('bến thành') || addr.includes('quận 4')) {
-      const b = activeBranches.find(x => x.name.includes('Quận 1') || x.address.includes('Quận 1'));
+      const b = availableBranchesWithDistance.find(x => x.name.includes('Quận 1') || x.address.includes('Quận 1'));
       if (b) return b;
     }
     if (addr.includes('quận 3') || addr.includes('điện biên phủ') || addr.includes('phú nhuận') || addr.includes('bình thạnh')) {
-      const b = activeBranches.find(x => x.name.includes('Quận 3') || x.address.includes('Quận 3'));
+      const b = availableBranchesWithDistance.find(x => x.name.includes('Quận 3') || x.address.includes('Quận 3'));
       if (b) return b;
     }
     if (addr.includes('smart city') || addr.includes('tây mỗ') || addr.includes('nam từ liêm') || addr.includes('hà đông') || addr.includes('hoài đức')) {
-      const b = activeBranches.find(x => x.name.includes('SMART CITY') || x.address.includes('Smart City'));
+      const b = availableBranchesWithDistance.find(x => x.name.includes('SMART CITY') || x.address.includes('Smart City'));
       if (b) return b;
     }
 
     if (selectedBranchId) {
-      const currentB = activeBranches.find(x => x.id === selectedBranchId);
+      const currentB = availableBranchesWithDistance.find(x => x.id === selectedBranchId);
       if (currentB) return currentB;
     }
 
-    return activeBranches[0];
-  }, [address, activeBranches, selectedBranchId]);
+    return availableBranchesWithDistance[0];
+  }, [address, availableBranchesWithDistance, selectedBranchId, userLocation]);
 
   // Sync selectedBranchId when suggestedBranch updates if not explicitly selected
   useEffect(() => {
@@ -1153,26 +1197,34 @@ export default function PublicStorefrontHome() {
 
                 {/* Automatic Nearest Branch Suggestion Box */}
                 {suggestedBranch && (
-                  <div className="bg-gradient-to-r from-amber-950/80 to-orange-950/80 border-2 border-amber-400/60 rounded-2xl p-3.5 text-xs space-y-2 shadow-md">
+                  <div className="bg-gradient-to-r from-amber-950/80 to-orange-950/80 border-2 border-amber-400/60 rounded-2xl p-3.5 text-xs space-y-2.5 shadow-md">
                     <div className="font-black text-amber-300 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
-                      <span className="flex items-center gap-1.5 text-sm">
+                      <span className="flex items-center gap-1.5 text-xs sm:text-sm flex-wrap">
                         <MapPin className="w-4 h-4 text-amber-400 shrink-0" />
-                        <span>Đơn hàng được phục vụ bởi: <strong className="text-white uppercase tracking-tight">{suggestedBranch.name}</strong></span>
+                        <span>📍 Đơn hàng được phục vụ bởi: <strong className="text-white uppercase tracking-tight">{suggestedBranch.name}</strong></span>
+                        {suggestedBranch.distance !== undefined && suggestedBranch.distance < 999 && (
+                          <span className="ml-1 px-2 py-0.5 rounded-md bg-orange-500/20 text-orange-400 font-semibold text-xs border border-orange-400/40">
+                            Cách bạn {suggestedBranch.distance} km
+                          </span>
+                        )}
                       </span>
-                      <span className="text-[11px] bg-amber-500/30 text-amber-300 border border-amber-400/50 px-2.5 py-0.5 rounded-full shrink-0 font-bold">
+                      <span className="text-[11px] text-amber-400 font-medium shrink-0">
                         (Dự kiến giao 30-40p)
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-2 text-[11px] text-amber-200/80 pt-1 border-t border-amber-500/30">
-                      <span>Thay đổi cơ sở nhận đơn:</span>
+                    {/* Dropdown đổi cơ sở kèm khoảng cách */}
+                    <div className="pt-1.5 border-t border-amber-500/30 text-xs">
+                      <label className="text-[11px] text-amber-200/80 block mb-1 font-semibold">Thay đổi cơ sở nhận đơn:</label>
                       <select
-                        value={selectedBranchId}
+                        value={selectedBranchId || suggestedBranch.id}
                         onChange={(e) => setSelectedBranchId(e.target.value)}
-                        className="bg-slate-900 border border-amber-500/40 rounded-lg text-amber-200 px-2 py-1 text-xs outline-none font-bold cursor-pointer"
+                        className="w-full bg-slate-900 border border-amber-500/40 rounded-lg text-amber-200 px-3 py-1.5 text-xs outline-none font-bold cursor-pointer"
                       >
-                        {activeBranches.map(b => (
-                          <option key={b.id} value={b.id}>{b.name} ({b.district})</option>
+                        {availableBranchesWithDistance.map((b: any) => (
+                          <option key={b.id} value={b.id}>
+                            {b.name} {b.distance !== undefined && b.distance < 999 ? `(Cách ${b.distance} km)` : `(${b.district || 'Hà Nội'})`}
+                          </option>
                         ))}
                       </select>
                     </div>

@@ -365,7 +365,9 @@ export const INITIAL_DEFAULT_BRANCHES: Branch[] = [
     maps_url: 'https://maps.google.com/?q=Vin+Smart+City+Ha+Noi',
     is_active: true,
     capacity_per_hour: 40,
-    main_stock: 120
+    main_stock: 120,
+    latitude: 21.0028,
+    longitude: 105.7485
   },
   {
     id: 'b2222222-2222-2222-2222-222222222222',
@@ -381,7 +383,9 @@ export const INITIAL_DEFAULT_BRANCHES: Branch[] = [
     maps_url: 'https://maps.google.com/?q=Cau+Giay+Ha+Noi',
     is_active: true,
     capacity_per_hour: 35,
-    main_stock: 95
+    main_stock: 95,
+    latitude: 21.0362,
+    longitude: 105.7905
   },
   {
     id: 'b3333333-3333-3333-3333-333333333333',
@@ -397,7 +401,9 @@ export const INITIAL_DEFAULT_BRANCHES: Branch[] = [
     maps_url: 'https://maps.google.com/?q=Dang+Van+Ngu+Dong+Da',
     is_active: true,
     capacity_per_hour: 30,
-    main_stock: 80
+    main_stock: 80,
+    latitude: 21.0101,
+    longitude: 105.8340
   },
   {
     id: 'b4444444-4444-4444-4444-444444444444',
@@ -413,7 +419,9 @@ export const INITIAL_DEFAULT_BRANCHES: Branch[] = [
     maps_url: 'https://maps.google.com/?q=Le+Thi+Rieng+Quan+1',
     is_active: true,
     capacity_per_hour: 45,
-    main_stock: 110
+    main_stock: 110,
+    latitude: 10.7719,
+    longitude: 106.6917
   },
   {
     id: 'b5555555-5555-5555-5555-555555555555',
@@ -429,7 +437,9 @@ export const INITIAL_DEFAULT_BRANCHES: Branch[] = [
     maps_url: 'https://maps.google.com/?q=Dien+Bien+Phu+Quan+3',
     is_active: true,
     capacity_per_hour: 35,
-    main_stock: 75
+    main_stock: 75,
+    latitude: 10.7781,
+    longitude: 106.6787
   },
   {
     id: 'b6666666-6666-6666-6666-666666666666',
@@ -445,7 +455,9 @@ export const INITIAL_DEFAULT_BRANCHES: Branch[] = [
     maps_url: 'https://maps.google.com/?q=Tuu+Liet+Thanh+Tri',
     is_active: true,
     capacity_per_hour: 25,
-    main_stock: 60
+    main_stock: 60,
+    latitude: 20.9500,
+    longitude: 105.8450
   }
 ];
 
@@ -455,7 +467,17 @@ export function getBranches(): Branch[] {
     setItem(KEYS.BRANCHES, INITIAL_DEFAULT_BRANCHES);
     return INITIAL_DEFAULT_BRANCHES;
   }
-  return stored;
+  return stored.map(b => {
+    const initMatch = INITIAL_DEFAULT_BRANCHES.find(i => i.id === b.id || i.name === b.name);
+    if (initMatch) {
+      return {
+        ...b,
+        latitude: b.latitude !== undefined ? b.latitude : initMatch.latitude,
+        longitude: b.longitude !== undefined ? b.longitude : initMatch.longitude,
+      };
+    }
+    return b;
+  });
 }
 
 export function saveBranch(branchData: Partial<Branch> & { name: string }): Branch[] {
@@ -487,7 +509,9 @@ export function saveBranch(branchData: Partial<Branch> & { name: string }): Bran
       orders_pending: branchData.orders_pending || 0,
       orders_total_today: branchData.orders_total_today || 0,
       revenue_today: branchData.revenue_today || 0,
-      main_stock: branchData.main_stock || 30
+      main_stock: branchData.main_stock || 30,
+      latitude: branchData.latitude !== undefined ? Number(branchData.latitude) : undefined,
+      longitude: branchData.longitude !== undefined ? Number(branchData.longitude) : undefined
     };
     const updated = [...current, newBranch];
     setItem(KEYS.BRANCHES, updated);

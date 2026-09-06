@@ -31,6 +31,9 @@ export interface Branch {
   orders_total_today?: number;
   revenue_today?: number;
   main_stock?: number;
+  latitude?: number;
+  longitude?: number;
+  distance?: number;
 }
 
 export interface MenuItem {
