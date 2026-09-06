@@ -825,26 +825,23 @@ export default function PublicStorefrontHome() {
                     </div>
                   </div>
 
-                  <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
-                    {/* Khối hiển thị giá */}
+                  {/* Khối Giá bán & Nút Đặt món - Không lọt bất kỳ ký tự thừa nào */}
+                  <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between">
                     <div>
-                      <span className="text-xs text-slate-400 block font-medium">Giá bán</span>
-                      <div className="flex items-baseline gap-1">
-                        <span className="text-xl md:text-2xl font-black text-orange-600 tracking-tight">
-                          {formatPrice(p.price)}
-                        </span>
-                        {Boolean((p.original_price || p.originalPrice) && Number(p.original_price || p.originalPrice) > Number(p.price)) && (
-                          <span className="text-xs text-slate-400 line-through">
-                            {formatPrice(p.original_price || p.originalPrice)}
-                          </span>
-                        )}
-                      </div>
+                      <span className="text-xs text-gray-400 block font-medium">Giá bán</span>
+                      <span className="text-xl font-bold text-orange-600">
+                        {(() => {
+                          const raw = String(p.price || 0).replace(/[^0-9]/g, '');
+                          const num = Number(raw) || 0;
+                          return num.toLocaleString('vi-VN') + 'đ';
+                        })()}
+                      </span>
                     </div>
 
-                    {/* Nút Đặt Món Ngay */}
                     <button
+                      type="button"
                       onClick={() => handleOpenOrderModal(p)}
-                      className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 active:scale-95 text-white font-bold text-sm shadow-md shadow-orange-500/20 transition-all duration-150 whitespace-nowrap cursor-pointer"
+                      className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-sm shadow-md transition-all whitespace-nowrap cursor-pointer"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
