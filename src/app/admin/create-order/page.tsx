@@ -9,11 +9,13 @@ import {
 import { getBranches, getMenuItems, createOrder } from '@/actions/orders';
 import { Branch, MenuItem } from '@/types/database';
 import { findCustomerByPhone, addOrUpdateCustomerFromOrder, CustomerRecord } from '@/lib/store';
+import { useAuth } from '@/context/AuthContext';
 import ReceiptModal from '@/components/ReceiptModal';
 
 function CreateOrderContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { user } = useAuth();
 
   // Mode Selection: 'AI' or 'MANUAL'
   const [mode, setMode] = useState<'AI' | 'MANUAL'>('AI');
@@ -39,6 +41,7 @@ function CreateOrderContent() {
   const [voucherCode, setVoucherCode] = useState('');
   const [note, setNote] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'QR' | 'CASH'>('QR');
+  const [cashGiven, setCashGiven] = useState<string>('');
 
   // Matched CRM Customer
   const [matchedCustomer, setMatchedCustomer] = useState<CustomerRecord | null>(null);
@@ -62,12 +65,16 @@ function CreateOrderContent() {
       if (isMounted) {
         setBranches(bList);
         setMenuItems(mList);
-        if (bList.length > 0) setSelectedBranchId(bList[0].id);
+        if (user?.branch_id) {
+          setSelectedBranchId(user.branch_id);
+        } else if (bList.length > 0) {
+          setSelectedBranchId(bList[0].id);
+        }
       }
     }
     loadData();
     return () => { isMounted = false; };
-  }, []);
+  }, [user]);
 
   // Realtime CRM Customer Lookup
   useEffect(() => {
@@ -768,10 +775,33 @@ function CreateOrderContent() {
                   <span className="text-orange-600 text-base">{totals.finalAmount.toLocaleString('vi-VN')} VNĐ</span>
                 </div>
 
-                <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 flex justify-between items-center text-xs">
-                  <span className="text-slate-600 font-medium">Lợi Nhuận Dự Tính:</span>
-                  <span className="font-bold text-emerald-700 text-sm">+{totals.profit.toLocaleString('vi-VN')} VNĐ</span>
-                </div>
+                {paymentMethod === 'CASH' && (
+                  <div className="bg-emerald-50/70 border border-emerald-200 p-3 rounded-xl space-y-2">
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="font-bold text-emerald-900">Tiền Khách Đưa:</span>
+                      <input
+                        type="number"
+                        placeholder="Ví dụ: 300000"
+                        value={cashGiven}
+                        onChange={(e) => setCashGiven(e.target.value)}
+                        className="w-32 p-1.5 bg-white border border-emerald-300 font-extrabold text-right text-emerald-800 rounded-lg text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
+                      />
+                    </div>
+                    <div className="flex justify-between items-center text-xs font-extrabold border-t border-emerald-200 pt-2">
+                      <span className="text-emerald-950">Tiền Thừa Trả Khách:</span>
+                      <span className={(parseFloat(cashGiven) || 0) >= totals.finalAmount ? "text-emerald-700 text-sm" : "text-rose-600 text-xs font-semibold"}>
+                        {cashGiven ? (((parseFloat(cashGiven) || 0) - totals.finalAmount >= 0) ? `${((parseFloat(cashGiven) || 0) - totals.finalAmount).toLocaleString('vi-VN')} VNĐ` : 'Chưa đủ tiền đưa') : '0 VNĐ'}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {!(user?.role === 'STAFF' || user?.role === 'BRANCH_STAFF') && (
+                  <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 flex justify-between items-center text-xs">
+                    <span className="text-slate-600 font-medium">Lợi Nhuận Dự Tính:</span>
+                    <span className="font-bold text-emerald-700 text-sm">+{totals.profit.toLocaleString('vi-VN')} VNĐ</span>
+                  </div>
+                )}
               </div>
 
               <button

@@ -267,7 +267,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (
         path.startsWith('/admin/dashboard') ||
         path.startsWith('/admin/analytics') ||
-        path.startsWith('/admin/expenses') ||
         path.startsWith('/admin/cms') ||
         path.startsWith('/admin/users') ||
         path.startsWith('/admin/branches') ||

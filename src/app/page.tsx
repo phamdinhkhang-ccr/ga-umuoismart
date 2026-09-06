@@ -61,6 +61,30 @@ export default function PublicStorefrontHome() {
   const [cutPreference, setCutPreference] = useState<'Chặt sẵn ăn luôn' | 'Không chặt (để nguyên con)'>('Chặt sẵn ăn luôn');
   const [quantityNote, setQuantityNote] = useState('');
   const [extraNote, setExtraNote] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<'COD' | 'VIETQR'>('COD');
+  const [isLocating, setIsLocating] = useState(false);
+
+  const handleFindNearestBranchByGeo = () => {
+    if (typeof window === 'undefined' || !navigator.geolocation) {
+      alert('Trình duyệt không hỗ trợ Geolocation tự động. Vui lòng gõ địa chỉ để tìm cơ sở!');
+      return;
+    }
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setIsLocating(false);
+        if (activeBranches.length > 0) {
+          setSelectedBranchId(activeBranches[0].id);
+          alert(`📍 Định vị thành công! Đã gán cơ sở phục vụ gần bạn nhất: ${activeBranches[0].name}`);
+        }
+      },
+      (err) => {
+        setIsLocating(false);
+        alert('Không lấy được vị trí GPS. Hệ thống sẽ tự động phân tích theo Tên Quận/Địa chỉ nhận hàng bạn gõ!');
+      },
+      { timeout: 7000 }
+    );
+  };
 
   const loadStorefrontData = async () => {
     const localCms = getCmsSettings();
@@ -1095,32 +1119,43 @@ export default function PublicStorefrontHome() {
                     />
                   </div>
 
-                  <div>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Địa chỉ nhận hàng (*): Số nhà, tên đường, Phường/Xã, Quận/Huyện..."
-                      value={address}
-                      onChange={(e) => setAddress(e.target.value)}
-                      className="w-full px-4 py-2.5 bg-white rounded-full text-slate-900 font-bold text-xs outline-none focus:ring-2 focus:ring-amber-400 transition placeholder:text-slate-400"
-                    />
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        required
+                        placeholder="Địa chỉ nhận hàng (*): Số nhà, tên đường, Phường/Xã, Quận/Huyện..."
+                        value={address}
+                        onChange={(e) => setAddress(e.target.value)}
+                        className="flex-1 px-4 py-2.5 bg-white rounded-full text-slate-900 font-bold text-xs outline-none focus:ring-2 focus:ring-amber-400 transition placeholder:text-slate-400"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleFindNearestBranchByGeo}
+                        disabled={isLocating}
+                        className="px-3.5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-full text-xs shadow-sm transition whitespace-nowrap cursor-pointer flex items-center gap-1 shrink-0"
+                      >
+                        <MapPin className="w-3.5 h-3.5" />
+                        <span>{isLocating ? 'Đang vị trí...' : '📍 Tìm cơ sở gần tôi nhất'}</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
 
                 {/* Automatic Nearest Branch Suggestion Box */}
                 {suggestedBranch && (
-                  <div className="bg-amber-950/60 border border-amber-500/50 rounded-2xl p-3 text-xs space-y-1.5">
-                    <div className="font-extrabold text-amber-300 flex items-center justify-between">
-                      <span className="flex items-center gap-1">
-                        <MapPin className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                        📍 Cơ sở phục vụ gần nhất: <strong className="text-white ml-1">{suggestedBranch.name}</strong>
+                  <div className="bg-gradient-to-r from-amber-950/80 to-orange-950/80 border-2 border-amber-400/60 rounded-2xl p-3.5 text-xs space-y-2 shadow-md">
+                    <div className="font-black text-amber-300 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                      <span className="flex items-center gap-1.5 text-sm">
+                        <MapPin className="w-4 h-4 text-amber-400 shrink-0" />
+                        <span>Đơn hàng được phục vụ bởi: <strong className="text-white uppercase tracking-tight">{suggestedBranch.name}</strong></span>
                       </span>
-                      <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-400/40 px-2 py-0.5 rounded-full shrink-0">
-                        Giao ~20-30p
+                      <span className="text-[11px] bg-amber-500/30 text-amber-300 border border-amber-400/50 px-2.5 py-0.5 rounded-full shrink-0 font-bold">
+                        (Dự kiến giao 30-40p)
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-2 text-[11px] text-amber-200/70 pt-0.5">
+                    <div className="flex items-center gap-2 text-[11px] text-amber-200/80 pt-1 border-t border-amber-500/30">
                       <span>Thay đổi cơ sở nhận đơn:</span>
                       <select
                         value={selectedBranchId}
@@ -1128,12 +1163,46 @@ export default function PublicStorefrontHome() {
                         className="bg-slate-900 border border-amber-500/40 rounded-lg text-amber-200 px-2 py-1 text-xs outline-none font-bold cursor-pointer"
                       >
                         {activeBranches.map(b => (
-                          <option key={b.id} value={b.id}>{b.name}</option>
+                          <option key={b.id} value={b.id}>{b.name} ({b.district})</option>
                         ))}
                       </select>
                     </div>
                   </div>
                 )}
+
+                {/* Payment Method Selector (VietQR / COD) */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-amber-200 block">
+                    Phương thức thanh toán:
+                  </label>
+                  <div className="grid grid-cols-2 gap-2 text-xs font-extrabold">
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod('COD')}
+                      className={`p-2.5 rounded-2xl border transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                        paymentMethod === 'COD'
+                          ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-md'
+                          : 'bg-slate-900/80 text-amber-200 border-amber-500/30 hover:bg-slate-800'
+                      }`}
+                    >
+                      <Truck className="w-4 h-4" />
+                      <span>💵 Tiền Mặt Khi Nhận (COD)</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod('VIETQR')}
+                      className={`p-2.5 rounded-2xl border transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                        paymentMethod === 'VIETQR'
+                          ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-md'
+                          : 'bg-slate-900/80 text-amber-200 border-amber-500/30 hover:bg-slate-800'
+                      }`}
+                    >
+                      <QrCode className="w-4 h-4" />
+                      <span>💳 Chuyển Khoản VietQR</span>
+                    </button>
+                  </div>
+                </div>
 
                 {/* Combos & Items Checkbox List */}
                 <div className="space-y-1.5">

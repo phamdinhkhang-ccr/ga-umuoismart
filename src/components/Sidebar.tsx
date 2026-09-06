@@ -22,7 +22,8 @@ import {
   ChevronRight,
   X,
   Search,
-  Sparkles
+  Sparkles,
+  PackageCheck
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -59,6 +60,7 @@ export default function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarPr
         { href: '/admin/customers', label: 'Khách Hàng (CRM)', icon: UserCheck },
         { href: '/admin/inventory/import', label: 'Nhập Hàng Kho', icon: ArrowDownLeft },
         { href: '/admin/inventory/export', label: 'Xuất Hàng Kho', icon: ArrowUpRight },
+        { href: '/admin/inventory/check', label: 'Kiểm Tra Tồn Kho', icon: PackageCheck },
       ];
     }
 
@@ -74,18 +76,16 @@ export default function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarPr
         { href: '/admin/customers', label: 'Khách Hàng (CRM)', icon: UserCheck },
         { href: '/admin/inventory/import', label: 'Nhập Kho', icon: ArrowDownLeft },
         { href: '/admin/inventory/export', label: 'Xuất Kho', icon: ArrowUpRight },
+        { href: '/admin/inventory/check', label: 'Kiểm Tra Tồn Kho', icon: PackageCheck },
       ];
     }
 
     if (role === 'STAFF' || role === 'BRANCH_STAFF') {
       return [
-        { href: '/admin/create-order', label: 'Lên Đơn Mới (POS)', icon: PlusCircle },
-        { href: '/admin/orders', label: 'Đơn Hàng', icon: ClipboardList },
         { href: '/admin/shifts/active', label: 'Đóng / Mở Ca', icon: Clock },
-        { href: '/admin/shifts', label: 'Quản Lý Ca', icon: History },
-        { href: '/admin/products', label: 'Sản Phẩm (Menu)', icon: UtensilsCrossed },
-        { href: '/admin/inventory/import', label: 'Nhập Kho', icon: ArrowDownLeft },
-        { href: '/admin/inventory/export', label: 'Xuất Kho', icon: ArrowUpRight },
+        { href: '/admin/orders', label: 'Đơn Hàng', icon: ClipboardList },
+        { href: '/admin/expenses', label: 'Chi Tiêu (Sổ Quỹ)', icon: Wallet },
+        { href: '/admin/inventory/check', label: 'Kiểm Tra Tồn Kho', icon: PackageCheck },
       ];
     }
 

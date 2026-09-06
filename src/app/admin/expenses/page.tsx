@@ -60,17 +60,7 @@ export default function ExpensesPage() {
     return () => window.removeEventListener('gum_store_update', handleUpdate);
   }, []);
 
-  if (user?.role === 'STAFF' || user?.role === 'BRANCH_STAFF') {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 text-center space-y-3 max-w-md shadow-sm">
-          <AlertCircle className="w-8 h-8 text-rose-600 mx-auto" />
-          <h2 className="text-base font-bold text-slate-900">Truy Cập Bị Từ Chối</h2>
-          <p className="text-xs text-slate-600">Quản lý sổ quỹ chi tiêu chỉ dành riêng cho Quản Lý Cơ Sở và Admin Tối Cao.</p>
-        </div>
-      </div>
-    );
-  }
+
 
   const totalExpenseAmount = useMemo(() => {
     return expenses.reduce((sum, item) => sum + item.amount, 0);
