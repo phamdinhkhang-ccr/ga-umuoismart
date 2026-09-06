@@ -810,6 +810,8 @@ export interface StorefrontCmsSettings {
   hotlinePrefix?: string;
   promoBannerText?: string;
   brandName?: string;
+  featureTag1?: string;
+  featureTag2?: string;
   branches: CmsBranchItem[];
   social_facebook: string;
   social_tiktok: string;
@@ -830,6 +832,8 @@ const DEFAULT_CMS_SETTINGS: StorefrontCmsSettings = {
   hotlineBadgeText: '',
   promoBannerText: '',
   brandName: '',
+  featureTag1: 'Giao hỏa tốc 30-40p',
+  featureTag2: 'Hỗ trợ 35k ship từ Bill 355k',
   branches: [],
   social_facebook: '',
   social_tiktok: '',

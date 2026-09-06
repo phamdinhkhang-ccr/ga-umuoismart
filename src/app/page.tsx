@@ -613,18 +613,31 @@ export default function PublicStorefrontHome() {
             </div>
           )}
 
-          {/* Badges */}
-          <div className="flex flex-wrap items-center justify-center gap-2 pt-1 text-xs font-bold text-slate-700">
-            <span className="bg-white border border-slate-200 px-3 py-1.5 rounded-xl shadow-2xs flex items-center gap-1.5">
-              ⚡ Giao hỏa tốc 20-30p
-            </span>
-            <span className="bg-white border border-slate-200 px-3 py-1.5 rounded-xl shadow-2xs flex items-center gap-1.5">
-              🚚 Freeship đơn từ 350k
-            </span>
-            <span className="bg-white border border-slate-200 px-3 py-1.5 rounded-xl shadow-2xs flex items-center gap-1.5">
-              🌟 100% Gà tươi ủ muối hoa tiêu
-            </span>
-          </div>
+          {/* Badges / Feature Tags */}
+          {(() => {
+            const tag1 = cmsSettings.featureTag1 !== undefined ? cmsSettings.featureTag1 : 'Giao hỏa tốc 30-40p';
+            const tag2 = cmsSettings.featureTag2 !== undefined ? cmsSettings.featureTag2 : 'Hỗ trợ 35k ship từ Bill 355k';
+
+            const hasTag1 = tag1 && tag1.trim() !== '';
+            const hasTag2 = tag2 && tag2.trim() !== '';
+
+            if (!hasTag1 && !hasTag2) return null;
+
+            return (
+              <div className="flex flex-wrap items-center justify-center gap-2 pt-1 text-xs font-bold text-slate-700">
+                {hasTag1 && (
+                  <span className="bg-white border border-slate-200 px-3 py-1.5 rounded-xl shadow-2xs flex items-center gap-1.5">
+                    {tag1.startsWith('⚡') ? tag1 : `⚡ ${tag1}`}
+                  </span>
+                )}
+                {hasTag2 && (
+                  <span className="bg-white border border-slate-200 px-3 py-1.5 rounded-xl shadow-2xs flex items-center gap-1.5">
+                    {tag2.startsWith('🚚') ? tag2 : `🚚 ${tag2}`}
+                  </span>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Hero CTAs */}
           <div className="flex flex-wrap items-center justify-center gap-3 pt-3">

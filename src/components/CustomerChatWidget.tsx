@@ -203,7 +203,7 @@ export default function CustomerChatWidget() {
         break;
 
       case 'ship':
-        addBotMessage('🛵 **Chính Sách Giao Hàng Hỏa Tốc:**\n• Nội thành Hà Nội & TP.HCM: Giao hỏa tốc trong 20-30 phút.\n• Đơn từ 350.000đ: **Miễn phí vận chuyển (Freeship 100%)**!\n• Đơn dưới 350.000đ: Đồng giá ship 20.000đ.');
+        addBotMessage('🛵 **Chính Sách Giao Hàng Hỏa Tốc:**\n• Nội thành Hà Nội & TP.HCM: Giao hỏa tốc trong 30-40 phút.\n• Đơn từ 355.000đ: **Hỗ trợ 35k phí vận chuyển**!\n• Đơn dưới 355.000đ: Đồng giá ship 20.000đ.');
         break;
 
       case 'support':
@@ -267,7 +267,7 @@ export default function CustomerChatWidget() {
     if (textLower.includes('gà') || textLower.includes('menu') || textLower.includes('món') || textLower.includes('giá')) {
       addBotMessage('Dạ em gửi anh/chị Menu các món Gà Ủ Muối và Đồ Ăn Kèm nổi bật nhất bếp bên em ạ: 👇', 'menu_cards');
     } else if (textLower.includes('ship') || textLower.includes('phí') || textLower.includes('giao')) {
-      addBotMessage('🛵 Bếp em giao hỏa tốc toàn quốc. Đơn từ 350.000đ được **Freeship hỏa tốc** tận cửa ạ!');
+      addBotMessage('🛵 Bếp em giao hỏa tốc 30-40 phút. Đơn từ 355.000đ được **Hỗ trợ 35k ship** tận cửa ạ!');
     } else if (textLower.includes('chào') || textLower.includes('hi') || textLower.includes('alo')) {
       addBotMessage('Dạ em chào anh/chị! Em có thể giúp anh/chị chọn món Gà Ủ Muối nóng hổi nào hôm nay ạ?', 'quick_actions');
     } else {

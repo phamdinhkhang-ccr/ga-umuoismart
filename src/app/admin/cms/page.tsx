@@ -86,6 +86,8 @@ export default function AdminCmsPage() {
           heroSubtitle: safeData.heroSubtitle ?? safeData.hero_slogan ?? '',
           hero_slogan: safeData.hero_slogan ?? safeData.heroSubtitle ?? '',
           promoBannerText: safeData.promoBannerText ?? '',
+          featureTag1: safeData.featureTag1 !== undefined ? safeData.featureTag1 : 'Giao hỏa tốc 30-40p',
+          featureTag2: safeData.featureTag2 !== undefined ? safeData.featureTag2 : 'Hỗ trợ 35k ship từ Bill 355k',
           hero_banner_image: safeData.hero_banner_image ?? '',
           branches: Array.isArray(safeData.branches) ? safeData.branches : [],
           social_facebook: safeData.social_facebook ?? '',
@@ -172,6 +174,8 @@ export default function AdminCmsPage() {
       hero_hotline: settings.hotline ?? settings.hero_hotline ?? '',
       hotline: settings.hotline ?? settings.hero_hotline ?? '',
       promoBannerText: settings.promoBannerText ?? '',
+      featureTag1: settings.featureTag1 !== undefined ? settings.featureTag1 : 'Giao hỏa tốc 30-40p',
+      featureTag2: settings.featureTag2 !== undefined ? settings.featureTag2 : 'Hỗ trợ 35k ship từ Bill 355k',
       branches: settings.branches ?? [],
       social_facebook: settings.social_facebook ?? '',
       social_tiktok: settings.social_tiktok ?? '',
@@ -484,6 +488,28 @@ export default function AdminCmsPage() {
                 onChange={(e) => setSettings({ ...settings, promoBannerText: e.target.value })}
                 placeholder="VD: 🔥 Khuyến mãi đặc biệt: Đồng giá Gà Ủ Muối Nguyên Con 190.000đ!"
                 className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-orange-700 outline-none focus:border-orange-500 focus:bg-white transition"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="font-bold text-slate-700">Thẻ Cam Kết 1 (⚡ Tag Giao Hàng)</label>
+              <input
+                type="text"
+                value={settings.featureTag1 !== undefined ? settings.featureTag1 : 'Giao hỏa tốc 30-40p'}
+                onChange={(e) => setSettings({ ...settings, featureTag1: e.target.value })}
+                placeholder="VD: Giao hỏa tốc 30-40p (để trống để ẩn)"
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 outline-none focus:border-orange-500 focus:bg-white transition"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="font-bold text-slate-700">Thẻ Cam Kết 2 (🚚 Tag Ưu Đãi Ship)</label>
+              <input
+                type="text"
+                value={settings.featureTag2 !== undefined ? settings.featureTag2 : 'Hỗ trợ 35k ship từ Bill 355k'}
+                onChange={(e) => setSettings({ ...settings, featureTag2: e.target.value })}
+                placeholder="VD: Hỗ trợ 35k ship từ Bill 355k (để trống để ẩn)"
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 outline-none focus:border-orange-500 focus:bg-white transition"
               />
             </div>
 
