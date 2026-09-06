@@ -6,6 +6,8 @@ import { useAuth } from '@/context/AuthContext';
 import { getAnalyticsData, getBranches, updateOrderStatus } from '@/actions/orders';
 import { Branch, Order, OrderStatus } from '@/types/database';
 import { restoreInventoryForOrder, deductInventoryForOrder, getItem } from '@/lib/store';
+import ReceiptModal from '@/components/ReceiptModal';
+import TransferBranchModal from '@/components/TransferBranchModal';
 import {
   ClipboardList,
   Search,
@@ -30,7 +32,6 @@ import {
   RotateCcw,
   Sparkles
 } from 'lucide-react';
-import ReceiptModal from '@/components/ReceiptModal';
 import { supabase } from '@/lib/supabaseClient';
 
 const RICH_MOCK_ORDERS: Order[] = [
@@ -880,33 +881,11 @@ export default function CentralizedOrdersPage() {
 
       {/* BRANCH TRANSFER MODAL */}
       {transferOrder && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
-            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-              <h3 className="font-extrabold text-slate-900 text-sm">Chuyển Cơ Sở Tiếp Nhận Đơn #{transferOrder.order_code}</h3>
-              <button onClick={() => setTransferOrder(null)} className="text-slate-400 hover:text-slate-600 font-bold">✕</button>
-            </div>
-
-            <div className="space-y-3 text-xs">
-              <label className="block font-bold text-slate-700">Chọn Chi Nhánh Mới Mới Tiếp Nhận:</label>
-              <select
-                value={targetBranchId}
-                onChange={(e) => setTargetBranchId(e.target.value)}
-                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 outline-none"
-              >
-                <option value="">-- Chọn cơ sở mới --</option>
-                {branches.map(b => (
-                  <option key={b.id} value={b.id}>{b.name}</option>
-                ))}
-              </select>
-
-              <div className="flex justify-end space-x-2 pt-2">
-                <button onClick={() => setTransferOrder(null)} className="px-4 py-2 bg-slate-100 font-bold rounded-xl">Hủy</button>
-                <button onClick={handleConfirmTransfer} className="px-4 py-2 bg-blue-600 text-white font-bold rounded-xl shadow-sm">Xác Nhận Chuyển</button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <TransferBranchModal
+          order={transferOrder}
+          onClose={() => setTransferOrder(null)}
+          onSuccess={() => loadData()}
+        />
       )}
 
     </div>
