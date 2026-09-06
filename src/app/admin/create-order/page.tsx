@@ -14,6 +14,63 @@ import ReceiptModal from '@/components/ReceiptModal';
 import { supabase } from '@/lib/supabaseClient';
 import { assignBranch } from '@/lib/routing';
 
+const DEFAULT_SYSTEM_BRANCHES: Branch[] = [
+  {
+    id: 'b1111111-1111-1111-1111-111111111111',
+    name: 'CƠ SỞ VIN SMART CITY (NAM TỪ LIÊM)',
+    address: 'Tòa S2.01 Vin Smart City, Phường Tây Mỗ',
+    district: 'Quận Nam Từ Liêm',
+    city: 'Hà Nội',
+    phone: '0984.263.340',
+    is_active: true
+  },
+  {
+    id: 'b2222222-2222-2222-2222-222222222222',
+    name: 'CHI NHÁNH GÀ Ủ MUỐI CẦU GIẤY',
+    address: '88 Đường Cầu Giấy, Phường Quan Hoa',
+    district: 'Quận Cầu Giấy',
+    city: 'Hà Nội',
+    phone: '0902.345.678',
+    is_active: true
+  },
+  {
+    id: 'b3333333-3333-3333-3333-333333333333',
+    name: 'CHI NHÁNH GÀ Ủ MUỐI ĐỐNG ĐA',
+    address: '12 Phố Đặng Văn Ngữ, Phường Trung Tự',
+    district: 'Quận Đống Đa',
+    city: 'Hà Nội',
+    phone: '0903.456.789',
+    is_active: true
+  },
+  {
+    id: 'b4444444-4444-4444-4444-444444444444',
+    name: 'CHI NHÁNH GÀ Ủ MUỐI QUẬN 1 (TP.HCM)',
+    address: '145 Đường Lê Thị Riêng, Phường Bến Thành',
+    district: 'Quận 1',
+    city: 'Hồ Chí Minh',
+    phone: '0283.811.1111',
+    is_active: true
+  },
+  {
+    id: 'b5555555-5555-5555-5555-555555555555',
+    name: 'CHI NHÁNH GÀ Ủ MUỐI QUẬN 3 (TP.HCM)',
+    address: '456 Điện Biên Phủ, Phường 11',
+    district: 'Quận 3',
+    city: 'Hồ Chí Minh',
+    phone: '0283.822.2222',
+    is_active: true
+  },
+  {
+    id: 'b6666666-6666-6666-6666-666666666666',
+    name: 'CHI NHÁNH GÀ Ủ MUỐI THANH TRÌ',
+    address: 'Số 25 Tựu Liệt, Phụ Khánh',
+    district: 'Huyện Thanh Trì',
+    city: 'Hà Nội',
+    phone: '0977.888.999',
+    is_active: true
+  }
+];
+
 function CreateOrderContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -29,7 +86,7 @@ function CreateOrderContent() {
   const [createdOrderData, setCreatedOrderData] = useState<any>(null);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
 
-  const [branches, setBranches] = useState<Branch[]>([]);
+  const [branches, setBranches] = useState<Branch[]>(DEFAULT_SYSTEM_BRANCHES);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
 
   // Form State
@@ -59,11 +116,10 @@ function CreateOrderContent() {
     if (paramAddress) setShippingAddress(paramAddress);
   }, [searchParams]);
 
-  // Load branches & menu items from Supabase DB with local fallback
+  // Load branches & menu items from Supabase DB with safe fallback
   useEffect(() => {
     let isMounted = true;
     async function loadData() {
-      let activeBranches: Branch[] = [];
       try {
         const { data, error } = await supabase
           .from('branches')
@@ -71,38 +127,42 @@ function CreateOrderContent() {
           .eq('is_active', true)
           .order('display_order', { ascending: true });
 
-        if (!error && Array.isArray(data) && data.length > 0) {
-          activeBranches = data;
+        if (!error && Array.isArray(data) && data.length > 0 && isMounted) {
+          setBranches(data);
+        } else {
+          const local = (await getBranches()).filter(b => b.is_active !== false);
+          if (local.length > 0 && isMounted) setBranches(local);
         }
       } catch (e) {
-        console.warn('Lỗi fetch branches Supabase:', e);
-      }
-
-      if (activeBranches.length === 0) {
-        activeBranches = (await getBranches()).filter(b => b.is_active !== false);
+        console.warn('Lỗi fetch branches Supabase, dùng fallback:', e);
+        const local = (await getBranches()).filter(b => b.is_active !== false);
+        if (local.length > 0 && isMounted) setBranches(local);
       }
 
       const mList = await getMenuItems();
-
       if (isMounted) {
-        setBranches(activeBranches);
         setMenuItems(mList);
-
-        if (user && user.role !== 'SUPER_ADMIN' && user.branch_id) {
-          const matchStaffBranch = activeBranches.find(b => b.id === user.branch_id);
-          if (matchStaffBranch) {
-            setSelectedBranchId(matchStaffBranch.id);
-          } else if (activeBranches.length > 0) {
-            setSelectedBranchId(activeBranches[0].id);
-          }
-        } else if (activeBranches.length > 0) {
-          setSelectedBranchId(activeBranches[0].id);
-        }
       }
     }
     loadData();
     return () => { isMounted = false; };
-  }, [user]);
+  }, []);
+
+  // Set default selected branch based on user or first branch
+  useEffect(() => {
+    if (branches.length > 0) {
+      if (user && user.role !== 'SUPER_ADMIN' && user.branch_id) {
+        const matchStaffBranch = branches.find(b => b.id === user.branch_id);
+        if (matchStaffBranch) {
+          setSelectedBranchId(matchStaffBranch.id);
+        } else if (!selectedBranchId) {
+          setSelectedBranchId(branches[0].id);
+        }
+      } else if (!selectedBranchId) {
+        setSelectedBranchId(branches[0].id);
+      }
+    }
+  }, [branches, user, selectedBranchId]);
 
   // Auto match nearest branch when shippingAddress / district / city changes
   useEffect(() => {
@@ -716,12 +776,12 @@ function CreateOrderContent() {
                 <select
                   value={selectedBranchId}
                   onChange={(e) => setSelectedBranchId(e.target.value)}
-                  className="w-full px-4 py-2.5 border border-orange-400 rounded-xl bg-white text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-orange-500 cursor-pointer"
+                  className="w-full px-4 py-2.5 border-2 border-orange-500 rounded-xl bg-white text-gray-900 font-medium focus:outline-none text-sm cursor-pointer"
                 >
                   <option value="">-- Bấm để chọn cơ sở tiếp nhận --</option>
-                  {branches.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.name} {b.district ? `(${b.district})` : ''}
+                  {branches.map((branch) => (
+                    <option key={branch.id} value={branch.id}>
+                      {branch.name}
                     </option>
                   ))}
                 </select>
