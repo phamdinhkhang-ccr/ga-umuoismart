@@ -54,6 +54,8 @@ export default function AdminCmsPage() {
     image_url: ''
   });
 
+  const [isSaving, setIsSaving] = useState(false);
+
   const reloadData = async (isMounted = true) => {
     try {
       const localSettings = getCmsSettings();
@@ -65,24 +67,18 @@ export default function AdminCmsPage() {
       }
 
       const { data: record, error } = await supabase
-        .from('site_settings')
+        .from('storefront_settings')
         .select('*')
         .eq('id', 'default_config')
         .maybeSingle();
-
-      let targetRecord = record;
-      if (error || !record) {
-        const { data: sfRecord } = await supabase
-          .from('storefront_settings')
-          .select('*')
-          .eq('id', 'default_config')
-          .maybeSingle();
-        targetRecord = sfRecord;
+      
+      if (error) {
+        console.warn('Lỗi đọc cấu hình storefront_settings:', error.message);
       }
 
-      const safeData = targetRecord?.data ? { ...targetRecord.data, ...targetRecord } : (targetRecord || {});
+      const safeData = record?.data ? { ...record.data, ...record } : (record || {});
 
-      if (isMounted && targetRecord) {
+      if (isMounted && record) {
         setSettings({
           brandName: safeData.brand_name || safeData.brandName || '',
           hero_title: safeData.hero_title || safeData.brand_name || safeData.brandName || '',
@@ -215,10 +211,11 @@ export default function AdminCmsPage() {
       localStorage.setItem('storefront_settings', JSON.stringify(updated));
     } catch (e) {}
 
+    setIsSaving(true);
     try {
       const currentBannerUrl = settings.hero_banner_image || (settings as any).banner_url || '';
 
-      const payloadToSave = {
+      const payload = {
         id: 'default_config',
         brand_name: settings.brandName || 'Gà Ủ Muối Smart',
         hero_slogan: settings.hero_slogan || settings.heroSubtitle || '',
@@ -229,38 +226,35 @@ export default function AdminCmsPage() {
         hero_banner_image: currentBannerUrl,
         badge_ship: settings.featureTag2 !== undefined ? settings.featureTag2 : '',
         badge_promo: settings.featureTag1 !== undefined ? settings.featureTag1 : '',
+        menu: formattedMenuItems || [],
+        products: formattedMenuItems || [],
         data: fullConfigData,
         updated_at: new Date().toISOString()
       };
 
-      // 1. Write to storefront_settings
-      const { error: sfError } = await supabase
+      const { error } = await supabase
         .from('storefront_settings')
-        .upsert(payloadToSave, { onConflict: 'id' });
+        .upsert(payload, { onConflict: 'id' });
 
-      // 2. Also mirror to site_settings
-      const { error: siteError } = await supabase
-        .from('site_settings')
-        .upsert(payloadToSave, { onConflict: 'id' });
-
-      if (sfError && siteError) {
-        throw sfError || siteError;
+      if (error) {
+        console.error("Lỗi Supabase chi tiết:", error);
+        alert("Lỗi DB: " + error.message);
+        return;
       }
 
       if (typeof window !== 'undefined') {
         try {
-          localStorage.setItem('site_settings_cache', JSON.stringify(payloadToSave));
+          localStorage.setItem('site_settings_cache', JSON.stringify(payload));
         } catch (e) {}
       }
 
-      console.log('LƯU DB SUPABASE THÀNH CÔNG');
-      alert('Lưu cấu hình trang chủ thành công!');
-      showToast('✅ Lưu cấu hình trang chủ thành công!');
+      alert("✅ ĐÃ LƯU CẤU HÌNH VÀ MENU THÀNH CÔNG!");
+      showToast("✅ Đã lưu toàn bộ Cấu hình + Menu thành công!");
     } catch (err: any) {
-      console.error('Lỗi khi lưu:', err);
-      const errMsg = err?.message || 'Thao tác thất bại';
-      alert('Lỗi lưu menu: ' + errMsg);
-      showToast('❌ Lỗi lưu menu: ' + errMsg);
+      console.error("Lỗi catch:", err);
+      alert("Lỗi: " + (err?.message || "Không thể lưu"));
+    } finally {
+      setIsSaving(false);
     }
 
     notifyUpdate();

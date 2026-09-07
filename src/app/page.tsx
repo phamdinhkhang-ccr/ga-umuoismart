@@ -169,27 +169,27 @@ export default function PublicStorefrontHome() {
       };
 
       try {
-        const { data: siteData, error: siteErr } = await supabase
-          .from('site_settings')
+        const { data: sfData, error: sfErr } = await supabase
+          .from('storefront_settings')
           .select('*')
           .eq('id', 'default_config')
           .maybeSingle();
 
-        if (!siteErr && siteData && isMounted) {
-          applyCmsData(siteData);
+        if (!sfErr && sfData && isMounted) {
+          applyCmsData(sfData);
         } else {
-          const { data: sfData, error: sfErr } = await supabase
-            .from('storefront_settings')
+          const { data: siteData } = await supabase
+            .from('site_settings')
             .select('*')
             .eq('id', 'default_config')
             .maybeSingle();
 
-          if (!sfErr && sfData && isMounted) {
-            applyCmsData(sfData);
+          if (siteData && isMounted) {
+            applyCmsData(siteData);
           }
         }
       } catch (err) {
-        console.error('Lỗi tải site_settings từ Supabase:', err);
+        console.error('Lỗi tải storefront_settings từ Supabase:', err);
       }
 
       if (isMounted) {
