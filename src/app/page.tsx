@@ -147,59 +147,75 @@ export default function PublicStorefrontHome() {
         setIsLoadingMenu(false);
       }
 
-      try {
-        let loadedSettings: any = null;
+      const applyCmsData = (loadedSettings: any) => {
+        if (!loadedSettings) return;
+        const raw = loadedSettings.data ? { ...loadedSettings.data, ...loadedSettings } : loadedSettings;
+        setCmsSettings(prev => ({
+          ...prev,
+          ...raw,
+          brandName: raw.brand_name || raw.brandName || prev.brandName,
+          hero_title: raw.hero_title || raw.hero_highlight || raw.brand_name || raw.brandName || prev.hero_title,
+          hero_slogan: raw.hero_slogan || raw.heroSubtitle || prev.hero_slogan,
+          heroHighlightTitle: raw.hero_highlight || raw.heroHighlightTitle || prev.heroHighlightTitle,
+          hotline: raw.hotline || raw.hero_hotline || prev.hotline,
+          hero_hotline: raw.hero_hotline || raw.hotline || prev.hero_hotline,
+          hotlineBadgeText: raw.hotline_badge || raw.hotlineBadgeText || prev.hotlineBadgeText,
+          banner_url: raw.banner_url || raw.hero_banner_image || (prev as any).banner_url || '',
+          hero_banner_image: raw.banner_url || raw.hero_banner_image || prev.hero_banner_image || '',
+          featureTag1: raw.badge_promo !== undefined ? raw.badge_promo : (raw.featureTag1 !== undefined ? raw.featureTag1 : prev.featureTag1),
+          featureTag2: raw.badge_ship !== undefined ? raw.badge_ship : (raw.featureTag2 !== undefined ? raw.featureTag2 : prev.featureTag2),
+        }));
+      };
 
-        if (typeof window !== 'undefined') {
-          try {
-            const cached = localStorage.getItem('site_settings_cache');
-            if (cached) {
-              const parsed = JSON.parse(cached);
-              if (parsed) loadedSettings = parsed;
-            }
-          } catch (e) {}
-        }
-
-        const { data: siteData, error: siteErr } = await supabase
-          .from('site_settings')
-          .select('*')
-          .eq('id', 'default_config')
-          .maybeSingle();
-
-        if (!siteErr && siteData) {
-          loadedSettings = siteData.data ? { ...siteData.data, ...siteData } : siteData;
-        } else {
-          const { data: sfData, error: sfErr } = await supabase
-            .from('storefront_settings')
+      const fetchCmsSettingsDirectly = async () => {
+        try {
+          const { data: siteData, error: siteErr } = await supabase
+            .from('site_settings')
             .select('*')
             .eq('id', 'default_config')
             .maybeSingle();
 
-          if (!sfErr && sfData) {
-            loadedSettings = sfData.data ? { ...sfData.data, ...sfData } : sfData;
-          }
-        }
+          if (!siteErr && siteData) {
+            applyCmsData(siteData);
+          } else {
+            const { data: sfData, error: sfErr } = await supabase
+              .from('storefront_settings')
+              .select('*')
+              .eq('id', 'default_config')
+              .maybeSingle();
 
-        if (loadedSettings) {
-          setCmsSettings(prev => ({
-            ...prev,
-            ...loadedSettings,
-            brandName: loadedSettings.brand_name || loadedSettings.brandName || prev.brandName,
-            hero_title: loadedSettings.hero_title || loadedSettings.hero_highlight || loadedSettings.brand_name || loadedSettings.brandName || prev.hero_title,
-            hero_slogan: loadedSettings.hero_slogan || loadedSettings.heroSubtitle || prev.hero_slogan,
-            heroHighlightTitle: loadedSettings.hero_highlight || loadedSettings.heroHighlightTitle || prev.heroHighlightTitle,
-            hotline: loadedSettings.hotline || loadedSettings.hero_hotline || prev.hotline,
-            hero_hotline: loadedSettings.hero_hotline || loadedSettings.hotline || prev.hero_hotline,
-            hotlineBadgeText: loadedSettings.hotline_badge || loadedSettings.hotlineBadgeText || prev.hotlineBadgeText,
-            banner_url: loadedSettings.banner_url || loadedSettings.hero_banner_image || (prev as any).banner_url,
-            hero_banner_image: loadedSettings.banner_url || loadedSettings.hero_banner_image || prev.hero_banner_image,
-            featureTag1: loadedSettings.badge_promo !== undefined ? loadedSettings.badge_promo : (loadedSettings.featureTag1 !== undefined ? loadedSettings.featureTag1 : prev.featureTag1),
-            featureTag2: loadedSettings.badge_ship !== undefined ? loadedSettings.badge_ship : (loadedSettings.featureTag2 !== undefined ? loadedSettings.featureTag2 : prev.featureTag2),
-          }));
+            if (!sfErr && sfData) {
+              applyCmsData(sfData);
+            }
+          }
+        } catch (err) {
+          console.error('Lỗi tải site_settings từ Supabase:', err);
         }
-      } catch (e) {
-        console.warn('Dùng cấu hình mặc định:', e);
-      }
+      };
+
+      fetchCmsSettingsDirectly();
+
+      const channel = supabase
+        .channel('site_settings_realtime')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'site_settings' },
+          (payload: any) => {
+            if (payload?.new) {
+              applyCmsData(payload.new);
+            }
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'storefront_settings' },
+          (payload: any) => {
+            if (payload?.new) {
+              applyCmsData(payload.new);
+            }
+          }
+        )
+        .subscribe();
     };
 
     loadActiveProducts();
