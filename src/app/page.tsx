@@ -1,7 +1,5 @@
 'use client';
 
-export const dynamic = 'force-dynamic';
-
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
@@ -122,7 +120,10 @@ export default function PublicStorefrontHome() {
   }, [activeBranches, selectedBranchId]);
 
   useEffect(() => {
-    const loadActiveProducts = async () => {
+    let isMounted = true;
+    let channel: any = null;
+
+    const loadActiveProductsAndSettings = async () => {
       try {
         setIsLoadingMenu(true);
         const { data: prodData, error: prodErr } = await supabase
@@ -144,11 +145,11 @@ export default function PublicStorefrontHome() {
         setMenuItems(fallback);
         setProductsList(fallback);
       } finally {
-        setIsLoadingMenu(false);
+        if (isMounted) setIsLoadingMenu(false);
       }
 
       const applyCmsData = (loadedSettings: any) => {
-        if (!loadedSettings) return;
+        if (!loadedSettings || !isMounted) return;
         const raw = loadedSettings.data ? { ...loadedSettings.data, ...loadedSettings } : loadedSettings;
         setCmsSettings(prev => ({
           ...prev,
@@ -167,58 +168,63 @@ export default function PublicStorefrontHome() {
         }));
       };
 
-      const fetchCmsSettingsDirectly = async () => {
-        try {
-          const { data: siteData, error: siteErr } = await supabase
-            .from('site_settings')
+      try {
+        const { data: siteData, error: siteErr } = await supabase
+          .from('site_settings')
+          .select('*')
+          .eq('id', 'default_config')
+          .maybeSingle();
+
+        if (!siteErr && siteData && isMounted) {
+          applyCmsData(siteData);
+        } else {
+          const { data: sfData, error: sfErr } = await supabase
+            .from('storefront_settings')
             .select('*')
             .eq('id', 'default_config')
             .maybeSingle();
 
-          if (!siteErr && siteData) {
-            applyCmsData(siteData);
-          } else {
-            const { data: sfData, error: sfErr } = await supabase
-              .from('storefront_settings')
-              .select('*')
-              .eq('id', 'default_config')
-              .maybeSingle();
-
-            if (!sfErr && sfData) {
-              applyCmsData(sfData);
-            }
+          if (!sfErr && sfData && isMounted) {
+            applyCmsData(sfData);
           }
-        } catch (err) {
-          console.error('Lỗi tải site_settings từ Supabase:', err);
         }
-      };
+      } catch (err) {
+        console.error('Lỗi tải site_settings từ Supabase:', err);
+      }
 
-      fetchCmsSettingsDirectly();
-
-      const channel = supabase
-        .channel('site_settings_realtime')
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'site_settings' },
-          (payload: any) => {
-            if (payload?.new) {
-              applyCmsData(payload.new);
+      if (isMounted) {
+        channel = supabase
+          .channel('public:site_settings_realtime')
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'site_settings' },
+            (payload: any) => {
+              if (payload?.new && isMounted) {
+                applyCmsData(payload.new);
+              }
             }
-          }
-        )
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'storefront_settings' },
-          (payload: any) => {
-            if (payload?.new) {
-              applyCmsData(payload.new);
+          )
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'storefront_settings' },
+            (payload: any) => {
+              if (payload?.new && isMounted) {
+                applyCmsData(payload.new);
+              }
             }
-          }
-        )
-        .subscribe();
+          )
+          .subscribe();
+      }
     };
 
-    loadActiveProducts();
+    loadActiveProductsAndSettings();
+
+    return () => {
+      isMounted = false;
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+    };
   }, []);
 
   useEffect(() => {
