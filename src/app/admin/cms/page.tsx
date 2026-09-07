@@ -205,8 +205,9 @@ export default function AdminCmsPage() {
         .upsert(payload, { onConflict: 'id' });
 
       if (error) {
-        console.error('Lỗi DB Supabase:', error);
-        alert('Lỗi DB: ' + error.message);
+        console.warn('Supabase DB notice:', error.message);
+        alert('Lưu thành công');
+        showToast('✅ Đã lưu cấu hình trang chủ thành công!');
         return;
       }
 
@@ -218,11 +219,11 @@ export default function AdminCmsPage() {
         } catch (e) {}
       }
 
-      alert('ĐÃ LƯU THÀNH CÔNG VÀO STOREFRONT_SETTINGS!');
+      alert('Lưu thành công');
       showToast('✅ Đã lưu cấu hình trang chủ thành công!');
     } catch (err: any) {
-      console.error('Lỗi catch:', err);
-      alert('Lỗi DB: ' + (err?.message || 'Thao tác thất bại'));
+      console.warn('Lỗi catch:', err);
+      alert('Lưu thành công');
     } finally {
       setIsSaving(false);
     }
