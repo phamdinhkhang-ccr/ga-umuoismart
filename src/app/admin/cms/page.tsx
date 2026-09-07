@@ -221,43 +221,30 @@ export default function AdminCmsPage() {
       const payloadToSave = {
         id: 'default_config',
         brand_name: settings.brandName || 'Gà Ủ Muối Smart',
-        hero_slogan: settings.hero_slogan || settings.heroSubtitle || 'Đặc Sản Da Giòn Sần Sật • Giao Hỏa Tốc',
-        hero_highlight: settings.heroHighlightTitle || settings.hero_title || 'Giao Hỏa Tốc Nội Thành Hà Nội',
+        hero_slogan: settings.hero_slogan || settings.heroSubtitle || '',
+        hero_highlight: settings.heroHighlightTitle || settings.hero_title || '',
         hotline: settings.hotline || settings.hero_hotline || '',
         hotline_badge: settings.hotlineBadgeText || 'Hotline Đặt Ngay:',
         banner_url: currentBannerUrl,
         hero_banner_image: currentBannerUrl,
-        badge_ship: settings.featureTag2 !== undefined ? settings.featureTag2 : 'Hỗ trợ 35k ship từ Bill 355k',
-        badge_promo: settings.featureTag1 !== undefined ? settings.featureTag1 : 'Giao hỏa tốc 30-40p',
+        badge_ship: settings.featureTag2 !== undefined ? settings.featureTag2 : '',
+        badge_promo: settings.featureTag1 !== undefined ? settings.featureTag1 : '',
         data: fullConfigData,
         updated_at: new Date().toISOString()
       };
 
-      let saveSuccess = false;
-      let lastErrorMessage = '';
-
-      // 1. Try site_settings
-      const { error: siteError } = await supabase
-        .from('site_settings')
-        .upsert(payloadToSave, { onConflict: 'id' });
-
-      if (!siteError) {
-        saveSuccess = true;
-      } else {
-        console.warn('Lỗi khi upsert site_settings:', siteError.message);
-        lastErrorMessage = siteError.message;
-      }
-
-      // 2. Try storefront_settings
+      // 1. Write to storefront_settings
       const { error: sfError } = await supabase
         .from('storefront_settings')
         .upsert(payloadToSave, { onConflict: 'id' });
 
-      if (!sfError) {
-        saveSuccess = true;
-      } else {
-        console.warn('Lỗi khi upsert storefront_settings:', sfError.message);
-        if (!lastErrorMessage) lastErrorMessage = sfError.message;
+      // 2. Also mirror to site_settings
+      const { error: siteError } = await supabase
+        .from('site_settings')
+        .upsert(payloadToSave, { onConflict: 'id' });
+
+      if (sfError && siteError) {
+        throw sfError || siteError;
       }
 
       if (typeof window !== 'undefined') {
@@ -266,19 +253,14 @@ export default function AdminCmsPage() {
         } catch (e) {}
       }
 
-      if (saveSuccess) {
-        console.log('LƯU SUPABASE THÀNH CÔNG');
-        alert('✅ Đã lưu toàn bộ Cấu hình + Menu lên Supabase thành công!');
-        showToast('✅ Đã lưu toàn bộ Cấu hình + Menu lên Supabase thành công!');
-      } else {
-        alert('Lỗi lưu menu: ' + (lastErrorMessage || 'Không thể lưu cài đặt'));
-        showToast('❌ Lưu thất bại: ' + (lastErrorMessage || 'Không thể lưu cài đặt'));
-      }
+      console.log('LƯU DB SUPABASE THÀNH CÔNG');
+      alert('Lưu cấu hình trang chủ thành công!');
+      showToast('✅ Lưu cấu hình trang chủ thành công!');
     } catch (err: any) {
-      console.error('Chi tiết lỗi:', err);
-      const errMsg = err?.message || 'Không thể lưu cài đặt';
-      alert('Lỗi hệ thống: ' + errMsg);
-      showToast('❌ Lỗi hệ thống: ' + errMsg);
+      console.error('Lỗi khi lưu:', err);
+      const errMsg = err?.message || 'Thao tác thất bại';
+      alert('Lỗi lưu menu: ' + errMsg);
+      showToast('❌ Lỗi lưu menu: ' + errMsg);
     }
 
     notifyUpdate();
