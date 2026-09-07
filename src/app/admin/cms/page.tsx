@@ -65,37 +65,43 @@ export default function AdminCmsPage() {
       }
 
       const { data: record, error } = await supabase
-        .from('storefront_settings')
+        .from('site_settings')
         .select('*')
         .eq('id', 'default_config')
         .maybeSingle();
-      
-      if (error) {
-        console.warn('Lỗi đọc cấu hình storefront:', error.message);
+
+      let targetRecord = record;
+      if (error || !record) {
+        const { data: sfRecord } = await supabase
+          .from('storefront_settings')
+          .select('*')
+          .eq('id', 'default_config')
+          .maybeSingle();
+        targetRecord = sfRecord;
       }
 
-      const safeData = record?.data || {};
+      const safeData = targetRecord?.data ? { ...targetRecord.data, ...targetRecord } : (targetRecord || {});
 
-      if (isMounted && record && record.data) {
+      if (isMounted && targetRecord) {
         setSettings({
-          brandName: safeData.brandName ?? '',
-          hero_title: safeData.hero_title ?? '',
-          hotline: safeData.hotline ?? safeData.hero_hotline ?? '',
-          hero_hotline: safeData.hero_hotline ?? safeData.hotline ?? '',
-          hotlineBadgeText: safeData.hotlineBadgeText ?? '',
-          hotlinePrefix: safeData.hotlinePrefix ?? safeData.hotlineBadgeText ?? '',
-          heroHighlightTitle: safeData.heroHighlightTitle ?? '',
-          heroSubtitle: safeData.heroSubtitle ?? safeData.hero_slogan ?? '',
-          hero_slogan: safeData.hero_slogan ?? safeData.heroSubtitle ?? '',
-          promoBannerText: safeData.promoBannerText ?? '',
-          featureTag1: safeData.featureTag1 !== undefined ? safeData.featureTag1 : 'Giao hỏa tốc 30-40p',
-          featureTag2: safeData.featureTag2 !== undefined ? safeData.featureTag2 : 'Hỗ trợ 35k ship từ Bill 355k',
-          hero_banner_image: safeData.hero_banner_image ?? '',
+          brandName: safeData.brand_name || safeData.brandName || '',
+          hero_title: safeData.hero_title || safeData.brand_name || safeData.brandName || '',
+          hotline: safeData.hotline || safeData.hero_hotline || '',
+          hero_hotline: safeData.hero_hotline || safeData.hotline || '',
+          hotlineBadgeText: safeData.hotline_badge || safeData.hotlineBadgeText || 'Hotline Đặt Ngay:',
+          hotlinePrefix: safeData.hotlinePrefix || safeData.hotline_badge || '',
+          heroHighlightTitle: safeData.hero_highlight || safeData.heroHighlightTitle || '',
+          heroSubtitle: safeData.hero_slogan || safeData.heroSubtitle || '',
+          hero_slogan: safeData.hero_slogan || safeData.heroSubtitle || '',
+          promoBannerText: safeData.promoBannerText || '',
+          featureTag1: safeData.badge_promo !== undefined ? safeData.badge_promo : (safeData.featureTag1 !== undefined ? safeData.featureTag1 : 'Giao hỏa tốc 30-40p'),
+          featureTag2: safeData.badge_ship !== undefined ? safeData.badge_ship : (safeData.featureTag2 !== undefined ? safeData.featureTag2 : 'Hỗ trợ 35k ship từ Bill 355k'),
+          hero_banner_image: safeData.banner_url || safeData.hero_banner_image || '',
           branches: Array.isArray(safeData.branches) ? safeData.branches : [],
-          social_facebook: safeData.social_facebook ?? '',
-          social_tiktok: safeData.social_tiktok ?? '',
-          social_zalo: safeData.social_zalo ?? '',
-          hotline_complaints: safeData.hotline_complaints ?? '',
+          social_facebook: safeData.social_facebook || '',
+          social_tiktok: safeData.social_tiktok || '',
+          social_zalo: safeData.social_zalo || '',
+          hotline_complaints: safeData.hotline_complaints || '',
           bankInfo: safeData.bankInfo || { bankName: '', accountNumber: '', accountHolder: '' }
         });
 
@@ -374,41 +380,19 @@ export default function AdminCmsPage() {
 
   const uploadBannerImage = async (file: File): Promise<string | null> => {
     try {
-      const bucketName = 'cms-images';
-      const cleanPath = sanitizeFileName(file.name);
-
-      const { data, error: uploadError } = await supabase.storage
-        .from(bucketName)
-        .upload(cleanPath, file, {
-          cacheControl: '3600',
-          upsert: true
-        });
-
-      if (uploadError) {
-        console.warn('Thử fallback sang bucket banners:', uploadError.message);
-        const { error: fallbackError } = await supabase.storage
-          .from('banners')
-          .upload(cleanPath, file, { upsert: true });
-
-        if (fallbackError) {
-          console.warn('Supabase storage fallback thất bại, dùng nén Base64:', fallbackError.message);
-          return await compressImage(file);
-        } else {
-          const { data: publicUrlData } = supabase.storage
-            .from('banners')
-            .getPublicUrl(cleanPath);
-          return publicUrlData.publicUrl;
-        }
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Vui lòng chọn tệp ảnh dung lượng dưới 5MB!');
+        return null;
       }
-
-      const { data: publicUrlData } = supabase.storage
-        .from(bucketName)
-        .getPublicUrl(cleanPath);
-
-      return publicUrlData.publicUrl;
-    } catch (err: any) {
-      console.warn('Lỗi storage upload, fallback sang Base64:', err?.message);
       return await compressImage(file);
+    } catch (err: any) {
+      console.warn('Lỗi xử lý file ảnh, dùng fallback FileReader:', err?.message);
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(file);
+      });
     }
   };
 
