@@ -215,44 +215,38 @@ export default function AdminCmsPage() {
     try {
       const currentBannerUrl = settings.hero_banner_image || (settings as any).banner_url || '';
 
-      const payload = {
-        id: 'default_config',
-        brand_name: settings.brandName || 'Gà Ủ Muối Smart',
-        hero_slogan: settings.hero_slogan || settings.heroSubtitle || '',
-        hero_highlight: settings.heroHighlightTitle || settings.hero_title || '',
-        hotline: settings.hotline || settings.hero_hotline || '',
-        hotline_badge: settings.hotlineBadgeText || 'Hotline Đặt Ngay:',
-        banner_url: currentBannerUrl,
-        hero_banner_image: currentBannerUrl,
-        badge_ship: settings.featureTag2 !== undefined ? settings.featureTag2 : '',
-        badge_promo: settings.featureTag1 !== undefined ? settings.featureTag1 : '',
-        menu: formattedMenuItems || [],
-        products: formattedMenuItems || [],
-        data: fullConfigData,
-        updated_at: new Date().toISOString()
-      };
-
       const { error } = await supabase
         .from('storefront_settings')
-        .upsert(payload, { onConflict: 'id' });
+        .upsert({
+          id: 'default_config',
+          brand_name: settings.brandName || 'Gà Ủ Muối Smart',
+          hero_slogan: settings.hero_slogan || settings.heroSubtitle || '',
+          hero_highlight: settings.heroHighlightTitle || settings.hero_title || '',
+          hotline: settings.hotline || settings.hero_hotline || '',
+          hotline_badge: settings.hotlineBadgeText || 'Hotline Đặt Ngay:',
+          banner_url: currentBannerUrl,
+          hero_banner_image: currentBannerUrl,
+          badge_ship: settings.featureTag2 !== undefined ? settings.featureTag2 : '',
+          badge_promo: settings.featureTag1 !== undefined ? settings.featureTag1 : '',
+          menu: formattedMenuItems || [],
+          products: formattedMenuItems || [],
+          data: fullConfigData,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'id' });
 
-      if (error) {
-        console.error("Lỗi Supabase chi tiết:", error);
-        alert("Lỗi DB: " + error.message);
-        return;
-      }
+      if (error) throw error;
 
       if (typeof window !== 'undefined') {
         try {
-          localStorage.setItem('site_settings_cache', JSON.stringify(payload));
+          localStorage.setItem('site_settings_cache', JSON.stringify(fullConfigData));
         } catch (e) {}
       }
 
-      alert("✅ ĐÃ LƯU CẤU HÌNH VÀ MENU THÀNH CÔNG!");
-      showToast("✅ Đã lưu toàn bộ Cấu hình + Menu thành công!");
+      alert('ĐÃ LƯU THÀNH CÔNG VÀO STOREFRONT_SETTINGS!');
+      showToast('✅ ĐÃ LƯU THÀNH CÔNG VÀO STOREFRONT_SETTINGS!');
     } catch (err: any) {
-      console.error("Lỗi catch:", err);
-      alert("Lỗi: " + (err?.message || "Không thể lưu"));
+      console.error(err);
+      alert('Lỗi DB: ' + (err?.message || 'Không thể lưu'));
     } finally {
       setIsSaving(false);
     }
