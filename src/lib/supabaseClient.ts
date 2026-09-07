@@ -8,7 +8,8 @@ const supabaseAnonKey =
 
 export const supabase = createClient(cleanUrl, supabaseAnonKey, {
   auth: {
-    persistSession: false
+    persistSession: true,
+    autoRefreshToken: true,
   },
   realtime: {
     params: {
