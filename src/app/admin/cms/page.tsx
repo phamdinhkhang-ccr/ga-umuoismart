@@ -148,19 +148,15 @@ export default function AdminCmsPage() {
     window.dispatchEvent(new Event('gum_store_update'));
   };
 
-  const handleSaveStorefrontOnly = async (e?: React.FormEvent) => {
+  const handleDirectSave = async (e?: React.MouseEvent | React.FormEvent) => {
     if (e) e.preventDefault();
     setIsSaving(true);
 
     try {
-      const currentMenuList = (products && products.length > 0)
-        ? products
-        : (settings as any)?.menuItems?.length > 0
-          ? (settings as any).menuItems
-          : (settings as any)?.products?.length > 0
-            ? (settings as any).products
-            : getProducts();
+      // 1. Chỉ lấy link ảnh dạng text hiện có, TUYỆT ĐỐI KHÔNG GỌI supabase.storage.upload hay bất kỳ hàm xử lý ảnh nào
+      const banner = settings.hero_banner_image || (settings as any)?.banner_url || '';
 
+      const currentMenuList = (products && products.length > 0) ? products : getProducts();
       const formattedMenuItems = currentMenuList.map((item: any) => ({
         id: item.id || `item_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
         name: item.name,
@@ -173,40 +169,39 @@ export default function AdminCmsPage() {
         is_storefront_visible: item.isVisible !== false && item.is_storefront_visible !== false,
       }));
 
-      const currentBannerUrl = settings.hero_banner_image || (settings as any).banner_url || '';
-
       const fullConfigData = {
         ...settings,
-        hero_banner_image: currentBannerUrl,
-        banner_url: currentBannerUrl,
+        hero_banner_image: banner,
+        banner_url: banner,
         products: formattedMenuItems,
         menuItems: formattedMenuItems
       };
 
-      const payload = {
+      // 2. Gom dữ liệu đơn giản
+      const saveObj = {
         id: 'default_config',
-        brand_name: settings.brandName || 'Gà Ủ Muối Smart',
+        brand_name: settings.brandName || settings.hero_title || 'Gà Ủ Muối Smart',
         hero_slogan: settings.hero_slogan || settings.heroSubtitle || '',
         hero_highlight: settings.heroHighlightTitle || settings.hero_title || '',
         hotline: settings.hotline || settings.hero_hotline || '',
         hotline_badge: settings.hotlineBadgeText || 'Hotline Đặt Ngay:',
-        banner_url: currentBannerUrl,
-        hero_banner_image: currentBannerUrl,
+        banner_url: banner,
+        hero_banner_image: banner,
         badge_ship: settings.featureTag2 !== undefined ? settings.featureTag2 : '',
         badge_promo: settings.featureTag1 !== undefined ? settings.featureTag1 : '',
-        menu: formattedMenuItems || [],
-        products: formattedMenuItems || [],
+        menu: formattedMenuItems,
+        products: formattedMenuItems,
         data: fullConfigData,
         updated_at: new Date().toISOString()
       };
 
+      // 3. Chỉ gửi 1 request duy nhất vào storefront_settings
       const { error } = await supabase
         .from('storefront_settings')
-        .upsert(payload, { onConflict: 'id' });
+        .upsert(saveObj, { onConflict: 'id' });
 
       if (error) {
-        console.warn('Supabase DB error:', error.message);
-        alert('Lỗi DB: ' + error.message);
+        alert("Lỗi database: " + error.message);
         return;
       }
 
@@ -214,15 +209,14 @@ export default function AdminCmsPage() {
       if (typeof window !== 'undefined') {
         try {
           localStorage.setItem('storefront_settings', JSON.stringify(fullConfigData));
-          localStorage.setItem('site_settings_cache', JSON.stringify(payload));
-        } catch (e) {}
+          localStorage.setItem('site_settings_cache', JSON.stringify(saveObj));
+        } catch (err) {}
       }
 
-      alert('✅ ĐÃ LƯU THÀNH CÔNG!');
-      showToast('✅ Đã lưu cấu hình trang chủ thành công!');
+      alert("✅ ĐÃ CẬP NHẬT GIAO DIỆN THÀNH CÔNG!");
+      showToast('✅ Đã cập nhật giao diện thành công!');
     } catch (err: any) {
-      console.warn('Lỗi catch:', err);
-      alert('Lỗi: ' + (err?.message || 'Không thể lưu'));
+      alert("Lỗi hệ thống: " + (err?.message || "Không xác định"));
     } finally {
       setIsSaving(false);
     }
@@ -453,7 +447,7 @@ export default function AdminCmsPage() {
 
         <button
           type="button"
-          onClick={() => handleSaveStorefrontOnly()}
+          onClick={handleDirectSave}
           className="bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-extrabold px-5 py-2.5 rounded-xl text-xs shadow-md transition flex items-center justify-center space-x-2 cursor-pointer shrink-0"
         >
           <Save className="w-4 h-4" />
@@ -461,7 +455,7 @@ export default function AdminCmsPage() {
         </button>
       </div>
 
-      <form onSubmit={handleSaveStorefrontOnly} className="space-y-6">
+      <form onSubmit={handleDirectSave} className="space-y-6">
         
         {/* 1. KHỐI CẤU HÌNH BANNER & KHẨU HIỆU (HERO SECTION) */}
         <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
@@ -1018,7 +1012,7 @@ export default function AdminCmsPage() {
         <div className="flex justify-end pt-2">
           <button
             type="button"
-            onClick={() => handleSaveStorefrontOnly()}
+            onClick={handleDirectSave}
             className="w-full sm:w-auto bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-black px-8 py-3.5 rounded-2xl text-xs shadow-md transition flex items-center justify-center space-x-2 cursor-pointer"
           >
             <Save className="w-4 h-4" />
