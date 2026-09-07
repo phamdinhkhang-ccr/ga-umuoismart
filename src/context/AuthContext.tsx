@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { useRouter, usePathname } from 'next/navigation';
 import { UserAccount } from '@/types/auth';
 import { safeGetJSON } from '@/utils/storage';
+import { supabase } from '@/lib/supabaseClient';
 
 export const INITIAL_DEMO_ACCOUNTS: (UserAccount & { password?: string })[] = [
   {
@@ -141,36 +142,71 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
-    try {
-      if (typeof window !== 'undefined') {
-        const stored = safeGetJSON<UserAccount | null>('pos_current_user', null) 
-          || safeGetJSON<UserAccount | null>('gum_auth_user', null)
-          || safeGetJSON<UserAccount | null>('auth_user', null);
-        
-        if (stored && typeof stored === 'object' && (stored as any).id) {
-          if (stored.username === 'chinhanh2') {
-            stored.branch_id = 'b5555555-5555-5555-5555-555555555555';
-            stored.branch_name = 'Chi Nhánh Gà Ủ Muối Quận 3';
-          }
-          setUser(stored);
-        }
+    let isMounted = true;
+    const timer = setTimeout(() => {
+      if (isMounted) {
+        setIsLoading(false);
+        setIsLoaded(true);
+      }
+    }, 2000);
 
-        const storedAccounts = safeGetJSON<(UserAccount & { password?: string })[]>('gum_accounts', INITIAL_DEMO_ACCOUNTS);
-        if (storedAccounts && Array.isArray(storedAccounts) && storedAccounts.length > 0) {
-          setAccounts(storedAccounts);
+    const checkAuth = async () => {
+      try {
+        if (typeof window !== 'undefined') {
+          const stored = safeGetJSON<UserAccount | null>('pos_current_user', null) 
+            || safeGetJSON<UserAccount | null>('gum_auth_user', null)
+            || safeGetJSON<UserAccount | null>('auth_user', null);
+          
+          if (stored && typeof stored === 'object' && (stored as any).id) {
+            if (stored.username === 'chinhanh2') {
+              stored.branch_id = 'b5555555-5555-5555-5555-555555555555';
+              stored.branch_name = 'Chi Nhánh Gà Ủ Muối Quận 3';
+            }
+            if (isMounted) setUser(stored);
+          } else {
+            try {
+              const { data: { session } } = await supabase.auth.getSession();
+              if (session?.user && isMounted) {
+                const supaUser: UserAccount = {
+                  id: session.user.id,
+                  username: session.user.email?.split('@')[0] || 'user',
+                  name: session.user.user_metadata?.full_name || session.user.email || 'Người Dùng Supabase',
+                  role: 'SUPER_ADMIN',
+                  status: 'ACTIVE'
+                };
+                setUser(supaUser);
+              }
+            } catch (err) {
+              console.error("Auth check error:", err);
+            }
+          }
+
+          const storedAccounts = safeGetJSON<(UserAccount & { password?: string })[]>('gum_accounts', INITIAL_DEMO_ACCOUNTS);
+          if (storedAccounts && Array.isArray(storedAccounts) && storedAccounts.length > 0 && isMounted) {
+            setAccounts(storedAccounts);
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to parse user session on this device:', e);
+        try {
+          localStorage.removeItem('pos_current_user');
+          localStorage.removeItem('gum_auth_user');
+          localStorage.removeItem('auth_user');
+        } catch (err) {}
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+          setIsLoaded(true);
         }
       }
-    } catch (e) {
-      console.warn('Failed to parse user session on this device:', e);
-      try {
-        localStorage.removeItem('pos_current_user');
-        localStorage.removeItem('gum_auth_user');
-        localStorage.removeItem('auth_user');
-      } catch (err) {}
-    } finally {
-      setIsLoading(false);
-      setIsLoaded(true);
-    }
+    };
+
+    checkAuth();
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
   }, []);
 
   const login = useCallback((username: string, password: string) => {

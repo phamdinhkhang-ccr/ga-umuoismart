@@ -53,10 +53,23 @@ function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { isLoading, user } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [loadingTimeout, setLoadingTimeout] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    const timer = setTimeout(() => {
+      if (isMounted) setLoadingTimeout(true);
+    }, 2000);
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
+  }, []);
 
   const isAdminOrBranch = pathname.startsWith('/admin') || pathname.startsWith('/branch');
+  const showLoadingScreen = isAdminOrBranch && isLoading && !loadingTimeout;
 
-  if (isAdminOrBranch && isLoading) {
+  if (showLoadingScreen) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center font-sans text-slate-500 text-xs font-bold p-4">
         <div className="flex flex-col items-center gap-3 bg-white p-6 rounded-2xl border border-slate-200 shadow-md">

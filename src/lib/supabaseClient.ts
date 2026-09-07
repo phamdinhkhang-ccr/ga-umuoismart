@@ -2,11 +2,11 @@ import { createClient } from '@supabase/supabase-js';
 
 const rawUrl =
   process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://tkgdlmjgabzaglovnfxk.supabase.co';
-const supabaseUrl = rawUrl.replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '');
+const cleanUrl = rawUrl.replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '');
 const supabaseAnonKey =
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_DZlCxL4IUs2RpzOc0EHwAA_wl9K5o6E';
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+export const supabase = createClient(cleanUrl, supabaseAnonKey, {
   auth: {
     persistSession: false
   },
