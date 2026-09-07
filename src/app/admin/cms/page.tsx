@@ -148,105 +148,81 @@ export default function AdminCmsPage() {
     window.dispatchEvent(new Event('gum_store_update'));
   };
 
-  const handleSaveAll = async (e?: React.FormEvent) => {
+  const handleSaveStorefrontOnly = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-
-    const currentMenuList = (products && products.length > 0)
-      ? products
-      : (settings as any)?.menuItems?.length > 0
-        ? (settings as any).menuItems
-        : (settings as any)?.products?.length > 0
-          ? (settings as any).products
-          : getProducts();
-
-    const formattedMenuItems = currentMenuList.map((item: any) => ({
-      id: item.id || `item_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-      name: item.name,
-      price: Number(item.price) || 0,
-      originalPrice: Number(item.originalPrice || item.original_price) || 0,
-      original_price: Number(item.originalPrice || item.original_price) || 0,
-      image: item.image || item.imageUrl || item.image_url || '',
-      imageUrl: item.image || item.imageUrl || item.image_url || '',
-      image_url: item.image || item.imageUrl || item.image_url || '',
-      description: item.description || '',
-      category: item.category || 'Món Gà Ủ Muối',
-      isBestSeller: Boolean(item.isBestSeller || item.is_best_seller),
-      is_best_seller: Boolean(item.isBestSeller || item.is_best_seller),
-      isVisible: item.isVisible !== false && item.is_storefront_visible !== false,
-      is_storefront_visible: item.isVisible !== false && item.is_storefront_visible !== false,
-    }));
-
-    console.log('Đang gửi dữ liệu menu lên Supabase...', formattedMenuItems);
-
-    const fullConfigData = {
-      ...settings,
-      brandName: settings.brandName ?? '',
-      hero_title: settings.hero_title ?? '',
-      hero_slogan: settings.hero_slogan ?? settings.heroSubtitle ?? '',
-      heroSubtitle: settings.heroSubtitle ?? settings.hero_slogan ?? '',
-      heroHighlightTitle: settings.heroHighlightTitle ?? '',
-      hotlineBadgeText: settings.hotlineBadgeText ?? '',
-      hotlinePrefix: settings.hotlinePrefix ?? settings.hotlineBadgeText ?? '',
-      hero_hotline: settings.hotline ?? settings.hero_hotline ?? '',
-      hotline: settings.hotline ?? settings.hero_hotline ?? '',
-      promoBannerText: settings.promoBannerText ?? '',
-      featureTag1: settings.featureTag1 !== undefined ? settings.featureTag1 : 'Giao hỏa tốc 30-40p',
-      featureTag2: settings.featureTag2 !== undefined ? settings.featureTag2 : 'Hỗ trợ 35k ship từ Bill 355k',
-      branches: settings.branches ?? [],
-      social_facebook: settings.social_facebook ?? '',
-      social_tiktok: settings.social_tiktok ?? '',
-      social_zalo: settings.social_zalo ?? '',
-      hotline_complaints: settings.hotline_complaints ?? '',
-      bankInfo: settings.bankInfo ?? { bankName: '', accountNumber: '', accountHolder: '' },
-      hero_banner_image: settings.hero_banner_image ?? '',
-      products: formattedMenuItems,
-      menuItems: formattedMenuItems
-    };
-
-    const updated = saveCmsSettings(fullConfigData);
-    setSettings(updated);
-    setProducts(formattedMenuItems);
-
-    try {
-      localStorage.setItem('storefront_settings', JSON.stringify(updated));
-    } catch (e) {}
-
     setIsSaving(true);
+
     try {
+      const currentMenuList = (products && products.length > 0)
+        ? products
+        : (settings as any)?.menuItems?.length > 0
+          ? (settings as any).menuItems
+          : (settings as any)?.products?.length > 0
+            ? (settings as any).products
+            : getProducts();
+
+      const formattedMenuItems = currentMenuList.map((item: any) => ({
+        id: item.id || `item_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        name: item.name,
+        price: Number(item.price) || 0,
+        original_price: Number(item.originalPrice || item.original_price) || 0,
+        image_url: item.image || item.imageUrl || item.image_url || '',
+        description: item.description || '',
+        category: item.category || 'Món Gà Ủ Muối',
+        is_best_seller: Boolean(item.isBestSeller || item.is_best_seller),
+        is_storefront_visible: item.isVisible !== false && item.is_storefront_visible !== false,
+      }));
+
       const currentBannerUrl = settings.hero_banner_image || (settings as any).banner_url || '';
+
+      const fullConfigData = {
+        ...settings,
+        hero_banner_image: currentBannerUrl,
+        banner_url: currentBannerUrl,
+        products: formattedMenuItems,
+        menuItems: formattedMenuItems
+      };
+
+      const payload = {
+        id: 'default_config',
+        brand_name: settings.brandName || 'Gà Ủ Muối Smart',
+        hero_slogan: settings.hero_slogan || settings.heroSubtitle || '',
+        hero_highlight: settings.heroHighlightTitle || settings.hero_title || '',
+        hotline: settings.hotline || settings.hero_hotline || '',
+        hotline_badge: settings.hotlineBadgeText || 'Hotline Đặt Ngay:',
+        banner_url: currentBannerUrl,
+        hero_banner_image: currentBannerUrl,
+        badge_ship: settings.featureTag2 !== undefined ? settings.featureTag2 : '',
+        badge_promo: settings.featureTag1 !== undefined ? settings.featureTag1 : '',
+        menu: formattedMenuItems || [],
+        products: formattedMenuItems || [],
+        data: fullConfigData,
+        updated_at: new Date().toISOString()
+      };
 
       const { error } = await supabase
         .from('storefront_settings')
-        .upsert({
-          id: 'default_config',
-          brand_name: settings.brandName || 'Gà Ủ Muối Smart',
-          hero_slogan: settings.hero_slogan || settings.heroSubtitle || '',
-          hero_highlight: settings.heroHighlightTitle || settings.hero_title || '',
-          hotline: settings.hotline || settings.hero_hotline || '',
-          hotline_badge: settings.hotlineBadgeText || 'Hotline Đặt Ngay:',
-          banner_url: currentBannerUrl,
-          hero_banner_image: currentBannerUrl,
-          badge_ship: settings.featureTag2 !== undefined ? settings.featureTag2 : '',
-          badge_promo: settings.featureTag1 !== undefined ? settings.featureTag1 : '',
-          menu: formattedMenuItems || [],
-          products: formattedMenuItems || [],
-          data: fullConfigData,
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'id' });
+        .upsert(payload, { onConflict: 'id' });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Lỗi DB Supabase:', error);
+        alert('Lỗi DB: ' + error.message);
+        return;
+      }
 
+      saveCmsSettings(fullConfigData);
       if (typeof window !== 'undefined') {
         try {
-          localStorage.setItem('site_settings_cache', JSON.stringify(fullConfigData));
+          localStorage.setItem('storefront_settings', JSON.stringify(fullConfigData));
+          localStorage.setItem('site_settings_cache', JSON.stringify(payload));
         } catch (e) {}
       }
 
       alert('ĐÃ LƯU THÀNH CÔNG VÀO STOREFRONT_SETTINGS!');
-      showToast('✅ ĐÃ LƯU THÀNH CÔNG VÀO STOREFRONT_SETTINGS!');
+      showToast('✅ Đã lưu cấu hình trang chủ thành công!');
     } catch (err: any) {
-      console.error(err);
-      alert('Lỗi DB: ' + (err?.message || 'Không thể lưu'));
+      console.error('Lỗi catch:', err);
+      alert('Lỗi DB: ' + (err?.message || 'Thao tác thất bại'));
     } finally {
       setIsSaving(false);
     }
@@ -476,7 +452,8 @@ export default function AdminCmsPage() {
         </div>
 
         <button
-          onClick={() => handleSaveAll()}
+          type="button"
+          onClick={() => handleSaveStorefrontOnly()}
           className="bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-extrabold px-5 py-2.5 rounded-xl text-xs shadow-md transition flex items-center justify-center space-x-2 cursor-pointer shrink-0"
         >
           <Save className="w-4 h-4" />
@@ -484,7 +461,7 @@ export default function AdminCmsPage() {
         </button>
       </div>
 
-      <form onSubmit={handleSaveAll} className="space-y-6">
+      <form onSubmit={handleSaveStorefrontOnly} className="space-y-6">
         
         {/* 1. KHỐI CẤU HÌNH BANNER & KHẨU HIỆU (HERO SECTION) */}
         <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
@@ -1040,7 +1017,8 @@ export default function AdminCmsPage() {
         {/* BOTTOM SAVE BAR */}
         <div className="flex justify-end pt-2">
           <button
-            type="submit"
+            type="button"
+            onClick={() => handleSaveStorefrontOnly()}
             className="w-full sm:w-auto bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-black px-8 py-3.5 rounded-2xl text-xs shadow-md transition flex items-center justify-center space-x-2 cursor-pointer"
           >
             <Save className="w-4 h-4" />
