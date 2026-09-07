@@ -148,16 +148,48 @@ export default function PublicStorefrontHome() {
       }
 
       try {
-        const { data: cmsData } = await supabase
-          .from('storefront_settings')
-          .select('data')
+        let loadedSettings: any = null;
+
+        const { data: siteData, error: siteErr } = await supabase
+          .from('site_settings')
+          .select('*')
           .eq('id', 'default_config')
           .maybeSingle();
 
-        if (cmsData?.data) {
-          setCmsSettings(prev => ({ ...prev, ...cmsData.data }));
+        if (!siteErr && siteData) {
+          loadedSettings = siteData.data ? { ...siteData.data, ...siteData } : siteData;
+        } else {
+          const { data: sfData, error: sfErr } = await supabase
+            .from('storefront_settings')
+            .select('*')
+            .eq('id', 'default_config')
+            .maybeSingle();
+
+          if (!sfErr && sfData) {
+            loadedSettings = sfData.data ? { ...sfData.data, ...sfData } : sfData;
+          }
         }
-      } catch (e) {}
+
+        if (loadedSettings) {
+          setCmsSettings(prev => ({
+            ...prev,
+            ...loadedSettings,
+            brandName: loadedSettings.brand_name || loadedSettings.brandName || prev.brandName,
+            hero_title: loadedSettings.hero_title || loadedSettings.hero_highlight || loadedSettings.brand_name || loadedSettings.brandName || prev.hero_title,
+            hero_slogan: loadedSettings.hero_slogan || loadedSettings.heroSubtitle || prev.hero_slogan,
+            heroHighlightTitle: loadedSettings.hero_highlight || loadedSettings.heroHighlightTitle || prev.heroHighlightTitle,
+            hotline: loadedSettings.hotline || loadedSettings.hero_hotline || prev.hotline,
+            hero_hotline: loadedSettings.hero_hotline || loadedSettings.hotline || prev.hero_hotline,
+            hotlineBadgeText: loadedSettings.hotline_badge || loadedSettings.hotlineBadgeText || prev.hotlineBadgeText,
+            banner_url: loadedSettings.banner_url || loadedSettings.hero_banner_image || (prev as any).banner_url,
+            hero_banner_image: loadedSettings.banner_url || loadedSettings.hero_banner_image || prev.hero_banner_image,
+            featureTag1: loadedSettings.badge_promo !== undefined ? loadedSettings.badge_promo : (loadedSettings.featureTag1 !== undefined ? loadedSettings.featureTag1 : prev.featureTag1),
+            featureTag2: loadedSettings.badge_ship !== undefined ? loadedSettings.badge_ship : (loadedSettings.featureTag2 !== undefined ? loadedSettings.featureTag2 : prev.featureTag2),
+          }));
+        }
+      } catch (e) {
+        console.warn('Dùng cấu hình mặc định:', e);
+      }
     };
 
     loadActiveProducts();
