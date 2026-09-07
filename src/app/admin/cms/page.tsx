@@ -254,6 +254,12 @@ export default function AdminCmsPage() {
         if (!lastErrorMessage) lastErrorMessage = sfError.message;
       }
 
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('site_settings_cache', JSON.stringify(payloadToSave));
+        } catch (e) {}
+      }
+
       if (saveSuccess) {
         console.log('LƯU SUPABASE THÀNH CÔNG');
         alert('✅ Đã lưu toàn bộ Cấu hình + Menu lên Supabase thành công!');

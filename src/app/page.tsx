@@ -150,6 +150,16 @@ export default function PublicStorefrontHome() {
       try {
         let loadedSettings: any = null;
 
+        if (typeof window !== 'undefined') {
+          try {
+            const cached = localStorage.getItem('site_settings_cache');
+            if (cached) {
+              const parsed = JSON.parse(cached);
+              if (parsed) loadedSettings = parsed;
+            }
+          } catch (e) {}
+        }
+
         const { data: siteData, error: siteErr } = await supabase
           .from('site_settings')
           .select('*')
