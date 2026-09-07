@@ -1,7 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl =
+const rawUrl =
   process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://tkgdlmjgabzaglovnfxk.supabase.co';
+const supabaseUrl = rawUrl.replace(/\/+$/, '');
 const supabaseAnonKey =
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_DZlCxL4IUs2RpzOc0EHwAA_wl9K5o6E';
 

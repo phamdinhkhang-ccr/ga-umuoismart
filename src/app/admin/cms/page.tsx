@@ -222,8 +222,9 @@ export default function AdminCmsPage() {
 
       if (error) {
         console.error('LỖI SUPABASE TRẢ VỀ:', error);
-        alert('Lỗi lưu menu: ' + error.message);
-        showToast('❌ Lưu thất bại: ' + error.message);
+        const errMsg = error.message || (typeof error === 'string' ? error : JSON.stringify(error));
+        alert('Lỗi lưu menu: ' + errMsg);
+        showToast('❌ Lưu thất bại: ' + errMsg);
         return;
       } else {
         console.log('LƯU SUPABASE THÀNH CÔNG:', data);
@@ -232,7 +233,9 @@ export default function AdminCmsPage() {
       }
     } catch (err: any) {
       console.error('Lỗi khi lưu:', err);
-      alert('Lỗi hệ thống: ' + err.message);
+      const errMsg = err?.message || 'Không thể lưu dữ liệu';
+      alert('Lỗi hệ thống: ' + errMsg);
+      showToast('❌ Lỗi hệ thống: ' + errMsg);
     }
 
     notifyUpdate();
