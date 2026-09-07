@@ -216,21 +216,28 @@ export default function AdminCmsPage() {
         updated_at: new Date().toISOString()
       };
 
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from('storefront_settings')
         .upsert(payloadToSave, { onConflict: 'id' });
 
       if (error) {
-        console.error('LỖI SUPABASE TRẢ VỀ:', error);
-        const errMsg = error.message || (typeof error === 'string' ? error : JSON.stringify(error));
-        alert('Lỗi lưu menu: ' + errMsg);
-        showToast('❌ Lưu thất bại: ' + errMsg);
-        return;
-      } else {
-        console.log('LƯU SUPABASE THÀNH CÔNG:', data);
-        alert('✅ Đã lưu toàn bộ Cấu hình + Menu lên Supabase thành công!');
-        showToast('✅ Đã lưu toàn bộ Cấu hình + Menu lên Supabase thành công!');
+        console.warn('Thử fallback sang bảng site_settings:', error.message);
+        const { error: siteError } = await supabase
+          .from('site_settings')
+          .upsert(payloadToSave, { onConflict: 'id' });
+
+        if (siteError) {
+          console.error('LỖI SUPABASE TRẢ VỀ:', siteError);
+          const errMsg = siteError.message || (typeof siteError === 'string' ? siteError : JSON.stringify(siteError));
+          alert('Lỗi lưu menu: ' + errMsg);
+          showToast('❌ Lưu thất bại: ' + errMsg);
+          return;
+        }
       }
+
+      console.log('LƯU SUPABASE THÀNH CÔNG');
+      alert('✅ Đã lưu toàn bộ Cấu hình + Menu lên Supabase thành công!');
+      showToast('✅ Đã lưu toàn bộ Cấu hình + Menu lên Supabase thành công!');
     } catch (err: any) {
       console.error('Lỗi khi lưu:', err);
       const errMsg = err?.message || 'Không thể lưu dữ liệu';
@@ -321,6 +328,58 @@ export default function AdminCmsPage() {
       };
       reader.onerror = (err) => reject(err);
     });
+  };
+
+  const sanitizeFileName = (fileName: string): string => {
+    const clean = fileName
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/đ/g, 'd')
+      .replace(/Đ/g, 'D')
+      .replace(/[^a-zA-Z0-9.-]/g, '_')
+      .toLowerCase();
+    const ext = clean.split('.').pop() || 'jpg';
+    return `banner_${Date.now()}.${ext}`;
+  };
+
+  const uploadBannerImage = async (file: File): Promise<string | null> => {
+    try {
+      const bucketName = 'cms-images';
+      const cleanPath = sanitizeFileName(file.name);
+
+      const { data, error: uploadError } = await supabase.storage
+        .from(bucketName)
+        .upload(cleanPath, file, {
+          cacheControl: '3600',
+          upsert: true
+        });
+
+      if (uploadError) {
+        console.warn('Thử fallback sang bucket banners:', uploadError.message);
+        const { error: fallbackError } = await supabase.storage
+          .from('banners')
+          .upload(cleanPath, file, { upsert: true });
+
+        if (fallbackError) {
+          console.warn('Supabase storage fallback thất bại, dùng nén Base64:', fallbackError.message);
+          return await compressImage(file);
+        } else {
+          const { data: publicUrlData } = supabase.storage
+            .from('banners')
+            .getPublicUrl(cleanPath);
+          return publicUrlData.publicUrl;
+        }
+      }
+
+      const { data: publicUrlData } = supabase.storage
+        .from(bucketName)
+        .getPublicUrl(cleanPath);
+
+      return publicUrlData.publicUrl;
+    } catch (err: any) {
+      console.warn('Lỗi storage upload, fallback sang Base64:', err?.message);
+      return await compressImage(file);
+    }
   };
 
   // Product Operations
@@ -567,13 +626,16 @@ export default function AdminCmsPage() {
                     onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (file) {
-                        showToast('⏳ Đang nén ảnh banner...');
+                        showToast('⏳ Đang xử lý & tải ảnh banner...');
                         try {
-                          const compressedBase64 = await compressImage(file);
-                          setSettings(prev => ({ ...prev, hero_banner_image: compressedBase64 }));
-                          showToast('📸 Đã nén & cập nhật ảnh banner!');
-                        } catch (err) {
-                          console.error('Lỗi nén banner:', err);
+                          const bannerUrl = await uploadBannerImage(file);
+                          if (bannerUrl) {
+                            setSettings(prev => ({ ...prev, hero_banner_image: bannerUrl }));
+                            showToast('📸 Đã cập nhật ảnh banner thành công!');
+                          }
+                        } catch (err: any) {
+                          console.error('Lỗi xử lý ảnh banner:', err);
+                          showToast('❌ Lỗi tải ảnh banner!');
                         }
                       }
                     }}
