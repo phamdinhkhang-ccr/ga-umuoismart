@@ -1,8 +1,16 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import path from 'path';
+import fs from 'fs';
 
+// Ensure SQLite DATABASE_URL points to an absolute path so SQLite never fails with error code 14 (SQLITE_CANTOPEN)
 if (!process.env.DATABASE_URL) {
-  process.env.DATABASE_URL = 'file:./dev.db';
+  const dbDir = path.resolve(process.cwd(), 'prisma');
+  if (!fs.existsSync(dbDir)) {
+    try { fs.mkdirSync(dbDir, { recursive: true }); } catch (e) {}
+  }
+  const dbPath = path.join(dbDir, 'dev.db');
+  process.env.DATABASE_URL = `file:${dbPath}`;
 }
 
 const globalForPrisma = global as unknown as { prisma: PrismaClient };
