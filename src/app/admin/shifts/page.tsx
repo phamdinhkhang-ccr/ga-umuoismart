@@ -1,319 +1,424 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   History,
   Calendar,
   Building2,
   Filter,
-  RefreshCw,
-  Clock,
+  RotateCcw,
+  ReceiptText,
   DollarSign,
+  TrendingUp,
   CreditCard,
+  Clock,
+  ArrowUpRight,
+  ArrowDownRight,
   AlertCircle,
   CheckCircle2,
-  User,
-  ArrowRightLeft,
-  FileSpreadsheet
+  Sparkles,
 } from 'lucide-react';
 
-export interface ClosedShiftAudit {
-  id: string;
-  shiftName: string;
-  staff: string;
-  branch: string;
-  openingCash: number;       // Tiền đầu ca
-  closingCash: number;       // Tiền cuối ca
-  cashSales: number;         // Tiền mặt đơn
-  transferSales: number;     // CK đơn
-  unpaidSales: number;       // Chưa thanh toán / chờ CK
-  cashExpenses: number;      // Chi tiền mặt
-  transferExpenses: number;  // Chi chuyển khoản
-  openedAt: string;          // Mở ca
-  closedAt: string;          // Đóng ca
-  variance: number;          // Chênh lệch
-  note: string;              // Ghi chú
-}
+import { useBranches } from '@/hooks/useBranches';
 
-const MOCK_CLOSED_SHIFTS: ClosedShiftAudit[] = [];
+export default function ShiftsManagementPage() {
+  const { branches } = useBranches();
+  const todayStr = new Date().toISOString().split('T')[0];
 
-export default function ShiftsAuditHistoryPage() {
-  const [filterDate, setFilterDate] = useState<string>('2026-09-04');
-  const [filterBranch, setFilterBranch] = useState<string>('ALL');
-  const [shiftsList] = useState<ClosedShiftAudit[]>(MOCK_CLOSED_SHIFTS);
+  const [date, setDate] = useState<string>(todayStr);
+  const [branchId, setBranchId] = useState<string>('all');
 
-  // Filtered Shifts
-  const filteredShifts = useMemo(() => {
-    return shiftsList.filter(shift => {
-      const matchBranch = filterBranch === 'ALL' || shift.branch === filterBranch;
-      const dateParts = filterDate.split('-');
-      const formattedDateFilter = dateParts.length === 3 ? `${partsFormat(dateParts[2])}/${partsFormat(dateParts[1])}/${dateParts[0]}` : '';
-      const matchDate = !filterDate || shift.openedAt.includes(formattedDateFilter) || shift.openedAt.includes(filterDate);
-      return matchBranch;
-    });
-  }, [shiftsList, filterDate, filterBranch]);
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
-  function partsFormat(str: string) {
-    return str.length === 1 ? `0${str}` : str;
-  }
-
-  // Summary Metrics Calculations (6 KPI Cards)
-  const summaryMetrics = useMemo(() => {
-    const totalRevenue = filteredShifts.reduce((sum, s) => sum + s.cashSales + s.transferSales, 0);
-    const totalCashSales = filteredShifts.reduce((sum, s) => sum + s.cashSales, 0);
-    const totalTransferSales = filteredShifts.reduce((sum, s) => sum + s.transferSales, 0);
-    const totalUnpaid = filteredShifts.reduce((sum, s) => sum + s.unpaidSales, 0);
-    const totalCashExpenses = filteredShifts.reduce((sum, s) => sum + s.cashExpenses, 0);
-    const totalTransferExpenses = filteredShifts.reduce((sum, s) => sum + s.transferExpenses, 0);
-
-    return {
-      totalRevenue,
-      totalCashSales,
-      totalTransferSales,
-      totalUnpaid,
-      totalCashExpenses,
-      totalTransferExpenses
-    };
-  }, [filteredShifts]);
-
-  const handleReset = () => {
-    setFilterDate('2026-09-04');
-    setFilterBranch('ALL');
+  const fetchShiftsData = () => {
+    setLoading(true);
+    fetch(`/api/shifts?date=${date}&branchId=${branchId}`)
+      .then((res) => res.json())
+      .then((resData) => {
+        if (resData.success) {
+          setData(resData);
+        }
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false));
   };
 
+  useEffect(() => {
+    fetchShiftsData();
+  }, [date, branchId]);
+
+  const handleResetFilter = () => {
+    setDate(todayStr);
+    setBranchId('all');
+  };
+
+  const metrics = data?.metrics || {
+    totalDayRevenue: 0,
+    cashRevenue: 0,
+    bankRevenue: 0,
+    unpaidRevenue: 0,
+    cashExpense: 0,
+    bankExpense: 0,
+  };
+
+  const closedShifts = (data?.shifts || []).filter((s: any) => s.status === 'CLOSED');
+
   return (
-    <div className="p-4 sm:p-6 bg-slate-50 min-h-screen space-y-6">
-      
-      {/* 1. TIÊU ĐỀ & KHỐI BỘ LỌC ĐẦU TRANG */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center space-x-3">
-          <div className="p-3 bg-slate-100 text-slate-800 rounded-xl border border-slate-200">
-            <History className="w-6 h-6" />
+    <div className="space-y-8 font-sans pb-12 transition-colors duration-300">
+      {/* 1. Header & Controls */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5 bg-white dark:bg-[#14171D] p-5 sm:p-6 rounded-2xl border border-slate-200 dark:border-neutral-800/80 shadow-xs">
+        <div className="flex items-start gap-3.5">
+          <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-500 dark:text-amber-400 flex items-center justify-center font-bold shrink-0 mt-0.5">
+            <History className="w-6 h-6 stroke-[1.75]" />
           </div>
           <div>
-            <h1 className="text-xl font-extrabold text-slate-900 flex items-center gap-2">
-              Quản lý các ca
-            </h1>
-            <p className="text-xs text-slate-600 mt-0.5">Tổng hợp theo từng ca đã đóng, mặc định hiển thị theo ngày hiện tại.</p>
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-[#FAFAF9] tracking-tight">
+                Quản lý các ca làm việc
+              </h1>
+              <span className="bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1">
+                <Sparkles className="w-3.5 h-3.5" /> Đối soát ca F&B Standard
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-neutral-400 mt-1 font-normal">
+              Bóc tách dòng tiền mặt & chuyển khoản đơn hàng, chi từ két & ngân hàng theo từng ca làm việc.
+            </p>
           </div>
         </div>
 
-        {/* Thanh Lọc (Filter Bar Controls) */}
+        {/* Filter Controls Right */}
         <div className="flex flex-wrap items-center gap-3">
-          {/* Ngày Datepicker */}
-          <div className="flex items-center space-x-1.5 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold">
-            <Calendar className="w-4 h-4 text-slate-500" />
-            <span className="text-slate-500">Ngày:</span>
-            <input
-              type="date"
-              value={filterDate}
-              onChange={(e) => setFilterDate(e.target.value)}
-              className="bg-transparent font-bold text-slate-900 outline-none cursor-pointer"
-            />
-          </div>
-
-          {/* Cơ sở Dropdown */}
-          <div className="flex items-center space-x-1.5 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold">
-            <Building2 className="w-4 h-4 text-slate-500" />
-            <select
-              value={filterBranch}
-              onChange={(e) => setFilterBranch(e.target.value)}
-              className="bg-transparent font-bold text-slate-900 outline-none cursor-pointer"
-            >
-              <option value="ALL">Tất cả cơ sở</option>
-              <option value="CƠ SỞ VIN SMART CITY">CƠ SỞ VIN SMART CITY</option>
-              <option value="Chi Nhánh Gà Ủ Muối Cầu Giấy">Chi Nhánh Cầu Giấy</option>
-              <option value="Chi Nhánh Gà Ủ Muối Đống Đa">Chi Nhánh Đống Đa</option>
-            </select>
-          </div>
-
-          {/* Action Buttons */}
+          {/* All Dates Toggle */}
           <button
-            onClick={() => {}}
-            className="bg-slate-800 hover:bg-slate-900 text-white font-extrabold px-4 py-2 rounded-xl text-xs shadow-xs transition flex items-center space-x-1.5 cursor-pointer"
+            onClick={() => setDate(date === 'all' ? todayStr : 'all')}
+            className={`text-xs font-bold px-3 py-2.5 rounded-xl border transition flex items-center gap-1.5 cursor-pointer ${
+              date === 'all'
+                ? 'bg-amber-500 text-neutral-950 border-amber-500 shadow'
+                : 'bg-slate-50 dark:bg-[#0B0D11] text-slate-700 dark:text-neutral-300 border-slate-300 dark:border-neutral-800 hover:border-amber-500/50'
+            }`}
+            title="Xem tất cả ca làm việc trong lịch sử"
+          >
+            <Calendar className="w-3.5 h-3.5" />
+            <span>{date === 'all' ? '🗓️ Tất cả ngày' : 'Xem theo ngày'}</span>
+          </button>
+
+          {/* Date Picker */}
+          {date !== 'all' && (
+            <div className="relative">
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="bg-slate-50 dark:bg-[#0B0D11] text-xs font-semibold text-slate-800 dark:text-neutral-200 pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 dark:border-neutral-800 hover:border-amber-500/50 focus:border-amber-500 focus:outline-none transition-all cursor-pointer"
+              />
+              <Calendar className="w-4 h-4 text-amber-500 dark:text-amber-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none stroke-[1.75]" />
+            </div>
+          )}
+
+          {/* Branch Dropdown */}
+          <div className="relative">
+            <select
+              value={branchId}
+              onChange={(e) => setBranchId(e.target.value)}
+              className="appearance-none bg-slate-50 dark:bg-[#0B0D11] text-xs font-semibold text-slate-800 dark:text-neutral-200 pl-9 pr-8 py-2.5 rounded-xl border border-slate-300 dark:border-neutral-800 hover:border-amber-500/50 focus:border-amber-500 focus:outline-none transition-all cursor-pointer"
+            >
+              <option value="all">🏢 Tất cả cơ sở</option>
+              {(data?.branchList || branches).map((b: any) => (
+                <option key={b.id} value={b.id}>
+                  📍 {b.name} ({b.badge || b.id})
+                </option>
+              ))}
+            </select>
+            <Building2 className="w-4 h-4 text-amber-500 dark:text-amber-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none stroke-[1.75]" />
+          </div>
+
+          {/* Filter Button */}
+          <button
+            onClick={fetchShiftsData}
+            className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 dark:bg-amber-500 dark:hover:bg-amber-400 text-white dark:text-neutral-950 px-4 py-2.5 rounded-xl font-bold text-xs shadow-xs transition cursor-pointer"
           >
             <Filter className="w-3.5 h-3.5" />
             <span>Lọc</span>
           </button>
 
+          {/* Reset Button */}
           <button
-            onClick={handleReset}
-            className="bg-white border border-slate-200 hover:border-slate-300 text-slate-700 font-bold px-4 py-2 rounded-xl text-xs transition flex items-center space-x-1.5 cursor-pointer"
+            onClick={handleResetFilter}
+            className="flex items-center gap-1.5 bg-slate-100 dark:bg-[#0B0D11] hover:bg-slate-200 dark:hover:bg-neutral-800 text-slate-600 dark:text-neutral-300 px-3.5 py-2.5 rounded-xl font-semibold text-xs border border-slate-300 dark:border-neutral-800 transition cursor-pointer"
           >
-            <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
+            <RotateCcw className="w-3.5 h-3.5" />
             <span>Reset</span>
           </button>
         </div>
       </div>
 
-      {/* 2. HÀNG THẺ CHỈ SỐ TỔNG HỢP CA (6 KPI CARDS - GRID 3x2) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        
-        {/* Card 1: Tổng doanh thu ngày */}
-        <div className="bg-white border border-rose-100/80 rounded-2xl p-5 shadow-xs space-y-1.5 border-l-4 border-l-rose-500">
-          <div className="text-xs font-bold text-slate-600">Tổng doanh thu ngày</div>
-          <div className="text-2xl font-extrabold text-slate-900">
-            {summaryMetrics.totalRevenue.toLocaleString('vi-VN')} <span className="text-sm font-normal text-slate-500">đ</span>
+      {/* 2. Dàn 6 Thẻ Thống Kê Dòng Tiền (Financial Metric Cards - 6 Cards) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 my-6">
+        {/* Card 1 - Total Revenue */}
+        <div className="bg-white dark:bg-[#14171D] p-5 rounded-2xl border border-slate-200 dark:border-neutral-800/80 border-l-4 border-l-orange-500 shadow-xs relative overflow-hidden group hover:border-slate-300 dark:hover:border-neutral-700 transition">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-slate-500 dark:text-neutral-400 uppercase tracking-wider">
+              Tổng doanh thu ngày / kỳ
+            </span>
+            <div className="w-9 h-9 rounded-xl bg-orange-500/10 text-orange-500 dark:text-orange-400 flex items-center justify-center">
+              <DollarSign className="w-5 h-5 stroke-[1.75]" />
+            </div>
           </div>
-          <p className="text-[11px] text-slate-500 font-medium">Đơn hàng thành công trong ngày đang lọc</p>
+          <div className="mt-2">
+            <span className="text-2xl font-extrabold text-orange-500 dark:text-orange-400 tracking-tight block">
+              {(metrics.totalDayRevenue || 0).toLocaleString('vi-VN')} đ
+            </span>
+            <span className="text-[11px] text-slate-500 dark:text-neutral-400 font-normal mt-1 block">
+              Tổng tiền đơn hàng hợp lệ trong kỳ
+            </span>
+          </div>
         </div>
 
-        {/* Card 2: Tổng tiền mặt đơn */}
-        <div className="bg-white border border-rose-100/80 rounded-2xl p-5 shadow-xs space-y-1.5 border-l-4 border-l-amber-500">
-          <div className="text-xs font-bold text-slate-600">Tổng tiền mặt đơn</div>
-          <div className="text-2xl font-extrabold text-slate-900">
-            {summaryMetrics.totalCashSales.toLocaleString('vi-VN')} <span className="text-sm font-normal text-slate-500">đ</span>
+        {/* Card 2 - Cash Revenue */}
+        <div className="bg-white dark:bg-[#14171D] p-5 rounded-2xl border border-slate-200 dark:border-neutral-800/80 border-l-4 border-l-amber-500 shadow-xs relative overflow-hidden group hover:border-slate-300 dark:hover:border-neutral-700 transition">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-slate-500 dark:text-neutral-400 uppercase tracking-wider">
+              Tổng tiền mặt đơn
+            </span>
+            <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-500 dark:text-amber-400 flex items-center justify-center">
+              <TrendingUp className="w-5 h-5 stroke-[1.75]" />
+            </div>
           </div>
-          <p className="text-[11px] text-slate-500 font-medium">Tiền mặt nhận từ đơn hàng</p>
+          <div className="mt-2">
+            <span className="text-2xl font-extrabold text-amber-500 dark:text-amber-400 tracking-tight block">
+              {(metrics.cashRevenue || 0).toLocaleString('vi-VN')} đ
+            </span>
+            <span className="text-[11px] text-slate-500 dark:text-neutral-400 font-normal mt-1 block">
+              Gồm đơn tiền mặt & phần tiền mặt đơn hỗn hợp
+            </span>
+          </div>
         </div>
 
-        {/* Card 3: Tổng chuyển khoản đơn */}
-        <div className="bg-white border border-rose-100/80 rounded-2xl p-5 shadow-xs space-y-1.5 border-l-4 border-l-blue-500">
-          <div className="text-xs font-bold text-slate-600">Tổng chuyển khoản đơn</div>
-          <div className="text-2xl font-extrabold text-slate-900">
-            {summaryMetrics.totalTransferSales.toLocaleString('vi-VN')} <span className="text-sm font-normal text-slate-500">đ</span>
+        {/* Card 3 - Bank Transfer Revenue */}
+        <div className="bg-white dark:bg-[#14171D] p-5 rounded-2xl border border-slate-200 dark:border-neutral-800/80 border-l-4 border-l-blue-500 shadow-xs relative overflow-hidden group hover:border-slate-300 dark:hover:border-neutral-700 transition">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-slate-500 dark:text-neutral-400 uppercase tracking-wider">
+              Tổng chuyển khoản đơn
+            </span>
+            <div className="w-9 h-9 rounded-xl bg-blue-500/10 text-blue-500 dark:text-blue-400 flex items-center justify-center">
+              <CreditCard className="w-5 h-5 stroke-[1.75]" />
+            </div>
           </div>
-          <p className="text-[11px] text-slate-500 font-medium">Bao gồm cả đơn đang chờ xác nhận</p>
+          <div className="mt-2">
+            <span className="text-2xl font-extrabold text-blue-500 dark:text-blue-400 tracking-tight block">
+              {(metrics.bankRevenue || 0).toLocaleString('vi-VN')} đ
+            </span>
+            <span className="text-[11px] text-slate-500 dark:text-neutral-400 font-normal mt-1 block">
+              Gồm đơn CK & phần CK đơn hỗn hợp
+            </span>
+          </div>
         </div>
 
-        {/* Card 4: Tổng chưa thanh toán / chờ CK */}
-        <div className="bg-white border border-rose-100/80 rounded-2xl p-5 shadow-xs space-y-1.5 border-l-4 border-l-purple-500">
-          <div className="text-xs font-bold text-slate-600">Tổng chưa thanh toán / chờ CK</div>
-          <div className="text-2xl font-extrabold text-slate-900">
-            {summaryMetrics.totalUnpaid.toLocaleString('vi-VN')} <span className="text-sm font-normal text-slate-500">đ</span>
+        {/* Card 4 - Unpaid Revenue */}
+        <div className="bg-white dark:bg-[#14171D] p-5 rounded-2xl border border-slate-200 dark:border-neutral-800/80 border-l-4 border-l-purple-500 shadow-xs relative overflow-hidden group hover:border-slate-300 dark:hover:border-neutral-700 transition">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-slate-500 dark:text-neutral-400 uppercase tracking-wider">
+              Tổng chưa thanh toán / chờ CK
+            </span>
+            <div className="w-9 h-9 rounded-xl bg-purple-500/10 text-purple-500 dark:text-purple-400 flex items-center justify-center">
+              <Clock className="w-5 h-5 stroke-[1.75]" />
+            </div>
           </div>
-          <p className="text-[11px] text-slate-500 font-medium">Các đơn pending, chuyển khoản chờ hoặc chưa thanh toán</p>
+          <div className="mt-2">
+            <span className="text-2xl font-extrabold text-purple-500 dark:text-purple-400 tracking-tight block">
+              {(metrics.unpaidRevenue || 0).toLocaleString('vi-VN')} đ
+            </span>
+            <span className="text-[11px] text-slate-500 dark:text-neutral-400 font-normal mt-1 block">
+              Các đơn chưa nhận đủ tiền về (paymentStatus != PAID)
+            </span>
+          </div>
         </div>
 
-        {/* Card 5: Tổng chi tiền mặt */}
-        <div className="bg-white border border-rose-100/80 rounded-2xl p-5 shadow-xs space-y-1.5 border-l-4 border-l-rose-600">
-          <div className="text-xs font-bold text-slate-600">Tổng chi tiền mặt</div>
-          <div className="text-2xl font-extrabold text-rose-600">
-            {summaryMetrics.totalCashExpenses.toLocaleString('vi-VN')} <span className="text-sm font-normal text-slate-500">đ</span>
+        {/* Card 5 - Cash Expenses */}
+        <div className="bg-white dark:bg-[#14171D] p-5 rounded-2xl border border-slate-200 dark:border-neutral-800/80 border-l-4 border-l-rose-500 shadow-xs relative overflow-hidden group hover:border-slate-300 dark:hover:border-neutral-700 transition">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-slate-500 dark:text-neutral-400 uppercase tracking-wider">
+              Tổng chi tiền mặt
+            </span>
+            <div className="w-9 h-9 rounded-xl bg-rose-500/10 text-rose-500 dark:text-rose-400 flex items-center justify-center">
+              <ArrowDownRight className="w-5 h-5 stroke-[1.75]" />
+            </div>
           </div>
-          <p className="text-[11px] text-slate-500 font-medium">Chi tiền mặt trong ngày đang lọc</p>
+          <div className="mt-2">
+            <span className="text-2xl font-extrabold text-rose-500 dark:text-rose-400 tracking-tight block">
+              {(metrics.cashExpense || 0).toLocaleString('vi-VN')} đ
+            </span>
+            <span className="text-[11px] text-slate-500 dark:text-neutral-400 font-normal mt-1 block">
+              Phiếu chi xuất két tiền mặt trong kỳ
+            </span>
+          </div>
         </div>
 
-        {/* Card 6: Tổng chi chuyển khoản */}
-        <div className="bg-white border border-rose-100/80 rounded-2xl p-5 shadow-xs space-y-1.5 border-l-4 border-l-indigo-500">
-          <div className="text-xs font-bold text-slate-600">Tổng chi chuyển khoản</div>
-          <div className="text-2xl font-extrabold text-slate-900">
-            {summaryMetrics.totalTransferExpenses.toLocaleString('vi-VN')} <span className="text-sm font-normal text-slate-500">đ</span>
+        {/* Card 6 - Bank Expenses */}
+        <div className="bg-white dark:bg-[#14171D] p-5 rounded-2xl border border-slate-200 dark:border-neutral-800/80 border-l-4 border-l-cyan-500 shadow-xs relative overflow-hidden group hover:border-slate-300 dark:hover:border-neutral-700 transition">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-slate-500 dark:text-neutral-400 uppercase tracking-wider">
+              Tổng chi chuyển khoản
+            </span>
+            <div className="w-9 h-9 rounded-xl bg-cyan-500/10 text-cyan-500 dark:text-cyan-400 flex items-center justify-center">
+              <ArrowUpRight className="w-5 h-5 stroke-[1.75]" />
+            </div>
           </div>
-          <p className="text-[11px] text-slate-500 font-medium">Chi chuyển khoản trong ngày đang lọc</p>
+          <div className="mt-2">
+            <span className="text-2xl font-extrabold text-cyan-500 dark:text-cyan-400 tracking-tight block">
+              {(metrics.bankExpense || 0).toLocaleString('vi-VN')} đ
+            </span>
+            <span className="text-[11px] text-slate-500 dark:text-neutral-400 font-normal mt-1 block">
+              Phiếu chi ngân hàng trong kỳ
+            </span>
+          </div>
         </div>
       </div>
 
-      {/* 3. BẢNG DANH SÁCH CA ĐÃ ĐÓNG (TABLE CHI TIẾT ĐỐI SOÁT) */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+      {/* 3. Bảng Chi Tiết "Danh Sách Ca Đã Đóng" (Shifts Table) */}
+      <div className="bg-white dark:bg-[#14171D] rounded-2xl border border-slate-200 dark:border-neutral-800/80 p-6 shadow-xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-200 dark:border-neutral-800/80">
           <div>
-            <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <FileSpreadsheet className="w-5 h-5 text-orange-600" />
-              Danh sách ca đã đóng
+            <h2 className="font-extrabold text-slate-900 dark:text-[#FAFAF9] text-base sm:text-lg tracking-tight flex items-center gap-2">
+              <ReceiptText className="w-5 h-5 text-amber-500 dark:text-amber-400 stroke-[1.75]" />
+              <span>Danh sách ca đã đóng (Đối soát chốt két)</span>
+              <span className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 text-xs font-bold px-2.5 py-0.5 rounded-full">
+                {closedShifts.length} Ca làm việc
+              </span>
             </h2>
-            <p className="text-xs text-slate-500 mt-0.5">Mỗi dòng là một ca hoàn chỉnh từ lúc mở đến lúc đóng.</p>
+            <p className="text-xs text-slate-500 dark:text-neutral-400 mt-0.5">
+              Tiền cuối ca lý thuyết = Tiền đầu ca + Tiền mặt đơn - Chi tiền mặt
+            </p>
           </div>
-          <span className="text-xs font-extrabold text-slate-600 bg-slate-100 px-3 py-1 rounded-xl">
-            {filteredShifts.length} Ca làm việc
-          </span>
+
+          <a
+            href="/admin/shifts/active"
+            className="self-start sm:self-auto px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-neutral-950 font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5"
+          >
+            <Clock className="w-3.5 h-3.5 stroke-[2]" />
+            <span>Xem Ca Đang Mở ↗</span>
+          </a>
         </div>
 
-        {/* Table scroll container */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs whitespace-nowrap">
-            <thead className="bg-slate-50 border-b border-slate-200 text-slate-700 font-bold uppercase text-[10px] tracking-wider">
-              <tr>
-                <th className="p-3">Ca</th>
-                <th className="p-3">Nhân viên</th>
-                <th className="p-3">Cửa hàng</th>
-                <th className="p-3 text-right">Tiền đầu ca</th>
-                <th className="p-3 text-right">Tiền cuối ca</th>
-                <th className="p-3 text-right">Tiền mặt đơn</th>
-                <th className="p-3 text-right">CK đơn</th>
-                <th className="p-3 text-right">Chưa thanh toán</th>
-                <th className="p-3 text-right">Chi tiền mặt</th>
-                <th className="p-3 text-right">Chi CK</th>
-                <th className="p-3 text-center">Mở ca</th>
-                <th className="p-3 text-center">Đóng ca</th>
-                <th className="p-3">Chênh lệch / Ghi chú</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
-              {filteredShifts.length === 0 ? (
-                <tr>
-                  <td colSpan={13} className="p-8 text-center text-slate-400 font-bold">
-                    Chưa có ca làm việc nào được chốt
-                  </td>
+        {/* Table Container */}
+        <div className="overflow-x-auto scrollbar-thin">
+          {loading ? (
+            <div className="py-12 text-center text-slate-400 dark:text-neutral-500 text-xs font-semibold">
+              Đang tải danh sách ca làm việc...
+            </div>
+          ) : closedShifts.length === 0 ? (
+            <div className="py-16 text-center space-y-3">
+              <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 text-slate-400 dark:text-neutral-500 flex items-center justify-center mx-auto">
+                <AlertCircle className="w-6 h-6 stroke-[1.5]" />
+              </div>
+              <p className="text-xs font-bold text-slate-600 dark:text-neutral-400">
+                Chưa có ca làm việc nào được chốt trong ngày đang chọn
+              </p>
+            </div>
+          ) : (
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="bg-slate-50 dark:bg-[#0B0D11] border-b border-slate-200 dark:border-neutral-800 text-slate-500 dark:text-neutral-400 font-bold uppercase text-[10px] tracking-wider whitespace-nowrap">
+                  <th className="py-3 px-3">CA</th>
+                  <th className="py-3 px-3">NHÂN VIÊN</th>
+                  <th className="py-3 px-3">CỬA HÀNG</th>
+                  <th className="py-3 px-3 text-right">TIỀN ĐẦU CA</th>
+                  <th className="py-3 px-3 text-right">TIỀN MẶT ĐƠN</th>
+                  <th className="py-3 px-3 text-right">CK ĐƠN</th>
+                  <th className="py-3 px-3 text-right">CHƯA THANH TOÁN</th>
+                  <th className="py-3 px-3 text-right">CHI TIỀN MẶT</th>
+                  <th className="py-3 px-3 text-right">CHI CK</th>
+                  <th className="py-3 px-3 text-right">TIỀN CUỐI CA LÝ THUYẾT</th>
+                  <th className="py-3 px-3">MỞ CA - ĐÓNG CA</th>
+                  <th className="py-3 px-3">GHI CHÚ TỒN KHO</th>
                 </tr>
-              ) : (
-                filteredShifts.map((shift) => (
-                  <tr key={shift.id} className="hover:bg-slate-50/80 transition">
-                    {/* Ca */}
-                    <td className="p-3 font-bold text-orange-600">{shift.shiftName}</td>
-                    
-                    {/* Nhân viên */}
-                    <td className="p-3 font-semibold text-slate-900">{shift.staff}</td>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-neutral-800/80 font-medium text-slate-800 dark:text-neutral-200">
+                {closedShifts.map((shift: any) => {
+                  const expectedEndCash = shift.finalCashExpected || (shift.initialCash + shift.cashSales - shift.cashExpenses);
+                  const disc = shift.discrepancy || 0;
 
-                    {/* Cửa hàng */}
-                    <td className="p-3 text-slate-700">{shift.branch}</td>
+                  return (
+                    <tr
+                      key={shift.id}
+                      className="hover:bg-slate-50/80 dark:hover:bg-neutral-900/60 transition-colors whitespace-nowrap"
+                    >
+                      {/* 1. CA */}
+                      <td className="py-3.5 px-3 font-extrabold text-amber-600 dark:text-amber-400">
+                        {shift.shiftName}
+                      </td>
 
-                    {/* Tiền đầu ca */}
-                    <td className="p-3 text-right font-extrabold text-slate-900">
-                      {shift.openingCash.toLocaleString('vi-VN')} đ
-                    </td>
+                      {/* 2. NHÂN VIÊN */}
+                      <td className="py-3.5 px-3 font-bold text-slate-900 dark:text-white">
+                        {shift.staffName}
+                      </td>
 
-                    {/* Tiền cuối ca */}
-                    <td className="p-3 text-right font-extrabold text-emerald-700">
-                      {shift.closingCash.toLocaleString('vi-VN')} đ
-                    </td>
+                      {/* 3. CỬA HÀNG */}
+                      <td className="py-3.5 px-3">
+                        <span className="bg-slate-100 dark:bg-neutral-800 text-slate-700 dark:text-neutral-300 px-2 py-0.5 rounded-md text-[11px] font-semibold border border-slate-200 dark:border-neutral-700">
+                          {shift.branchName}
+                        </span>
+                      </td>
 
-                    {/* Tiền mặt đơn */}
-                    <td className="p-3 text-right font-bold text-slate-700">
-                      {shift.cashSales.toLocaleString('vi-VN')} đ
-                    </td>
+                      {/* 4. TIỀN ĐẦU CA */}
+                      <td className="py-3.5 px-3 text-right font-semibold text-slate-700 dark:text-neutral-300">
+                        {shift.initialCash.toLocaleString('vi-VN')} đ
+                      </td>
 
-                    {/* CK đơn */}
-                    <td className="p-3 text-right font-bold text-slate-700">
-                      {shift.transferSales.toLocaleString('vi-VN')} đ
-                    </td>
+                      {/* 5. TIỀN MẶT ĐƠN */}
+                      <td className="py-3.5 px-3 text-right font-bold text-amber-600 dark:text-amber-400">
+                        {shift.cashSales.toLocaleString('vi-VN')} đ
+                      </td>
 
-                    {/* Chưa thanh toán */}
-                    <td className="p-3 text-right font-bold text-amber-600">
-                      {shift.unpaidSales.toLocaleString('vi-VN')} đ
-                    </td>
+                      {/* 6. CK ĐƠN */}
+                      <td className="py-3.5 px-3 text-right font-bold text-blue-600 dark:text-blue-400">
+                        {shift.bankSales.toLocaleString('vi-VN')} đ
+                      </td>
 
-                    {/* Chi tiền mặt */}
-                    <td className="p-3 text-right font-bold text-rose-600">
-                      -{shift.cashExpenses.toLocaleString('vi-VN')} đ
-                    </td>
+                      {/* 7. CHƯA THANH TOÁN */}
+                      <td className="py-3.5 px-3 text-right font-semibold text-purple-600 dark:text-purple-400">
+                        {shift.unpaidSales.toLocaleString('vi-VN')} đ
+                      </td>
 
-                    {/* Chi CK */}
-                    <td className="p-3 text-right font-bold text-slate-700">
-                      -{shift.transferExpenses.toLocaleString('vi-VN')} đ
-                    </td>
+                      {/* 8. CHI TIỀN MẶT */}
+                      <td className="py-3.5 px-3 text-right font-semibold text-rose-600 dark:text-rose-400">
+                        {shift.cashExpenses.toLocaleString('vi-VN')} đ
+                      </td>
 
-                    {/* Mở ca */}
-                    <td className="p-3 text-center text-slate-500 text-[11px]">{shift.openedAt}</td>
+                      {/* 9. CHI CK */}
+                      <td className="py-3.5 px-3 text-right font-semibold text-cyan-600 dark:text-cyan-400">
+                        {shift.bankExpenses.toLocaleString('vi-VN')} đ
+                      </td>
 
-                    {/* Đóng ca */}
-                    <td className="p-3 text-center text-slate-500 text-[11px]">{shift.closedAt}</td>
+                      {/* 10. TIỀN CUỐI CA LÝ THUYẾT */}
+                      <td className="py-3.5 px-3 text-right font-black dark:text-emerald-400 text-emerald-600 text-sm">
+                        {expectedEndCash.toLocaleString('vi-VN')} đ
+                      </td>
 
-                    {/* Chênh lệch / Ghi chú */}
-                    <td className="p-3 max-w-xs truncate text-slate-600" title={shift.note}>
-                      <span className={`font-bold mr-1.5 ${shift.variance === 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                        {shift.variance === 0 ? '0 đ (Khớp két)' : `${shift.variance > 0 ? '+' : ''}${shift.variance.toLocaleString('vi-VN')} đ`}
-                      </span>
-                      • {shift.note}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                      {/* 11. MỞ CA - ĐÓNG CA */}
+                      <td className="py-3.5 px-3 text-[11px] text-slate-500 dark:text-neutral-400">
+                        <div>
+                          {new Date(shift.startTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                          {' - '}
+                          {shift.endTime
+                            ? new Date(shift.endTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+                            : '-'}
+                        </div>
+                      </td>
+
+                      {/* 12. GHI CHÚ TỒN KHO */}
+                      <td className="py-3.5 px-3 text-slate-500 max-w-[200px] truncate" title={shift.inventoryNote}>
+                        {shift.inventoryNote || '-'}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
-
     </div>
   );
 }

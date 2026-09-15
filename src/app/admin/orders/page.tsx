@@ -1,895 +1,2426 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
-import Link from 'next/link';
-import { useAuth } from '@/context/AuthContext';
-import { getAnalyticsData, getBranches, updateOrderStatus } from '@/actions/orders';
-import { Branch, Order, OrderStatus } from '@/types/database';
-import { restoreInventoryForOrder, deductInventoryForOrder, getItem, playBeep } from '@/lib/store';
-import ReceiptModal from '@/components/ReceiptModal';
-import TransferBranchModal from '@/components/TransferBranchModal';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import {
-  ClipboardList,
+  ShoppingBag,
+  Plus,
   Search,
-  Filter,
+  RefreshCw,
+  FileSpreadsheet,
   Printer,
   Eye,
-  ArrowRightLeft,
-  XCircle,
+  Bell,
+  BellRing,
   Clock,
-  CheckCircle2,
-  Truck,
-  Store,
-  MapPin,
-  Phone,
-  User,
+  Sparkles,
   X,
-  Plus,
-  Download,
-  Calendar,
-  CreditCard,
-  QrCode,
-  RotateCcw,
-  Sparkles
+  Trash2,
+  CheckCircle2,
+  AlertTriangle,
+  Flame,
+  Check,
+  ChevronDown,
+  Pencil,
 } from 'lucide-react';
-import { supabase } from '@/lib/supabaseClient';
+import PhoneActionCell from '@/components/PhoneActionCell';
+import * as XLSX from 'xlsx';
+import { useBranches, detectBranchIdFromText } from '@/hooks/useBranches';
 
-const RICH_MOCK_ORDERS: Order[] = [
-  {
-    id: 'ord-9672',
-    order_code: 'OD9672',
-    customer_name: 'Hẻm Xéo',
-    customer_phone: '0984263340',
-    shipping_address: 'Số 12 Ngõ 88 Cầu Giấy, Hà Nội',
-    district: 'Quận Cầu Giấy',
-    city: 'Hà Nội',
-    branch_id: 'b1111111-1111-1111-1111-111111111111',
-    branch: { id: 'b1', name: 'CƠ SỞ VIN SMART CITY', address: 'Tòa S2.01 Vin Smart City', district: 'Nam Từ Liêm', city: 'Hà Nội', phone: '0901234567' },
-    items: [
-      { menu_item_id: 'm1', item_name: 'Gà Ủ Muối Nguyên Con', quantity: 1, unit_price: 190000, cost_price: 110000, subtotal: 190000 },
-      { menu_item_id: 'm3', item_name: 'Chân gà sả tắc', quantity: 2, unit_price: 65000, cost_price: 32000, subtotal: 130000 }
-    ],
-    subtotal: 365000,
-    discount_amount: 95000,
-    final_amount: 270000,
-    estimated_profit: 96000,
-    voucher_code: 'KM95K',
-    note: 'Giao ngay trước 12h, cho thêm 2 bịch nước chấm',
-    status: 'PAID',
-    created_at: '2026-09-04 14:15:00',
-    updated_at: '2026-09-04 14:15:00'
-  },
-  {
-    id: 'ord-9671',
-    order_code: 'OD9671',
-    customer_name: 'KH-1788490501',
-    customer_phone: '0912888999',
-    shipping_address: '456 Nguyễn Trãi, Phường Thanh Xuân',
-    district: 'Quận Thanh Xuân',
-    city: 'Hà Nội',
-    branch_id: 'b2222222-2222-2222-2222-222222222222',
-    branch: { id: 'b2', name: 'Chi Nhánh Gà Ủ Muối Cầu Giấy', address: '88 Cầu Giấy', district: 'Cầu Giấy', city: 'Hà Nội', phone: '0902345678' },
-    items: [
-      { menu_item_id: 'm8', item_name: 'Nem Ngựa 10 Cuốn Special', quantity: 1, unit_price: 117500, cost_price: 60000, subtotal: 117500 }
-    ],
-    subtotal: 117500,
-    discount_amount: 0,
-    final_amount: 117500,
-    estimated_profit: 57500,
-    voucher_code: null,
-    note: 'Khách gọi trước khi đến',
-    status: 'RECEIVED',
-    created_at: '2026-09-04 13:40:00',
-    updated_at: '2026-09-04 13:40:00'
-  },
-  {
-    id: 'ord-9670',
-    order_code: 'OD9670',
-    customer_name: 'Live 4/9',
-    customer_phone: '0977665544',
-    shipping_address: '789 Xô Viết Nghệ Tĩnh',
-    district: 'Quận Bình Thạnh',
-    city: 'Hồ Chí Minh',
-    branch_id: 'b3333333-3333-3333-3333-333333333333',
-    branch: { id: 'b3', name: 'Chi Nhánh Gà Ủ Muối Đống Đa', address: '12 Đống Đa', district: 'Đống Đa', city: 'Hà Nội', phone: '0903456789' },
-    items: [
-      { menu_item_id: 'm1', item_name: 'Gà Ủ Muối Nguyên Con (Kèm Nước Chấm)', quantity: 1, unit_price: 190000, cost_price: 110000, subtotal: 190000 }
-    ],
-    subtotal: 190000,
-    discount_amount: 0,
-    final_amount: 190000,
-    estimated_profit: 80000,
-    voucher_code: null,
-    note: 'Đơn từ Livestream TikTok 4/9',
-    status: 'SHIPPING',
-    created_at: '2026-09-04 12:20:00',
-    updated_at: '2026-09-04 12:20:00'
-  },
-  {
-    id: 'ord-9669',
-    order_code: 'OD9669',
-    customer_name: 'Anh Tuấn',
-    customer_phone: '0988776655',
-    shipping_address: '456 Điện Biên Phủ',
-    district: 'Quận 3',
-    city: 'Hồ Chí Minh',
-    branch_id: 'b1111111-1111-1111-1111-111111111111',
-    branch: { id: 'b1', name: 'CƠ SỞ VIN SMART CITY', address: 'Tòa S2.01 Vin Smart City', district: 'Nam Từ Liêm', city: 'Hà Nội', phone: '0901234567' },
-    items: [
-      { menu_item_id: 'm4', item_name: 'Cánh Gà Ủ Muối (Phần 4 Cánh)', quantity: 1, unit_price: 85000, cost_price: 45000, subtotal: 85000 },
-      { menu_item_id: 'm6', item_name: 'Trà Tắc Khổng Lồ', quantity: 2, unit_price: 20000, cost_price: 6000, subtotal: 40000 }
-    ],
-    subtotal: 125000,
-    discount_amount: 20000,
-    final_amount: 105000,
-    estimated_profit: 48000,
-    voucher_code: 'HALO20',
-    note: 'Đã hủy đơn do khách đổi ý',
-    status: 'CANCELLED',
-    created_at: '2026-09-04 11:05:00',
-    updated_at: '2026-09-04 11:05:00'
+interface OrderItem {
+  id?: string;
+  productId: string;
+  productName: string;
+  quantity: number;
+  price: number;
+  subtotal: number;
+}
+
+interface OrderRecord {
+  id: string;
+  orderCode: string;
+  customerName: string;
+  customerPhone: string;
+  deliveryAddress: string;
+  note: string | null;
+  status: string; // PENDING, CONFIRMED, DELIVERING, COMPLETED, CANCELLED
+  paymentStatus: string; // UNPAID, PAID
+  paymentMethod: string; // COD, BANK_TRANSFER
+  totalAmount: number;
+  cashAmount?: number | null;
+  transferAmount?: number | null;
+  discountAmount?: number | null;
+  shippingFee?: number | null;
+  branchId?: string | null;
+  sellerName?: string | null;
+  sourceTag?: string | null;
+  carrierName?: string | null;
+  driverName?: string | null;
+  driverPhone?: string | null;
+  trackingUrl?: string | null;
+  shippedAt?: string | null;
+  items: OrderItem[];
+  createdAt: string;
+}
+
+interface ProductItem {
+  id: string;
+  name: string;
+  price: number;
+  image?: string;
+  isAvailable: boolean;
+}
+
+const formatOrderDateTime = (dateStr?: string) => {
+  if (!dateStr) return '';
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    const hours = String(d.getHours()).padStart(2, '0');
+    const mins = String(d.getMinutes()).padStart(2, '0');
+    return `${day}/${month}/${year} ${hours}:${mins}`;
+  } catch (e) {
+    return dateStr;
   }
-];
+};
 
 export default function CentralizedOrdersPage() {
-  const { user } = useAuth();
-  const [orders, setOrders] = useState<Order[]>(RICH_MOCK_ORDERS);
-  const [branches, setBranches] = useState<Branch[]>([]);
-  
-  // Filter States
-  const [searchQuery, setSearchQuery] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<string>('ALL');
-  const [selectedBranch, setSelectedBranch] = useState<string>('ALL');
-  const [statusTab, setStatusTab] = useState<string>('ALL');
-  const [startDate, setStartDate] = useState<string>('');
-  const [endDate, setEndDate] = useState<string>('');
+  const [orders, setOrders] = useState<OrderRecord[]>([]);
+  const [dbProducts, setDbProducts] = useState<ProductItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Modals
-  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
-  const [printOrder, setPrintOrder] = useState<Order | null>(null);
-  const [transferOrder, setTransferOrder] = useState<Order | null>(null);
-  const [targetBranchId, setTargetBranchId] = useState<string>('');
+  // Filters State
+  const [searchTerm, setSearchTerm] = useState('');
+  const [paymentFilter, setPaymentFilter] = useState('ALL');
+  const [branchFilter, setBranchFilter] = useState('ALL');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
 
-  const loadData = useCallback(async () => {
+  const [paymentConfig, setPaymentConfig] = useState<{
+    bankId: string;
+    bankName: string;
+    accountNumber: string;
+    accountName: string;
+    qrTemplate: string;
+    transferSyntax: string;
+  }>({
+    bankId: 'MB',
+    bankName: 'MBBank',
+    accountNumber: '0988888888',
+    accountName: 'NGUYEN VAN KHANG',
+    qrTemplate: 'compact2',
+    transferSyntax: 'GUM [Mã_Đơn]'
+  });
+
+  const fetchPaymentConfigForBranch = useCallback(async (bId?: string) => {
     try {
-      const [bList, analyticsRes] = await Promise.all([
-        getBranches(),
-        getAnalyticsData('all', 'all')
-      ]);
-      setBranches(bList || []);
-
-      let supabaseOrders: any[] = [];
-      try {
-        let query = supabase
-          .from('orders')
-          .select('*')
-          .order('created_at', { ascending: false });
-
-        if (user && user.role !== 'SUPER_ADMIN') {
-          const userBId = user.branch_id;
-          const userBName = user.branch_name;
-          const conds: string[] = [];
-          if (userBId) conds.push(`branch_id.eq.${userBId}`);
-          if (userBName) {
-            conds.push(`branch_name.ilike.%${userBName}%`);
-            conds.push(`branch.ilike.%${userBName}%`);
-          }
-          if (conds.length > 0) {
-            query = query.or(conds.join(','));
-          }
-        }
-
-        const { data: dbOrders, error: dbError } = await query;
-        if (!dbError && Array.isArray(dbOrders)) {
-          supabaseOrders = dbOrders;
-        }
-      } catch (e) {
-        console.warn('Supabase DB orders fetch exception:', e);
+      const url = bId && bId !== 'ALL'
+        ? `/api/settings/payment?branchId=${bId}`
+        : '/api/settings/payment';
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data.config) {
+        setPaymentConfig(data.config);
       }
-
-      let localOrders = getItem<any[]>('pos_orders_data', []);
-      let cloudOrders: any[] = [];
-
-      try {
-        const cloudRes = await fetch('/api/orders?limit=20', {
-          headers: { 'Accept': 'application/json' },
-          cache: 'no-store'
-        });
-        if (cloudRes.ok) {
-          const contentType = cloudRes.headers.get('content-type') || '';
-          if (contentType.includes('application/json')) {
-            const cloudData = await cloudRes.json();
-            if (cloudData && Array.isArray(cloudData.orders)) {
-              cloudOrders = cloudData.orders;
-            }
-          }
-        }
-      } catch (e) {
-        console.warn('Orders silent fetch bypass:', e);
-      }
-
-      // Merge Supabase DB, Cloud & Local Orders securely by ID / Code
-      const mergedMap = new Map();
-      supabaseOrders.forEach((o: any) => mergedMap.set(o.id || o.order_code, o));
-      cloudOrders.forEach((o: any) => {
-        const key = o.id || o.order_code;
-        if (!mergedMap.has(key)) mergedMap.set(key, o);
-      });
-      (localOrders || []).forEach((o: any) => {
-        const key = o.id || o.order_code;
-        if (!mergedMap.has(key)) mergedMap.set(key, o);
-      });
-      const combinedRaw = Array.from(mergedMap.values());
-
-      let mockOrders = analyticsRes?.orders || [];
-
-      // Normalize local & cloud orders to ensure every single required field exists defensively
-      const normalizedLocal: Order[] = combinedRaw.map((o: any) => {
-        const orderId = o.id || o.order_code || o.code?.replace('#', '') || `OD${Math.floor(1000 + Math.random() * 9000)}`;
-        const codeStr = o.order_code || o.code?.replace('#', '') || o.id || orderId;
-        const custName = o.customer_name || o.customerName || o.name || 'Khách Vãng Lai';
-        const custPhone = o.customer_phone || o.phone || '';
-        const custAddr = o.shipping_address || o.address || o.customer_address || '';
-        const branchObj = typeof o.branch === 'object' && o.branch !== null ? o.branch : { id: o.branch_id || o.branchId || 'b1', name: o.branchName || o.branch || 'CƠ SỞ VIN SMART CITY' };
-        const bId = o.branch_id || o.branchId || branchObj.id || 'b1';
-        const itemsList = (o.items || o.order_items || []).map((i: any) => ({
-          menu_item_id: i.menu_item_id || i.id || 'm1',
-          item_name: i.item_name || i.name || 'Gà Ủ Muối Nguyên Con',
-          quantity: i.quantity || 1,
-          unit_price: i.unit_price || i.price || 0,
-          cost_price: i.cost_price || Math.round((i.price || i.unit_price || 0) * 0.55),
-          subtotal: i.subtotal || (i.price || i.unit_price || 0) * (i.quantity || 1)
-        }));
-        const totalAmt = typeof o.final_amount === 'number' ? o.final_amount : (o.totalAmount || o.total_amount || o.subtotal || 0);
-
-        return {
-          ...o,
-          id: orderId,
-          order_code: codeStr,
-          code: `#${codeStr}`,
-          customer_name: custName,
-          customerName: custName,
-          customer_phone: custPhone,
-          phone: custPhone,
-          shipping_address: custAddr,
-          address: custAddr,
-          branch_id: bId,
-          branchId: bId,
-          branch: branchObj,
-          branchName: branchObj.name || 'CƠ SỞ VIN SMART CITY',
-          items: itemsList,
-          subtotal: totalAmt,
-          discount_amount: o.discount_amount || 0,
-          final_amount: totalAmt,
-          totalAmount: totalAmt,
-          status: o.status || 'RECEIVED',
-          created_at: o.created_at || o.createdAt || new Date().toISOString()
-        };
-      });
-
-      const localIdSet = new Set(normalizedLocal.map((o: any) => o.id || o.order_code));
-      const extraMocks = mockOrders.filter((o: any) => !localIdSet.has(o.id) && !localIdSet.has(o.order_code));
-
-      let allOrders = [...normalizedLocal, ...extraMocks];
-      allOrders.sort((a, b) => new Date(b.created_at || (b as any).createdAt || 0).getTime() - new Date(a.created_at || (a as any).createdAt || 0).getTime());
-      setOrders(allOrders);
     } catch (e) {
-      console.warn('Error loading orders:', e);
+      console.error('Error loading branch payment config:', e);
     }
   }, []);
 
   useEffect(() => {
-    loadData();
+    fetchPaymentConfigForBranch(branchFilter);
+  }, [branchFilter, fetchPaymentConfigForBranch]);
 
-    // Supabase Realtime Order Subscription ('orders-realtime-staff')
-    const orderSubscription = supabase
-      .channel('orders-realtime-staff')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'orders' },
-        (payload: any) => {
-          if (payload.eventType === 'INSERT') {
-            try {
-              playBeep();
-            } catch (e) {}
-            loadData();
-          } else {
-            loadData();
-          }
+  // Toast message
+  const [toastMessage, setToastMessage] = useState('');
+
+  const [statusTab, setStatusTab] = useState('ALL'); // ALL, PENDING, CONFIRMED, DELIVERING, COMPLETED, CANCELLED
+
+  const [currentUser, setCurrentUser] = useState<{
+    role: string;
+    branchId?: string | null;
+    branchIds?: string[];
+  } | null>(null);
+
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.user) {
+          setCurrentUser(data.user);
         }
-      )
-      .subscribe();
+      })
+      .catch(console.error);
+  }, []);
 
-    const intervalId = setInterval(() => {
-      loadData();
-    }, 2500);
+  const { branches } = useBranches();
 
-    const handleUpdate = () => loadData();
-    const handleStorage = (e: StorageEvent) => {
-      if (
-        e.key === 'pos_orders_data' || 
-        e.key === 'pos_order_sync_trigger' || 
-        e.key === 'pos_new_order_event' || 
-        e.key === 'pos_last_order_ping' || 
-        e.key === 'gum_smart_orders_v3'
-      ) {
-        handleUpdate();
-      }
-    };
+  const availableBranches = (currentUser?.role === 'MANAGER' && currentUser.branchIds && currentUser.branchIds.length > 0)
+    ? branches.filter((b) => currentUser.branchIds!.includes(b.id) || currentUser.branchIds!.includes(b.code))
+    : branches;
 
-    window.addEventListener('gum_store_update', handleUpdate);
-    window.addEventListener('storage', handleStorage);
-    window.addEventListener('app_order_created', handleUpdate);
-    window.addEventListener('new_order_placed', handleUpdate);
-    window.addEventListener('new_order_event', handleUpdate);
+  // Modals State
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState<OrderRecord | null>(null);
+  const [printBillOrder, setPrintBillOrder] = useState<OrderRecord | null>(null);
+  const [confirmPaidOrderModal, setConfirmPaidOrderModal] = useState<{ id: string; targetStatus: string } | null>(null);
 
-    return () => {
-      try {
-        supabase.removeChannel(orderSubscription);
-      } catch (e) {}
-      clearInterval(intervalId);
-      window.removeEventListener('gum_store_update', handleUpdate);
-      window.removeEventListener('storage', handleStorage);
-      window.removeEventListener('app_order_created', handleUpdate);
-      window.removeEventListener('new_order_placed', handleUpdate);
-      window.removeEventListener('new_order_event', handleUpdate);
-    };
-  }, [loadData]);
+  // Shipping Modal State
+  const [shippingModalOrder, setShippingModalOrder] = useState<OrderRecord | null>(null);
+  const [shippingCarrierName, setShippingCarrierName] = useState('GrabExpress');
+  const [shippingDriverName, setShippingDriverName] = useState('');
+  const [shippingDriverPhone, setShippingDriverPhone] = useState('');
+  const [shippingTrackingUrl, setShippingTrackingUrl] = useState('');
+  const [submittingShipping, setSubmittingShipping] = useState(false);
 
-  // Handle Quick Status Change with automatic Inventory restoration/deduction
-  const handleStatusChange = async (orderId: string, newStatus: OrderStatus) => {
-    if ((user?.role === 'STAFF' || user?.role === 'BRANCH_STAFF') && newStatus === 'CANCELLED') {
-      alert('⚠️ Nhân viên ca không có quyền hủy đơn hàng. Vui lòng liên hệ Quản Lý Chi Nhánh hoặc Admin!');
+  // AI Parser & Order Form State inside Modal
+  const [rawAiMessage, setRawAiMessage] = useState('');
+  const [parsingAi, setParsingAi] = useState(false);
+  const [aiToast, setAiToast] = useState('');
+
+  // Form Fields
+  const [formCustomerName, setFormCustomerName] = useState('');
+  const [formCustomerPhone, setFormCustomerPhone] = useState('');
+  const [formDeliveryAddress, setFormDeliveryAddress] = useState('');
+  const [formBranchId, setFormBranchId] = useState('cs1');
+  const [formSellerName, setFormSellerName] = useState('Thu ngân POS');
+  const [formPaymentMethod, setFormPaymentMethod] = useState<'COD' | 'BANK_TRANSFER' | 'SPLIT'>('COD');
+  const [formCashAmount, setFormCashAmount] = useState<number>(0);
+  const [formTransferAmount, setFormTransferAmount] = useState<number>(0);
+  const [formSourceTag, setFormSourceTag] = useState('Đơn Mới Web');
+  const [formNotes, setFormNotes] = useState('');
+  const [formShippingFee, setFormShippingFee] = useState(35000);
+  const [formDiscountAmount, setFormDiscountAmount] = useState(0);
+  const [formItems, setFormItems] = useState<OrderItem[]>([]);
+  const [selectedAddProductId, setSelectedAddProductId] = useState('');
+
+  const [formError, setFormError] = useState('');
+  const [submittingOrder, setSubmittingOrder] = useState(false);
+
+  // Edit Order Modal States & Logic
+  const [editingOrder, setEditingOrder] = useState<OrderRecord | null>(null);
+  const [editCustomerName, setEditCustomerName] = useState('');
+  const [editCustomerPhone, setEditCustomerPhone] = useState('');
+  const [editDeliveryAddress, setEditDeliveryAddress] = useState('');
+  const [editBranchId, setEditBranchId] = useState('cs1');
+  const [editNote, setEditNote] = useState('');
+  const [editShippingFee, setEditShippingFee] = useState<number>(0);
+  const [editDiscountAmount, setEditDiscountAmount] = useState<number>(0);
+  const [editPaymentMethod, setEditPaymentMethod] = useState<'COD' | 'BANK_TRANSFER' | 'SPLIT'>('COD');
+  const [editCashAmount, setEditCashAmount] = useState<number>(0);
+  const [editTransferAmount, setEditTransferAmount] = useState<number>(0);
+  const [editStatus, setEditStatus] = useState<string>('PENDING');
+  const [editPaymentStatus, setEditPaymentStatus] = useState<string>('UNPAID');
+  const [editItems, setEditItems] = useState<OrderItem[]>([]);
+  const [editSelectedProductId, setEditSelectedProductId] = useState('');
+  const [submittingEdit, setSubmittingEdit] = useState(false);
+  const [editFormError, setEditFormError] = useState('');
+
+  const editSubtotal = useMemo(() => {
+    return editItems.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+  }, [editItems]);
+
+  const editFinalTotal = useMemo(() => {
+    return Math.max(0, editSubtotal + (Number(editShippingFee) || 0) - (Number(editDiscountAmount) || 0));
+  }, [editSubtotal, editShippingFee, editDiscountAmount]);
+
+  const handleSelectEditSplit = () => {
+    setEditPaymentMethod('SPLIT');
+    setEditCashAmount(0);
+    setEditTransferAmount(editFinalTotal);
+  };
+
+  const handleEditCashChange = (val: number) => {
+    setEditCashAmount(val);
+    setEditTransferAmount(Math.max(0, editFinalTotal - val));
+  };
+
+  const handleEditTransferChange = (val: number) => {
+    setEditTransferAmount(val);
+    setEditCashAmount(Math.max(0, editFinalTotal - val));
+  };
+
+  useEffect(() => {
+    if (editingOrder && editPaymentMethod === 'SPLIT') {
+      setEditTransferAmount(Math.max(0, editFinalTotal - editCashAmount));
+    }
+  }, [editFinalTotal]);
+
+  const handleEditIncreaseQty = (index: number) => {
+    const newItems = [...editItems];
+    newItems[index].quantity += 1;
+    newItems[index].subtotal = newItems[index].quantity * newItems[index].price;
+    setEditItems(newItems);
+  };
+
+  const handleEditDecreaseQty = (index: number) => {
+    const newItems = [...editItems];
+    if (newItems[index].quantity > 1) {
+      newItems[index].quantity -= 1;
+      newItems[index].subtotal = newItems[index].quantity * newItems[index].price;
+      setEditItems(newItems);
+    }
+  };
+
+  const handleEditRemoveItem = (index: number) => {
+    setEditItems(editItems.filter((_, i) => i !== index));
+  };
+
+  const handleEditAddProduct = () => {
+    if (!editSelectedProductId) return;
+    const prod = dbProducts.find((p) => p.id === editSelectedProductId);
+    if (!prod) return;
+    const existingIndex = editItems.findIndex((i) => i.productId === prod.id);
+    if (existingIndex >= 0) {
+      const newItems = [...editItems];
+      newItems[existingIndex].quantity += 1;
+      newItems[existingIndex].subtotal = newItems[existingIndex].quantity * newItems[existingIndex].price;
+      setEditItems(newItems);
+    } else {
+      setEditItems([
+        ...editItems,
+        {
+          productId: prod.id,
+          productName: prod.name,
+          quantity: 1,
+          price: prod.price,
+          subtotal: prod.price,
+        },
+      ]);
+    }
+    setEditSelectedProductId('');
+  };
+
+  const handleOpenEditModal = (order: OrderRecord) => {
+    setEditingOrder(order);
+    setEditCustomerName(order.customerName || '');
+    setEditCustomerPhone(order.customerPhone || '');
+    setEditDeliveryAddress(order.deliveryAddress || '');
+    setEditBranchId(order.branchId || 'cs1');
+    setEditNote(order.note || '');
+    setEditShippingFee(order.shippingFee || 0);
+    setEditDiscountAmount(order.discountAmount || 0);
+    setEditPaymentMethod((order.paymentMethod as 'COD' | 'BANK_TRANSFER' | 'SPLIT') || 'COD');
+    setEditCashAmount((order as any).cashAmount !== undefined ? (order as any).cashAmount : (order.paymentMethod === 'COD' ? order.totalAmount : 0));
+    setEditTransferAmount((order as any).transferAmount !== undefined ? (order as any).transferAmount : (order.paymentMethod === 'BANK_TRANSFER' ? order.totalAmount : 0));
+    setEditStatus(order.status || 'PENDING');
+    setEditPaymentStatus(order.paymentStatus || 'UNPAID');
+    setEditItems((order.items || []).map((i) => ({ ...i })));
+    setEditFormError('');
+  };
+
+  const handleSubmitEditOrder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingOrder) return;
+
+    if (!editCustomerName.trim() || !editCustomerPhone.trim() || !editDeliveryAddress.trim()) {
+      setEditFormError('Vui lòng điền đầy đủ Tên, SĐT và Địa chỉ giao hàng.');
+      return;
+    }
+    if (editItems.length === 0) {
+      setEditFormError('Đơn hàng phải có ít nhất 1 sản phẩm.');
       return;
     }
 
-    const targetOrder = orders.find(o => o.id === orderId);
-    if (targetOrder) {
-      if (newStatus === 'CANCELLED') {
-        restoreInventoryForOrder(targetOrder);
-      } else if (newStatus === 'PAID' || newStatus === 'DELIVERED') {
-        deductInventoryForOrder(targetOrder);
-      }
-    }
+    setSubmittingEdit(true);
+    setEditFormError('');
 
-    setOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, status: newStatus } : o));
-    await updateOrderStatus(orderId, newStatus);
-    if (selectedOrder && selectedOrder.id === orderId) {
-      setSelectedOrder((prev) => prev ? { ...prev, status: newStatus } : null);
-    }
-  };
+    try {
+      const payload = {
+        customerName: editCustomerName.trim(),
+        customerPhone: editCustomerPhone.trim(),
+        deliveryAddress: editDeliveryAddress.trim(),
+        shippingAddress: editDeliveryAddress.trim(),
+        branchId: editBranchId,
+        note: editNote.trim(),
+        shippingFee: Number(editShippingFee) || 0,
+        discountAmount: Number(editDiscountAmount) || 0,
+        paymentMethod: editPaymentMethod,
+        cashAmount: editCashAmount,
+        transferAmount: editTransferAmount,
+        status: editStatus,
+        lifecycleStatus: editStatus,
+        paymentStatus: editPaymentStatus,
+        items: editItems.map((item) => ({
+          productId: item.productId || null,
+          productName: item.productName,
+          quantity: item.quantity,
+          price: item.price,
+        })),
+      };
 
-  // Branch Transfer Handler
-  const handleConfirmTransfer = async () => {
-    if (!transferOrder || !targetBranchId) return;
+      const res = await fetch(`/api/orders/${editingOrder.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
 
-    const targetB = branches.find((b) => b.id === targetBranchId);
-    setOrders((prev) =>
-      prev.map((o) =>
-        o.id === transferOrder.id
-          ? { ...o, branch_id: targetBranchId, branch: targetB }
-          : o
-      )
-    );
-
-    setTransferOrder(null);
-  };
-
-  // Export Filtered Table to CSV/Excel
-  const handleExportExcel = () => {
-    const headers = ['Mã đơn', 'Trạng thái', 'Cửa hàng', 'Sản phẩm', 'Khách hàng', 'Số lượng', 'Giá bán', 'Giảm giá', 'Thành tiền', 'Người bán', 'Thanh toán', 'Thời gian'];
-    const csvRows = [headers.join(',')];
-    filteredOrders.forEach(o => {
-      const row = [
-        o.order_code,
-        o.status,
-        `"${o.branch?.name || o.branch_id}"`,
-        `"${o.items?.map(i => i.item_name).join(' + ')}"`,
-        `"${o.customer_name} (${o.customer_phone})"`,
-        o.items?.reduce((sum, i) => sum + i.quantity, 0) || 0,
-        o.subtotal,
-        o.discount_amount,
-        o.final_amount,
-        `"${o.note ? 'Ghi chú: ' + o.note : 'Đức'}"`,
-        o.status === 'PAID' ? 'Đã chuyển khoản' : 'Chưa thanh toán',
-        `"${new Date(o.created_at).toLocaleString('vi-VN')}"`
-      ];
-      csvRows.push(row.join(','));
-    });
-
-    const blob = new Blob(['\uFEFF' + csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `danh_sach_don_hang_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  // Filtered Orders Logic
-  const filteredOrders = useMemo(() => {
-    return orders.filter((o) => {
-      // 1. Search Query (Name, Phone, or #OD code)
-      const q = searchQuery.toLowerCase().trim();
-      const codeStr = (o.order_code || o.id || '').toString().toLowerCase();
-      const nameStr = (o.customer_name || (o as any).customerName || '').toString().toLowerCase();
-      const phoneStr = (o.customer_phone || (o as any).phone || '').toString();
-      const addrStr = (o.shipping_address || (o as any).address || '').toString().toLowerCase();
-
-      const matchSearch =
-        !q ||
-        codeStr.includes(q) ||
-        nameStr.includes(q) ||
-        phoneStr.includes(q) ||
-        addrStr.includes(q);
-
-      // 2. Status Tab
-      const s = (o.status || 'RECEIVED').toString().toUpperCase();
-      const matchTab =
-        statusTab === 'ALL' ||
-        (statusTab === 'RECEIVED' && (s === 'RECEIVED' || s === 'PENDING')) ||
-        (statusTab === 'PAID' && (s === 'PAID' || s === 'DELIVERED')) ||
-        (statusTab === 'SHIPPING' && s === 'SHIPPING') ||
-        (statusTab === 'CANCELLED' && s === 'CANCELLED');
-
-      // 3. Payment Method Filter
-      const matchPayment =
-        paymentMethod === 'ALL' ||
-        (paymentMethod === 'PAID' && o.status === 'PAID') ||
-        (paymentMethod === 'CASH' && o.status === 'SHIPPING') ||
-        (paymentMethod === 'UNPAID' && o.status === 'RECEIVED');
-
-      // 4. Branch Filter (Enforce role-based branch scoping for Branch Manager & Staff)
-      let matchBranch = selectedBranch === 'ALL' || o.branch_id === selectedBranch;
-      if (user && user.role !== 'SUPER_ADMIN') {
-        const userBId = (user.branch_id || '').toLowerCase();
-        const userBName = (user.branch_name || '').toLowerCase();
-
-        const orderBId = (o.branch_id || (o as any).branchId || '').toLowerCase();
-        const orderBName = (typeof o.branch === 'object' && o.branch?.name ? o.branch.name : (o.branch || (o as any).branchName || '')).toLowerCase();
-
-        const matchId = Boolean(userBId && (orderBId === userBId || (orderBId.length >= 8 && userBId.includes(orderBId.substring(0, 8)))));
-        const matchName = Boolean(userBName && (
-          orderBName.includes(userBName) || 
-          userBName.includes(orderBName) ||
-          (userBName.includes('quận 3') && (orderBName.includes('quận 3') || orderBName.includes('q3'))) ||
-          (userBName.includes('quận 1') && (orderBName.includes('quận 1') || orderBName.includes('q1'))) ||
-          (userBName.includes('cầu giấy') && orderBName.includes('cầu giấy')) ||
-          (userBName.includes('smart city') && orderBName.includes('smart city'))
-        ));
-
-        matchBranch = matchId || matchName;
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Cập nhật đơn hàng thất bại');
       }
 
-      // 5. Date Filters
-      const orderDate = o.created_at.split('T')[0];
-      const matchStart = !startDate || orderDate >= startDate;
-      const matchEnd = !endDate || orderDate <= endDate;
+      const updatedRecord: OrderRecord = {
+        ...editingOrder,
+        customerName: data.order.customerName,
+        customerPhone: data.order.customerPhone,
+        deliveryAddress: data.order.deliveryAddress || data.order.shippingAddress,
+        branchId: data.order.branchId,
+        note: data.order.note,
+        shippingFee: data.order.shippingFee,
+        discountAmount: data.order.discountAmount,
+        totalAmount: data.order.totalAmount,
+        paymentMethod: data.order.paymentMethod,
+        cashAmount: data.order.cashAmount,
+        transferAmount: data.order.transferAmount,
+        status: data.order.status,
+        paymentStatus: data.order.paymentStatus,
+        items: data.order.items || editItems,
+      };
 
-      return matchSearch && matchTab && matchPayment && matchBranch && matchStart && matchEnd;
-    });
-  }, [orders, searchQuery, statusTab, paymentMethod, selectedBranch, startDate, endDate, user]);
+      setOrders((prev) => prev.map((o) => (o.id === editingOrder.id ? updatedRecord : o)));
+      showToast(`Cập nhật đơn hàng #${editingOrder.orderCode} thành công!`);
+      setEditingOrder(null);
+    } catch (err: any) {
+      console.error('Error updating order:', err);
+      setEditFormError(err.message || 'Lỗi hệ thống khi cập nhật đơn hàng.');
+    } finally {
+      setSubmittingEdit(false);
+    }
+  };
 
-  const handleResetFilters = () => {
-    setSearchQuery('');
-    setPaymentMethod('ALL');
-    setSelectedBranch('ALL');
+  // Show Toast Auto Dismiss
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(''), 4000);
+  };
+
+  // 1. Sound Bell Test
+  const handleTestBell = () => {
+    try {
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, audioCtx.currentTime); // A5 note
+      osc.frequency.exponentialRampToValueAtTime(440, audioCtx.currentTime + 0.5);
+      gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.5);
+    } catch (e) {
+      console.log('Audio Context Error:', e);
+    }
+  };
+
+  // 2. Fetch Orders
+  const fetchOrders = async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (searchTerm) params.append('search', searchTerm);
+      if (paymentFilter !== 'ALL') params.append('paymentMethod', paymentFilter);
+      if (branchFilter !== 'ALL') params.append('branchId', branchFilter);
+      if (fromDate) params.append('fromDate', fromDate);
+      if (toDate) params.append('toDate', toDate);
+      if (statusTab !== 'ALL') params.append('status', statusTab);
+
+      const res = await fetch(`/api/orders?${params.toString()}`);
+      const data = await res.json();
+      if (data.success) {
+        setOrders(data.orders || []);
+      }
+    } catch (err) {
+      console.error('Error fetching orders:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 3. Fetch Products for Order Form
+  const fetchProducts = async () => {
+    try {
+      const res = await fetch('/api/products');
+      const data = await res.json();
+      if (data.success && Array.isArray(data.products)) {
+        setDbProducts(data.products.filter((p: any) => p.isAvailable));
+      }
+    } catch (err) {
+      console.error('Error fetching products:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchOrders();
+    fetchProducts();
+  }, []);
+
+  // Filter Trigger
+  const handleApplyFilter = () => {
+    fetchOrders();
+  };
+
+  const handleResetFilter = () => {
+    setSearchTerm('');
+    setPaymentFilter('ALL');
+    setBranchFilter('ALL');
+    setFromDate('');
+    setToDate('');
     setStatusTab('ALL');
-    setStartDate('');
-    setEndDate('');
+    setTimeout(() => {
+      fetchOrders();
+    }, 50);
   };
+
+  // Update Status & Payment Status Handler
+  const handleUpdateOrderStatus = async (id: string, newStatus: string, autoMarkPaid: boolean = false) => {
+    // If selecting DELIVERING, open Shipping Info Modal
+    if (newStatus === 'DELIVERING') {
+      const targetOrd = orders.find((o) => o.id === id) || (selectedOrder?.id === id ? selectedOrder : null);
+      if (targetOrd) {
+        setShippingModalOrder(targetOrd);
+        setShippingCarrierName(targetOrd.carrierName || 'GrabExpress');
+        setShippingDriverName(targetOrd.driverName || '');
+        setShippingDriverPhone(targetOrd.driverPhone || '');
+        setShippingTrackingUrl(targetOrd.trackingUrl || '');
+      }
+      return;
+    }
+
+    // If selecting COMPLETED and autoMarkPaid is not specified yet, trigger confirmation popup
+    if (newStatus === 'COMPLETED' && !autoMarkPaid) {
+      setConfirmPaidOrderModal({ id, targetStatus: 'COMPLETED' });
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/orders/${id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: newStatus,
+          autoMarkPaid,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        fetchOrders();
+        showToast(`Đã cập nhật trạng thái đơn hàng thành công!`);
+        if (selectedOrder && selectedOrder.id === id) {
+          setSelectedOrder(data.order);
+        }
+        if (printBillOrder && printBillOrder.id === id) {
+          setPrintBillOrder(data.order);
+        }
+      } else {
+        alert(data.error || 'Lỗi khi cập nhật trạng thái');
+      }
+    } catch (err: any) {
+      alert('Lỗi kết nối máy chủ');
+    }
+  };
+
+  // Submit Shipping Info Handler
+  const handleSubmitShippingInfo = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!shippingModalOrder) return;
+
+    if (!shippingCarrierName.trim()) {
+      alert('Vui lòng chọn hoặc nhập đơn vị vận chuyển!');
+      return;
+    }
+
+    setSubmittingShipping(true);
+    try {
+      const res = await fetch(`/api/orders/${shippingModalOrder.id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: 'DELIVERING',
+          carrierName: shippingCarrierName,
+          driverName: shippingDriverName,
+          driverPhone: shippingDriverPhone,
+          trackingUrl: shippingTrackingUrl,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setShippingModalOrder(null);
+        fetchOrders();
+        showToast(`🛵 Đã xuất bếp & bắt đầu giao đơn hàng #${shippingModalOrder.orderCode}!`);
+        if (selectedOrder && selectedOrder.id === shippingModalOrder.id) {
+          setSelectedOrder(data.order);
+        }
+      } else {
+        alert(data.error || 'Lỗi khi cập nhật vận chuyển');
+      }
+    } catch (err: any) {
+      alert('Lỗi kết nối máy chủ');
+    } finally {
+      setSubmittingShipping(false);
+    }
+  };
+
+  // Confirm Order from K80 Modal button
+  const handleConfirmOrderFromK80Modal = async () => {
+    if (!printBillOrder) return;
+    await handleUpdateOrderStatus(printBillOrder.id, 'CONFIRMED');
+    showToast(`✓ Đã xác nhận đơn #${printBillOrder.orderCode}! Chuyển trạng thái sang Bếp đang làm món.`);
+    setPrintBillOrder(null);
+  };
+
+  // Update Payment Status (UNPAID / PAID)
+  const handleUpdatePaymentStatus = async (id: string, newPaymentStatus: string) => {
+    try {
+      const res = await fetch(`/api/orders/${id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          paymentStatus: newPaymentStatus,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        fetchOrders();
+        showToast(`Đã cập nhật thanh toán: ${newPaymentStatus === 'PAID' ? 'Đã nhận tiền ✅' : 'Chưa thanh toán ❌'}`);
+      } else {
+        alert(data.error || 'Cập nhật thanh toán thất bại');
+      }
+    } catch (err) {
+      alert('Lỗi kết nối máy chủ');
+    }
+  };
+
+  // Open Create Modal
+  const handleOpenCreateModal = () => {
+    setRawAiMessage('');
+    setAiToast('');
+    setFormCustomerName('');
+    setFormCustomerPhone('');
+    setFormDeliveryAddress('');
+    setFormBranchId('cs1');
+    setFormPaymentMethod('COD');
+    setFormSellerName('Thu ngân POS');
+    setFormSourceTag('Đơn Mới Web');
+    setFormNotes('');
+    setFormShippingFee(0);
+    setFormDiscountAmount(0);
+    setFormError('');
+    setFormItems([]);
+
+    setShowCreateModal(true);
+  };
+
+  // AI Parse Message Handler
+  const handleAiParseMessage = async () => {
+    if (!rawAiMessage.trim()) {
+      alert('Vui lòng dán nội dung tin nhắn của khách vào ô văn bản trước!');
+      return;
+    }
+
+    setParsingAi(true);
+    setAiToast('');
+    try {
+      const res = await fetch('/api/ai/parse-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rawText: rawAiMessage }),
+      });
+      const data = await res.json();
+
+      if (data.success && data.data) {
+        const parsed = data.data;
+        const extractedName = parsed.customerName?.trim();
+        setFormCustomerName(extractedName && extractedName !== '' && extractedName !== 'Khách Đặt Qua Tin Nhắn' ? extractedName : 'Khách Chưa Đặt Tên');
+        if (parsed.phone) setFormCustomerPhone(parsed.phone);
+        if (parsed.address) {
+          setFormDeliveryAddress(parsed.address);
+          const autoBranch = detectBranchIdFromText(parsed.address, branches);
+          setFormBranchId(autoBranch || parsed.branchSuggested || (branches[0]?.id || 'cs1'));
+        } else if (parsed.branchSuggested) {
+          setFormBranchId(parsed.branchSuggested);
+        }
+        if (parsed.note !== undefined && parsed.note !== null) {
+          setFormNotes(parsed.note);
+        } else if (parsed.notes !== undefined && parsed.notes !== null) {
+          setFormNotes(parsed.notes);
+        }
+
+        if (Array.isArray(parsed.items) && parsed.items.length > 0) {
+          const itemsMap: OrderItem[] = parsed.items.map((it: any) => ({
+            productId: it.productId,
+            productName: it.productName,
+            quantity: Math.max(1, Number(it.quantity) || 1),
+            price: Number(it.price) || 0,
+            subtotal: (Number(it.price) || 0) * Math.max(1, Number(it.quantity) || 1),
+          }));
+          setFormItems(itemsMap);
+        }
+
+        setFormSourceTag('AI Bot Chat');
+        setAiToast('✨ Đã phân tích thành công thông tin khách hàng và tự động điền giỏ hàng!');
+      } else {
+        alert(data.error || 'Không thể phân tích tin nhắn');
+      }
+    } catch (err: any) {
+      alert('Lỗi khi gọi AI Parser: ' + err.message);
+    } finally {
+      setParsingAi(false);
+    }
+  };
+
+  // Quantity change inside form items
+  const handleItemQtyChange = (index: number, delta: number) => {
+    setFormItems((prev) => {
+      const updated = [...prev];
+      const newQty = Math.max(1, updated[index].quantity + delta);
+      updated[index].quantity = newQty;
+      updated[index].subtotal = newQty * updated[index].price;
+      return updated;
+    });
+  };
+
+  // Remove item from form
+  const handleRemoveFormItem = (index: number) => {
+    setFormItems((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // Add item manually to form
+  const handleAddManualProduct = () => {
+    if (!selectedAddProductId) return;
+    const prod = dbProducts.find((p) => p.id === selectedAddProductId);
+    if (!prod) return;
+
+    setFormItems((prev) => {
+      const existingIdx = prev.findIndex((i) => i.productId === prod.id);
+      if (existingIdx >= 0) {
+        const updated = [...prev];
+        updated[existingIdx].quantity += 1;
+        updated[existingIdx].subtotal = updated[existingIdx].quantity * updated[existingIdx].price;
+        return updated;
+      }
+      return [
+        ...prev,
+        {
+          productId: prod.id,
+          productName: prod.name,
+          quantity: 1,
+          price: prod.price,
+          subtotal: prod.price,
+        },
+      ];
+    });
+    setSelectedAddProductId('');
+  };
+
+  // Form Totals Calculation
+  const formSubtotal = useMemo(() => {
+    return formItems.reduce((acc, item) => acc + item.subtotal, 0);
+  }, [formItems]);
+
+  useEffect(() => {
+    if (formSubtotal >= 355000 && formSubtotal > 0) {
+      setFormShippingFee(0);
+    } else if (formSubtotal === 0) {
+      setFormShippingFee(0);
+    } else {
+      setFormShippingFee(35000);
+    }
+  }, [formSubtotal]);
+
+  const formFinalTotal = useMemo(() => {
+    return Math.max(0, formSubtotal + formShippingFee - formDiscountAmount);
+  }, [formSubtotal, formShippingFee, formDiscountAmount]);
+
+  // Split payment auto-reconcile handlers
+  const handleSelectSplit = () => {
+    setFormPaymentMethod('SPLIT');
+    setFormCashAmount(0);
+    setFormTransferAmount(formFinalTotal);
+  };
+
+  const handleCashChange = (val: number) => {
+    const cleanCash = Math.max(0, val);
+    setFormCashAmount(cleanCash);
+    setFormTransferAmount(Math.max(0, formFinalTotal - cleanCash));
+  };
+
+  const handleTransferChange = (val: number) => {
+    const cleanTransfer = Math.max(0, val);
+    setFormTransferAmount(cleanTransfer);
+    setFormCashAmount(Math.max(0, formFinalTotal - cleanTransfer));
+  };
+
+  useEffect(() => {
+    if (formPaymentMethod === 'SPLIT') {
+      setFormTransferAmount(Math.max(0, formFinalTotal - formCashAmount));
+    }
+  }, [formFinalTotal, formPaymentMethod]);
+
+  // Submit Order & Print Bill K80
+  const handleSubmitCreateOrder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormError('');
+
+    if (!formCustomerName.trim()) {
+      setFormError('Vui lòng nhập Tên khách hàng!');
+      return;
+    }
+    if (!formCustomerPhone.trim()) {
+      setFormError('Vui lòng nhập Số điện thoại!');
+      return;
+    }
+    if (!formDeliveryAddress.trim()) {
+      setFormError('Vui lòng nhập Địa chỉ giao hàng!');
+      return;
+    }
+    if (formItems.length === 0) {
+      setFormError('Vui lòng chọn ít nhất 1 món ăn trong đơn hàng!');
+      return;
+    }
+
+    setSubmittingOrder(true);
+    try {
+      const res = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customerName: formCustomerName,
+          customerPhone: formCustomerPhone,
+          deliveryAddress: formDeliveryAddress,
+          note: formNotes,
+          paymentMethod: formPaymentMethod,
+          cashAmountInput: formCashAmount,
+          cashAmount: formCashAmount,
+          transferAmount: formTransferAmount,
+          branchId: formBranchId,
+          discountAmount: formDiscountAmount,
+          shippingFee: formShippingFee,
+          sellerName: formSellerName,
+          sourceTag: formSourceTag,
+          items: formItems,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (data.success && data.order) {
+        setShowCreateModal(false);
+        fetchOrders();
+        setPrintBillOrder(data.order);
+        showToast(`🎉 Đã tạo đơn thành công #${data.order.orderCode}!`);
+      } else {
+        setFormError(data.error || 'Lỗi khi tạo đơn hàng!');
+      }
+    } catch (err: any) {
+      setFormError(err.message || 'Lỗi kết nối máy chủ!');
+    } finally {
+      setSubmittingOrder(false);
+    }
+  };
+
+  // Excel Export Handler
+  const handleExportExcel = () => {
+    if (orders.length === 0) {
+      alert('Không có dữ liệu đơn hàng để xuất file Excel!');
+      return;
+    }
+
+    const excelData = orders.map((o, idx) => {
+      const branchObj = branches.find((b) => b.id === o.branchId || b.code === o.branchId);
+      const branchName = branchObj ? `${branchObj.code ? branchObj.code.toUpperCase() + ' - ' : ''}${branchObj.name}` : (o.branchId || 'Chi Nhánh POS');
+      const itemsText = o.items.map((i) => `${i.productName} (x${i.quantity})`).join(', ');
+
+      let statusText = 'Mới tạo';
+      if (o.status === 'CONFIRMED') statusText = 'Đã xác nhận';
+      if (o.status === 'DELIVERING') statusText = 'Đang giao hàng';
+      if (o.status === 'COMPLETED') statusText = 'Thành công';
+      if (o.status === 'CANCELLED') statusText = 'Đã hủy';
+
+      return {
+        'STT': idx + 1,
+        'Mã Đơn': o.orderCode,
+        'Nguồn Đơn': o.sourceTag || 'Đơn Mới Web',
+        'Cửa Hàng': branchName,
+        'Khách Hàng': o.customerName,
+        'Số Điện Thoại': o.customerPhone,
+        'Địa Chỉ': o.deliveryAddress,
+        'Danh Sách Món': itemsText,
+        'Tiền Hàng': o.items.reduce((a, b) => a + b.subtotal, 0),
+        'Phí Ship': o.shippingFee || 0,
+        'Giảm Giá': o.discountAmount || 0,
+        'Thành Tiền': o.totalAmount,
+        'PT Thanh Toán': o.paymentMethod === 'COD' ? 'Tiền mặt' : 'Chuyển khoản QR',
+        'TT Thanh Toán': o.paymentStatus === 'PAID' ? 'Đã nhận tiền' : 'Chưa thanh toán',
+        'Người Bán': o.sellerName || 'Thu ngân POS',
+        'Trạng Thái Đơn': statusText,
+        'Ngày Tạo': new Date(o.createdAt).toLocaleString('vi-VN'),
+      };
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(excelData);
+    worksheet['!cols'] = [
+      { wch: 6 },
+      { wch: 12 },
+      { wch: 16 },
+      { wch: 20 },
+      { wch: 22 },
+      { wch: 14 },
+      { wch: 30 },
+      { wch: 35 },
+      { wch: 14 },
+      { wch: 12 },
+      { wch: 12 },
+      { wch: 16 },
+      { wch: 18 },
+      { wch: 16 },
+      { wch: 18 },
+      { wch: 16 },
+      { wch: 20 },
+    ];
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Danh Sách Đơn Hàng');
+    XLSX.writeFile(workbook, `Danh_Sach_Don_Hang_GaUMuoiSmart_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
+  const currentDateStr = new Date().toLocaleDateString('vi-VN', {
+    weekday: 'long',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+
+  const pendingCount = useMemo(() => orders.filter((o) => o.status === 'PENDING').length, [orders]);
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 p-4 sm:p-6 lg:p-8 space-y-6">
-      
-      {/* 1. BỘ LỌC TÌM KIẾM ĐA NĂNG & HEADER (FILTER SECTION) */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-4">
-        
-        {/* Header & Quick Order Button */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
-          <div className="flex items-center space-x-3">
-            <div className="p-3 bg-orange-50 text-orange-600 rounded-xl border border-orange-200">
-              <ClipboardList className="w-6 h-6" />
+    <div className="space-y-6 max-w-[1600px] mx-auto pb-12 relative">
+      {/* Toast Banner */}
+      {toastMessage && (
+        <div className="fixed top-20 right-6 z-50 px-4 py-3 rounded-xl bg-emerald-600 text-white font-bold text-xs shadow-2xl flex items-center gap-2 animate-in fade-in slide-in-from-top-4 duration-300">
+          <CheckCircle2 className="w-5 h-5" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
+
+      {/* 1. Header & Top Control Banner */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b dark:border-neutral-800 border-stone-200">
+        <div>
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-amber-500/15 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+              <ShoppingBag className="w-6 h-6 stroke-[1.5]" />
             </div>
             <div>
-              <h1 className="text-xl font-extrabold text-slate-900 flex items-center gap-2">
-                Quản Lý Đơn Hàng Tập Trung ({orders.length})
-              </h1>
-              <p className="text-xs text-slate-600 mt-0.5">Bảng danh sách đơn đa chi nhánh, trạng thái dòng tiền &amp; in bill K80.</p>
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-extrabold dark:text-white text-stone-900 tracking-tight">
+                  Quản Lý Đơn Hàng Tập Trung
+                </h1>
+                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                  {orders.length} đơn tổng
+                </span>
+              </div>
+              <p className="text-xs dark:text-neutral-400 text-stone-500 mt-0.5">
+                Bảng danh sách đơn đa chi nhánh, trạng thái dòng tiền & in bill K80 hỏa tốc.
+              </p>
             </div>
           </div>
+        </div>
 
-          <Link
-            href="/admin/create-order"
-            className="bg-sky-600 hover:bg-sky-700 text-white font-extrabold px-4 py-2.5 rounded-xl text-xs shadow-sm transition flex items-center justify-center space-x-2 cursor-pointer shrink-0"
+        {/* Top Status & Controls */}
+        <div className="flex items-center gap-3 flex-wrap shrink-0">
+          {/* Sound Bell Test */}
+          <button
+            onClick={handleTestBell}
+            className="px-3 py-2 rounded-xl dark:bg-neutral-900 bg-stone-100 dark:text-neutral-300 text-stone-700 hover:text-amber-500 border dark:border-neutral-800 border-stone-200 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
+            title="Kiểm tra âm thanh chuông báo đơn mới"
           >
-            <Plus className="w-4 h-4 bg-white/20 rounded-full p-0.5" />
+            <BellRing className="w-4 h-4 text-amber-500" />
+            <span>Thử chuông</span>
+          </button>
+
+          {/* Realtime Date */}
+          <div className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-xl dark:bg-neutral-900 bg-stone-100 dark:text-neutral-300 text-stone-700 border dark:border-neutral-800 border-stone-200 text-xs font-medium">
+            <Clock className="w-3.5 h-3.5 text-amber-500" />
+            <span>{currentDateStr}</span>
+          </div>
+
+          {/* Notification Bell */}
+          <div className="relative p-2 rounded-xl dark:bg-neutral-900 bg-stone-100 border dark:border-neutral-800 border-stone-200">
+            <Bell className="w-4 h-4 dark:text-neutral-300 text-stone-700" />
+            {pendingCount > 0 && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-500 text-white font-extrabold text-[9px] flex items-center justify-center animate-pulse">
+                {pendingCount}
+              </span>
+            )}
+          </div>
+
+          {/* POS Status Badge */}
+          <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-500/10 text-emerald-500 border border-emerald-500/30 text-xs font-bold">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+            <span>POS System Active</span>
+          </div>
+
+          {/* Prominent Action Button: Create New Order */}
+          <button
+            onClick={handleOpenCreateModal}
+            className="px-4 py-2.5 bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 hover:from-amber-600 hover:to-amber-800 text-stone-950 font-black rounded-xl text-xs flex items-center gap-2 transition shadow-lg shadow-amber-500/20 cursor-pointer"
+          >
+            <Plus className="w-4 h-4 stroke-[2.5]" />
             <span>+ Tạo Đơn Hàng Mới</span>
-          </Link>
+          </button>
         </div>
-
-        {/* Filter Controls Row 1 & Row 2 */}
-        <div className="space-y-3 text-xs">
-          
-          {/* Row 1: Search Customer + Payment Method */}
-          <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
-            <div className="sm:col-span-8 relative">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="Tên khách hàng, SĐT hoặc Mã đơn #OD..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold outline-none focus:border-orange-500 transition"
-              />
-            </div>
-
-            <div className="sm:col-span-4">
-              <select
-                value={paymentMethod}
-                onChange={(e) => setPaymentMethod(e.target.value)}
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none cursor-pointer"
-              >
-                <option value="ALL">Tất cả hình thức thanh toán</option>
-                <option value="PAID">Đã chuyển khoản</option>
-                <option value="CASH">Tiền mặt</option>
-                <option value="UNPAID">Chưa thanh toán (Chờ CK)</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Row 2: Branch + Date Range + Action Buttons */}
-          <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
-            
-            {/* Cửa hàng */}
-            <div className="sm:col-span-4">
-              <select
-                value={user && user.role !== 'SUPER_ADMIN' ? (user.branch_id || selectedBranch) : selectedBranch}
-                onChange={(e) => setSelectedBranch(e.target.value)}
-                disabled={Boolean(user && user.role !== 'SUPER_ADMIN')}
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none cursor-pointer disabled:opacity-80 disabled:bg-slate-100"
-              >
-                {user?.role === 'SUPER_ADMIN' && <option value="ALL">Tất cả cửa hàng / chi nhánh</option>}
-                {branches.map((b) => (
-                  <option key={b.id} value={b.id}>{b.name}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Từ ngày */}
-            <div className="sm:col-span-2">
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800 outline-none"
-              />
-            </div>
-
-            {/* Đến ngày */}
-            <div className="sm:col-span-2">
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800 outline-none"
-              />
-            </div>
-
-            {/* Actions: Lọc, Reset, Xuất Excel */}
-            <div className="sm:col-span-4 flex items-center space-x-2">
-              <button
-                onClick={() => {}}
-                className="flex-1 py-2.5 px-3 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl transition flex items-center justify-center space-x-1 cursor-pointer"
-              >
-                <Filter className="w-3.5 h-3.5" />
-                <span>Lọc</span>
-              </button>
-
-              <button
-                onClick={handleResetFilters}
-                className="py-2.5 px-3 bg-white border border-slate-200 hover:border-slate-300 text-slate-700 font-bold rounded-xl transition flex items-center justify-center space-x-1 cursor-pointer"
-              >
-                <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
-                <span>Reset</span>
-              </button>
-
-              <button
-                onClick={handleExportExcel}
-                className="py-2.5 px-3 bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 font-extrabold rounded-xl transition flex items-center justify-center space-x-1 cursor-pointer"
-              >
-                <Download className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Xuất Excel</span>
-              </button>
-            </div>
-
-          </div>
-
-        </div>
-
-        {/* Hàng Tab Trạng Thái Đơn Nhanh */}
-        <div className="flex bg-slate-100 p-1 rounded-xl text-xs font-semibold text-slate-600 w-fit">
-          {[
-            { id: 'ALL', label: 'Tất cả đơn' },
-            { id: 'RECEIVED', label: '🔴 Chờ thanh toán' },
-            { id: 'PAID', label: '🟢 Thành công' },
-            { id: 'SHIPPING', label: '🟣 Đang giao' },
-            { id: 'CANCELLED', label: '⚪ Đã hủy' },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setStatusTab(tab.id)}
-              className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
-                statusTab === tab.id
-                  ? 'bg-white text-orange-600 shadow-2xs font-bold'
-                  : 'hover:text-slate-900'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
       </div>
 
-      {/* 2. BẢNG DANH SÁCH ĐƠN HÀNG (RESPONSIVE TABLE - 13 CỘT) */}
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs whitespace-nowrap">
-            <thead className="bg-slate-50 border-b border-slate-200 text-slate-700 font-bold uppercase text-[10px] tracking-wider">
-              <tr>
-                <th className="p-3.5 text-center">#</th>
-                <th className="p-3.5">Trạng thái</th>
-                <th className="p-3.5">Cửa hàng</th>
-                <th className="p-3.5">Sản phẩm</th>
-                <th className="p-3.5">Khách hàng</th>
-                <th className="p-3.5 text-center">Số lượng</th>
-                <th className="p-3.5 text-right">Giá bán</th>
-                <th className="p-3.5 text-right">Giảm giá</th>
-                <th className="p-3.5 text-right">Thành tiền</th>
-                <th className="p-3.5">Người bán</th>
-                <th className="p-3.5">Thanh toán</th>
-                <th className="p-3.5 text-center">Thời gian</th>
-                <th className="p-3.5 text-center">Thao tác</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
-              {filteredOrders.length === 0 ? (
+      {/* 2. Multi-Dimensional Filter Controls */}
+      <div className="p-4 rounded-2xl dark:bg-[#141820] bg-white border dark:border-neutral-800/80 border-stone-200/80 shadow-sm space-y-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+          {/* Search */}
+          <div className="lg:col-span-2 relative">
+            <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-3" />
+            <input
+              type="text"
+              placeholder="Tên khách hàng, SĐT hoặc Mã đơn #OD / #DH..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleApplyFilter()}
+              className="w-full pl-9 pr-3 py-2 rounded-xl dark:bg-neutral-900 bg-stone-50 border dark:border-neutral-700 border-stone-300 dark:text-white text-stone-900 text-xs font-medium focus:outline-none focus:border-amber-500"
+            />
+          </div>
+
+          {/* Payment Method */}
+          <div>
+            <select
+              value={paymentFilter}
+              onChange={(e) => setPaymentFilter(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl dark:bg-neutral-900 bg-stone-50 border dark:border-neutral-700 border-stone-300 dark:text-white text-stone-900 text-xs font-medium focus:outline-none focus:border-amber-500 cursor-pointer"
+            >
+              <option value="ALL">💳 PTTT: Tất Cả</option>
+              <option value="COD">💵 Tiền mặt (COD)</option>
+              <option value="BANK_TRANSFER">📱 Chuyển khoản QR</option>
+            </select>
+          </div>
+
+          {/* Branch Filter */}
+          <div>
+            <select
+              value={branchFilter}
+              onChange={(e) => setBranchFilter(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl dark:bg-neutral-900 bg-stone-50 border dark:border-neutral-700 border-stone-300 dark:text-white text-stone-900 text-xs font-medium focus:outline-none focus:border-amber-500 cursor-pointer"
+            >
+              {currentUser?.role !== 'MANAGER' && <option value="ALL">🏢 Cửa Hàng: Tất Cả ({branches.length}) Cơ Sở</option>}
+              {currentUser?.role === 'MANAGER' && <option value="ALL">🏢 Các cơ sở phụ trách ({availableBranches.length})</option>}
+              {availableBranches.map((b) => (
+                <option key={b.id} value={b.id}>
+                  📍 {b.code ? `${b.code.toUpperCase()} – ${b.name}` : b.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Date range inputs */}
+          <div className="flex items-center gap-1.5">
+            <input
+              type="date"
+              value={fromDate}
+              onChange={(e) => setFromDate(e.target.value)}
+              placeholder="Từ ngày"
+              className="w-1/2 px-2 py-2 rounded-xl dark:bg-neutral-900 bg-stone-50 border dark:border-neutral-700 border-stone-300 dark:text-white text-stone-900 text-[11px] font-medium focus:outline-none focus:border-amber-500"
+            />
+            <span className="text-neutral-500 text-xs">-</span>
+            <input
+              type="date"
+              value={toDate}
+              onChange={(e) => setToDate(e.target.value)}
+              placeholder="Đến ngày"
+              className="w-1/2 px-2 py-2 rounded-xl dark:bg-neutral-900 bg-stone-50 border dark:border-neutral-700 border-stone-300 dark:text-white text-stone-900 text-[11px] font-medium focus:outline-none focus:border-amber-500"
+            />
+          </div>
+        </div>
+
+        {/* Filter Action Buttons */}
+        <div className="flex items-center justify-between pt-2 border-t dark:border-neutral-800 border-stone-200">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleApplyFilter}
+              className="px-4 py-1.5 dark:bg-amber-500/20 bg-amber-500 text-amber-600 dark:text-amber-400 font-bold rounded-lg text-xs hover:opacity-90 transition cursor-pointer"
+            >
+              Lọc Dữ Liệu
+            </button>
+            <button
+              onClick={handleResetFilter}
+              className="px-3 py-1.5 dark:bg-neutral-800 bg-stone-200 dark:text-neutral-300 text-stone-700 font-semibold rounded-lg text-xs hover:bg-neutral-700 transition cursor-pointer flex items-center gap-1"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Reset</span>
+            </button>
+          </div>
+
+          <button
+            onClick={handleExportExcel}
+            className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg text-xs flex items-center gap-1.5 transition shadow-sm cursor-pointer"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            <span>Xuất Excel</span>
+          </button>
+        </div>
+      </div>
+
+      {/* 3. Dãy Tab trạng thái nhanh (Quick Filter Pills - 5 Order Lifecycle Steps) */}
+      <div className="flex items-center gap-2 overflow-x-auto scrollbar-none pb-1">
+        {[
+          { key: 'ALL', label: 'Tất cả đơn', count: orders.length },
+          { key: 'PENDING', label: '🟡 Chờ xác nhận', count: orders.filter((o) => o.status === 'PENDING').length },
+          { key: 'CONFIRMED', label: '🔵 Đã xác nhận (Bếp làm)', count: orders.filter((o) => o.status === 'CONFIRMED').length },
+          { key: 'DELIVERING', label: '🟣 Đang giao hàng', count: orders.filter((o) => o.status === 'DELIVERING').length },
+          { key: 'COMPLETED', label: '🟢 Thành công', count: orders.filter((o) => o.status === 'COMPLETED').length },
+          { key: 'CANCELLED', label: '🔴 Đã hủy', count: orders.filter((o) => o.status === 'CANCELLED').length },
+        ].map((tab) => {
+          const isActive = statusTab === tab.key;
+          return (
+            <button
+              key={tab.key}
+              onClick={() => {
+                setStatusTab(tab.key);
+                setTimeout(() => fetchOrders(), 50);
+              }}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap flex items-center gap-2 cursor-pointer border ${
+                isActive
+                  ? 'bg-amber-500 text-stone-950 border-amber-500 shadow-md font-black'
+                  : 'dark:bg-[#141820] bg-white dark:text-neutral-300 text-stone-700 hover:bg-stone-100 dark:hover:bg-neutral-800 border-stone-200 dark:border-neutral-800'
+              }`}
+            >
+              <span>{tab.label}</span>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] ${isActive ? 'bg-stone-950 text-amber-400 font-extrabold' : 'dark:bg-neutral-800 bg-stone-100 text-neutral-500'}`}>
+                {tab.count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* 4. Bảng Danh Sách Đơn Hàng (Orders Table with Interactive Status & Payment Selects) */}
+      <div className="rounded-2xl dark:bg-[#141820] bg-white border dark:border-neutral-800/80 border-stone-200/80 shadow-md overflow-hidden">
+        {loading ? (
+          <div className="p-12 text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-500 mx-auto mb-3"></div>
+            <p className="text-xs dark:text-neutral-400 text-stone-500">Đang tải danh sách đơn hàng tập trung...</p>
+          </div>
+        ) : orders.length === 0 ? (
+          <div className="p-12 text-center">
+            <ShoppingBag className="w-10 h-10 text-neutral-500 mx-auto mb-2 opacity-50" />
+            <p className="text-sm font-semibold dark:text-neutral-300 text-stone-700">Chưa tìm thấy đơn hàng phù hợp</p>
+            <p className="text-xs dark:text-neutral-500 text-stone-500 mt-1">
+              Thử thay đổi từ khóa tìm kiếm hoặc bấm nút "+ Tạo Đơn Hàng Mới".
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="dark:bg-neutral-900/90 bg-stone-100 dark:text-neutral-400 text-stone-600 font-semibold border-b dark:border-neutral-800 border-stone-200 uppercase text-[10px] tracking-wider">
                 <tr>
-                  <td colSpan={13} className="p-8 text-center text-slate-400">
-                    Không tìm thấy đơn hàng phù hợp với bộ lọc
-                  </td>
+                  <th className="py-3.5 px-4"># MÃ ĐƠN</th>
+                  <th className="py-3.5 px-4">TRẠNG THÁI (LIFECYCLE)</th>
+                  <th className="py-3.5 px-4">CỬA HÀNG</th>
+                  <th className="py-3.5 px-4">SẢN PHẨM</th>
+                  <th className="py-3.5 px-4 min-w-[220px] max-w-[260px]">KHÁCH HÀNG & ĐỊA CHỈ GIAO</th>
+                  <th className="py-3.5 px-4 text-center">SL</th>
+                  <th className="py-3.5 px-4">TIỀN HÀNG</th>
+                  <th className="py-3.5 px-4">GIẢM GIÁ</th>
+                  <th className="py-3.5 px-4">THÀNH TIỀN</th>
+                  <th className="py-3.5 px-4">NGƯỜI BÁN</th>
+                  <th className="py-3.5 px-4">THANH TOÁN</th>
+                  <th className="py-3.5 px-4 text-right">THAO TÁC</th>
                 </tr>
-              ) : (
-                filteredOrders.map((o) => {
-                  const totalQty = o.items?.reduce((sum, i) => sum + i.quantity, 0) || 1;
-                  const itemSummary = o.items?.map(i => i.item_name).join(' + ') || 'Gà Ủ Muối';
-                  const isNewWebOrder = o.status === 'RECEIVED' || (o.status as string) === 'PENDING' || (o as any).source === 'Website Khách Đặt';
+              </thead>
+              <tbody className="divide-y dark:divide-neutral-800/60 divide-stone-200 font-medium">
+                {orders.map((order) => {
+                  const branchObj = branches.find((b) => b.id === order.branchId || b.code === order.branchId);
+                  const branchName = branchObj ? `${branchObj.code ? branchObj.code.toUpperCase() + ' - ' : ''}${branchObj.name}` : (order.branchId || 'Chi Nhánh POS');
+
+                  const totalQty = order.items.reduce((acc, item) => acc + item.quantity, 0);
+                  const subtotalAmount = order.items.reduce((acc, item) => acc + item.subtotal, 0);
 
                   return (
-                    <tr key={o.id} className={`transition ${isNewWebOrder ? 'bg-emerald-50/70 border-l-4 border-l-emerald-500 font-semibold' : 'hover:bg-slate-50/80'}`}>
-                      {/* # Mã Đơn */}
-                      <td className="p-3.5 text-center font-extrabold text-slate-900">
-                        #{o.order_code || o.id}
-                      </td>
-
-                      {/* Trạng Thái Badge */}
-                      <td className="p-3.5">
-                        {isNewWebOrder ? (
-                          <span className="inline-flex items-center space-x-1 bg-emerald-100 text-emerald-800 border border-emerald-300 font-black px-2.5 py-1 rounded-lg text-[11px] animate-pulse shadow-2xs">
-                            <Sparkles className="w-3 h-3 text-emerald-600" />
-                            <span>🟢 Đơn Mới (Web)</span>
+                    <tr key={order.id} className="dark:hover:bg-neutral-900/50 hover:bg-stone-50 transition-colors">
+                      {/* Order Code & Creation Date Time */}
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        <div className="flex flex-col">
+                          <span className="font-mono font-bold text-amber-500">
+                            #{order.orderCode}
                           </span>
-                        ) : o.status === 'PAID' ? (
-                          <span className="inline-flex items-center space-x-1 bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold px-2.5 py-1 rounded-lg text-[11px]">
-                            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                            <span>Thành công</span>
+                          <span className="text-[11px] text-neutral-400 font-medium mt-0.5">
+                            {formatOrderDateTime(order.createdAt)}
                           </span>
-                        ) : o.status === 'SHIPPING' ? (
-                          <span className="inline-flex items-center space-x-1 bg-purple-50 text-purple-700 border border-purple-200 font-bold px-2.5 py-1 rounded-lg text-[11px]">
-                            <Truck className="w-3 h-3 text-purple-600" />
-                            <span>Đang giao</span>
+                        </div>
+                      </td>
+
+                      {/* Interactive Status Select Dropdown */}
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        <div className="space-y-1">
+                          <select
+                            value={order.status}
+                            onChange={(e) => handleUpdateOrderStatus(order.id, e.target.value)}
+                            className={`px-2.5 py-1 rounded-xl text-[11px] font-extrabold focus:outline-none cursor-pointer border ${
+                              order.status === 'PENDING'
+                                ? 'bg-amber-500/20 text-amber-500 border-amber-500/40'
+                                : order.status === 'CONFIRMED'
+                                ? 'bg-blue-500/20 text-blue-400 border-blue-500/40'
+                                : order.status === 'DELIVERING'
+                                ? 'bg-purple-500/20 text-purple-400 border-purple-500/40'
+                                : order.status === 'COMPLETED'
+                                ? 'bg-emerald-500/20 text-emerald-500 border-emerald-500/40'
+                                : 'bg-rose-500/20 text-rose-500 border-rose-500/40'
+                            }`}
+                          >
+                            <option value="PENDING">🟡 Chờ xác nhận</option>
+                            <option value="CONFIRMED">🔵 Đã xác nhận (Bếp làm)</option>
+                            <option value="DELIVERING">🟣 Đang giao hàng</option>
+                            <option value="COMPLETED">🟢 Thành công</option>
+                            <option value="CANCELLED">🔴 Đã hủy đơn</option>
+                          </select>
+                          <span className="block text-[9px] font-semibold text-neutral-400">
+                            {order.sourceTag || 'Đơn Mới Web'}
                           </span>
-                        ) : (
-                          <span className="inline-flex items-center space-x-1 bg-slate-100 text-slate-500 border border-slate-200 font-bold px-2.5 py-1 rounded-lg text-[11px] line-through">
-                            <span>Đã hủy</span>
-                          </span>
-                        )}
+
+                          {order.status === 'DELIVERING' && (
+                            <div className="mt-1 flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setShippingModalOrder(order);
+                                  setShippingCarrierName(order.carrierName || 'GrabExpress');
+                                  setShippingDriverName(order.driverName || '');
+                                  setShippingDriverPhone(order.driverPhone || '');
+                                  setShippingTrackingUrl(order.trackingUrl || '');
+                                }}
+                                className={`px-2 py-0.5 border rounded-lg text-[10px] font-bold flex items-center gap-1 transition cursor-pointer ${
+                                  (order.carrierName || '').toLowerCase().includes('be')
+                                    ? 'bg-amber-500/20 hover:bg-amber-500/30 border-amber-500/40 text-amber-400'
+                                    : (order.carrierName || '').toLowerCase().includes('xanh')
+                                    ? 'bg-teal-500/20 hover:bg-teal-500/30 border-teal-500/40 text-teal-300'
+                                    : 'bg-emerald-500/20 hover:bg-emerald-500/30 border-emerald-500/40 text-emerald-400'
+                                }`}
+                                title={`Đơn vị: ${order.carrierName || 'GrabExpress'} | Tài xế: ${order.driverName || 'Chưa có'} ${order.driverPhone ? `(${order.driverPhone})` : ''}`}
+                              >
+                                <span>
+                                  {(order.carrierName || '').toLowerCase().includes('be')
+                                    ? '🟡'
+                                    : (order.carrierName || '').toLowerCase().includes('xanh')
+                                    ? '🌿'
+                                    : '🟢'}
+                                </span>
+                                <span className="truncate max-w-[90px]">{order.carrierName || 'GrabExpress'}</span>
+                              </button>
+                              {order.trackingUrl && (
+                                <a
+                                  href={order.trackingUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="p-1 text-emerald-400 hover:text-emerald-300 transition"
+                                  title="Xem hành trình hỏa tốc thời gian thực"
+                                >
+                                  📍
+                                </a>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </td>
 
-                      {/* Cửa hàng */}
-                      <td className="p-3.5 font-bold text-slate-900">
-                        {o.branch?.name || 'CƠ SỞ VIN SMART CITY'}
+                      {/* Store */}
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        <span className="px-2 py-0.5 rounded-lg dark:bg-neutral-800 bg-stone-100 text-stone-700 dark:text-neutral-300 text-[11px] font-medium border border-stone-200 dark:border-neutral-700">
+                          {branchName}
+                        </span>
                       </td>
 
-                      {/* Sản phẩm */}
-                      <td className="p-3.5 text-slate-700 max-w-xs truncate font-medium" title={itemSummary}>
-                        {itemSummary}
+                      {/* Products */}
+                      <td className="py-3.5 px-4 max-w-[200px]">
+                        <div className="text-[11px] dark:text-neutral-200 text-stone-800 line-clamp-2">
+                          {order.items.map((i) => `${i.productName} (x${i.quantity})`).join(', ')}
+                        </div>
                       </td>
 
-                      {/* Khách hàng */}
-                      <td className="p-3.5">
-                        <div className="font-bold text-slate-900">{o.customer_name}</div>
-                        <div className="text-[11px] text-slate-500">{o.customer_phone}</div>
+                      {/* Customer */}
+                      <td className="py-3.5 px-4 min-w-[220px] max-w-[260px]">
+                        <PhoneActionCell
+                          name={order.customerName}
+                          phone={order.customerPhone}
+                          address={order.deliveryAddress}
+                        />
                       </td>
 
-                      {/* Số lượng */}
-                      <td className="p-3.5 text-center font-extrabold text-slate-900">
+                      {/* Qty */}
+                      <td className="py-3.5 px-4 text-center font-bold dark:text-white text-stone-900">
                         {totalQty}
                       </td>
 
-                      {/* Giá bán */}
-                      <td className="p-3.5 text-right font-medium text-slate-600">
-                        {o.subtotal.toLocaleString('vi-VN')} đ
+                      {/* Subtotal */}
+                      <td className="py-3.5 px-4 whitespace-nowrap font-medium dark:text-neutral-300 text-stone-700">
+                        {subtotalAmount.toLocaleString('vi-VN')} đ
                       </td>
 
-                      {/* Giảm giá */}
-                      <td className="p-3.5 text-right font-semibold text-rose-600">
-                        -{o.discount_amount.toLocaleString('vi-VN')} đ
+                      {/* Discount */}
+                      <td className="py-3.5 px-4 whitespace-nowrap text-rose-500 font-medium">
+                        -{(order.discountAmount || 0).toLocaleString('vi-VN')} đ
                       </td>
 
-                      {/* Thành tiền */}
-                      <td className="p-3.5 text-right font-extrabold text-blue-700 text-sm">
-                        {o.final_amount.toLocaleString('vi-VN')} đ
+                      {/* Total Amount */}
+                      <td className="py-3.5 px-4 whitespace-nowrap font-black text-emerald-500 text-sm">
+                        {order.totalAmount.toLocaleString('vi-VN')} đ
                       </td>
 
-                      {/* Người bán */}
-                      <td className="p-3.5 font-semibold text-slate-700">
-                        {o.note?.includes('AI') ? 'AI Parser' : 'Đức'}
+                      {/* Seller */}
+                      <td className="py-3.5 px-4 whitespace-nowrap text-neutral-400 text-[11px]">
+                        {order.sellerName || 'Thu ngân POS'}
                       </td>
 
-                      {/* Thanh toán */}
-                      <td className="p-3.5">
-                        {o.status === 'PAID' ? (
-                          <span className="text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 text-[11px]">Đã chuyển khoản</span>
-                        ) : o.status === 'SHIPPING' ? (
-                          <span className="text-amber-700 font-bold bg-amber-50 px-2 py-0.5 rounded border border-amber-200 text-[11px]">Tiền mặt</span>
-                        ) : (
-                          <span className="text-rose-700 font-bold bg-rose-50 px-2 py-0.5 rounded border border-rose-200 text-[11px]">Chưa thanh toán</span>
-                        )}
+                      {/* Interactive Payment Status Select */}
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        <select
+                          value={order.paymentStatus || 'UNPAID'}
+                          onChange={(e) => handleUpdatePaymentStatus(order.id, e.target.value)}
+                          className={`px-2 py-1 rounded text-[10px] font-extrabold focus:outline-none cursor-pointer border ${
+                            order.paymentStatus === 'PAID'
+                              ? 'bg-emerald-500/20 text-emerald-500 border-emerald-500/40'
+                              : 'bg-amber-500/10 text-amber-500 border-amber-500/30'
+                          }`}
+                        >
+                          <option value="UNPAID">❌ Chưa thanh toán</option>
+                          <option value="PAID">✅ Đã nhận tiền</option>
+                        </select>
                       </td>
 
-                      {/* Thời gian */}
-                      <td className="p-3.5 text-center text-slate-500 text-[11px]">
-                        {new Date(o.created_at).toLocaleString('vi-VN')}
-                      </td>
-
-                      {/* Thao tác */}
-                      <td className="p-3.5 text-center">
-                        <div className="flex items-center justify-center space-x-1.5">
+                      {/* Fast Actions: Edit, K80 Print & Detail View */}
+                      <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                        <div className="flex items-center justify-end gap-1.5">
+                          {/* Edit Order Button */}
                           <button
-                            onClick={() => setSelectedOrder(o)}
+                            onClick={() => handleOpenEditModal(order)}
+                            className="px-2.5 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-500 border border-amber-500/40 font-bold rounded-lg text-[11px] flex items-center gap-1 transition shadow-xs cursor-pointer"
+                            title="Chỉnh sửa đơn hàng"
+                          >
+                            <Pencil className="w-3.5 h-3.5 stroke-[2]" />
+                            <span>Sửa</span>
+                          </button>
+
+                          {/* Fast K80 Print Button */}
+                          <button
+                            onClick={() => setPrintBillOrder(order)}
+                            className="px-2.5 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-lg text-[11px] flex items-center gap-1 transition shadow-xs cursor-pointer"
+                            title="In hóa đơn K80 nhanh"
+                          >
+                            <Printer className="w-3.5 h-3.5 stroke-[2]" />
+                            <span>In K80</span>
+                          </button>
+
+                          {/* Detail view */}
+                          <button
+                            onClick={() => setSelectedOrder(order)}
+                            className="p-1.5 dark:bg-neutral-800 bg-stone-100 hover:bg-stone-200 dark:hover:bg-neutral-700 text-neutral-400 hover:text-white rounded-lg transition cursor-pointer"
                             title="Xem chi tiết đơn"
-                            className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition cursor-pointer"
                           >
-                            <Eye className="w-4 h-4" />
-                          </button>
-
-                          <button
-                            onClick={() => setPrintOrder(o)}
-                            title="In Bill Chế Biến K80"
-                            className="p-1.5 bg-orange-50 hover:bg-orange-100 text-orange-600 rounded-lg transition cursor-pointer border border-orange-200"
-                          >
-                            <Printer className="w-4 h-4" />
-                          </button>
-
-                          <button
-                            onClick={() => setTransferOrder(o)}
-                            title="Chuyển sang cơ sở khác"
-                            className="p-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg transition cursor-pointer border border-blue-200"
-                          >
-                            <ArrowRightLeft className="w-4 h-4" />
+                            <Eye className="w-4 h-4 stroke-[1.5]" />
                           </button>
                         </div>
                       </td>
                     </tr>
                   );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
-      {/* 3. MODAL CHI TIẾT ĐƠN HÀNG (ORDER DETAIL DRAWER) */}
-      {selectedOrder && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <ClipboardList className="w-5 h-5 text-orange-600" />
-                Chi Tiết Đơn Hàng #{selectedOrder.order_code}
-              </h3>
-              <button
-                onClick={() => setSelectedOrder(null)}
-                className="text-slate-400 hover:text-slate-600 font-bold text-sm cursor-pointer"
-              >
-                ✕
-              </button>
+      {/* 5. Modal "Tạo Đơn Hàng Mới & AI Smart Parser" */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 bg-neutral-950/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+          <div className="w-full max-w-3xl dark:bg-[#141820] bg-white rounded-2xl border dark:border-neutral-800 border-stone-300 shadow-2xl p-6 relative my-8 animate-in fade-in zoom-in-95 duration-200">
+            <button
+              onClick={() => setShowCreateModal(false)}
+              className="absolute top-4 right-4 p-1.5 text-neutral-400 hover:text-white rounded-lg dark:hover:bg-neutral-800 hover:bg-stone-100 transition"
+            >
+              <X className="w-5 h-5 stroke-[1.5]" />
+            </button>
+
+            <h3 className="text-lg font-extrabold dark:text-white text-stone-900 mb-1 flex items-center gap-2">
+              <Plus className="w-5 h-5 text-amber-500" />
+              <span>Tạo Đơn Hàng POS Mới & AI Smart Order Autofill</span>
+            </h3>
+            <p className="text-xs dark:text-neutral-400 text-stone-500 mb-4">
+              Dán nội dung tin nhắn của khách để AI tự động trích xuất Tên, SĐT, Địa chỉ và Danh mục giỏ hàng!
+            </p>
+
+            {/* PART A: AI SMART PARSER */}
+            <div className="p-4 rounded-xl dark:bg-neutral-900/90 bg-stone-50 border border-amber-500/30 mb-6 space-y-3 shadow-inner">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-extrabold text-amber-500 flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4" />
+                  <span>AI Smart Order Parser (Zalo / Facebook / SMS Message)</span>
+                </span>
+                <span className="text-[10px] text-neutral-400">Powered by Gemini AI</span>
+              </div>
+
+              <textarea
+                rows={3}
+                value={rawAiMessage}
+                onChange={(e) => setRawAiMessage(e.target.value)}
+                placeholder="Dán tin nhắn khách tại đây... (Ví dụ: 'Ship cho anh Tuấn 0912345678 đến Tòa S2.05 Vin Smart City nhé, lấy 2 con gà ủ muối nguyên con với 1 hộp chân gà rút xương, giao tầm 6h tối')"
+                className="w-full px-3 py-2 rounded-lg dark:bg-[#141820] bg-white border dark:border-neutral-700 border-stone-300 text-xs dark:text-white text-stone-900 focus:outline-none focus:border-amber-500"
+              ></textarea>
+
+              <div className="flex items-center justify-between">
+                {aiToast ? (
+                  <span className="text-xs font-bold text-emerald-500 flex items-center gap-1">
+                    <Check className="w-4 h-4" />
+                    <span>{aiToast}</span>
+                  </span>
+                ) : (
+                  <span className="text-[11px] text-neutral-500 italic">
+                    AI sẽ tự động nhận diện tên, SĐT, địa chỉ & món ăn trong thực đơn.
+                  </span>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleAiParseMessage}
+                  disabled={parsingAi}
+                  className="px-4 py-2 bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 hover:from-amber-600 hover:to-amber-800 text-stone-950 font-extrabold rounded-xl text-xs flex items-center gap-2 shadow-md transition cursor-pointer disabled:opacity-50"
+                >
+                  {parsingAi ? (
+                    <>
+                      <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-stone-950"></div>
+                      <span>Đang phân tích tin nhắn...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4" />
+                      <span>✨ AI Phân Tích & Tự Điền Form</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
 
-            <div className="space-y-4 text-xs">
-              {/* Receiver Info Card */}
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="font-extrabold text-slate-900 text-sm">{selectedOrder.customer_name}</span>
-                  <span className="font-bold text-orange-600">{selectedOrder.customer_phone}</span>
+            {/* PART B: DETAILED ORDER FORM */}
+            <form onSubmit={handleSubmitCreateOrder} className="space-y-4">
+              {formError && (
+                <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-500 text-xs font-semibold flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                  <span>{formError}</span>
                 </div>
-                <div className="text-slate-600 flex items-start space-x-1.5">
-                  <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
-                  <span>{selectedOrder.shipping_address}, {selectedOrder.district}, {selectedOrder.city}</span>
-                </div>
-                {selectedOrder.note && (
-                  <div className="bg-amber-50 border border-amber-200 p-2 rounded-lg text-amber-900 font-semibold italic">
-                    Ghi chú: {selectedOrder.note}
-                  </div>
-                )}
-              </div>
+              )}
 
-              {/* Order Items Table */}
-              <div className="border border-slate-200 rounded-xl overflow-hidden">
-                <table className="w-full text-left">
-                  <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200 uppercase text-[10px]">
-                    <tr>
-                      <th className="p-2.5">Sản Phẩm</th>
-                      <th className="p-2.5 text-center">SL</th>
-                      <th className="p-2.5 text-right">Đơn Giá</th>
-                      <th className="p-2.5 text-right">Thành Tiền</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 font-medium">
-                    {selectedOrder.items?.map((item, idx) => (
-                      <tr key={idx}>
-                        <td className="p-2.5 font-bold text-slate-900">{item.item_name}</td>
-                        <td className="p-2.5 text-center font-bold text-slate-800">{item.quantity}</td>
-                        <td className="p-2.5 text-right text-slate-600">{item.unit_price.toLocaleString('vi-VN')} đ</td>
-                        <td className="p-2.5 text-right font-extrabold text-slate-900">{item.subtotal.toLocaleString('vi-VN')} đ</td>
-                      </tr>
+              {/* Customer Info Section */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div>
+                  <label className="text-xs font-bold dark:text-neutral-300 text-stone-700 block mb-1">
+                    Tên Khách Hàng (*)
+                  </label>
+                  <input
+                    type="text"
+                    value={formCustomerName}
+                    onChange={(e) => setFormCustomerName(e.target.value)}
+                    placeholder="VD: Anh Tuấn"
+                    className="w-full px-3 py-2 rounded-xl dark:bg-neutral-900 bg-stone-50 border dark:border-neutral-700 border-stone-300 text-xs dark:text-white text-stone-900 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold dark:text-neutral-300 text-stone-700 block mb-1">
+                    Số Điện Thoại (*)
+                  </label>
+                  <input
+                    type="text"
+                    value={formCustomerPhone}
+                    onChange={(e) => setFormCustomerPhone(e.target.value)}
+                    placeholder="VD: 0912345678"
+                    className="w-full px-3 py-2 rounded-xl dark:bg-neutral-900 bg-stone-50 border dark:border-neutral-700 border-stone-300 text-xs dark:text-white text-stone-900 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold dark:text-neutral-300 text-stone-700 block mb-1">
+                    Cơ Sở Xuất Hàng (*)
+                  </label>
+                  <select
+                    value={formBranchId}
+                    onChange={(e) => setFormBranchId(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl dark:bg-neutral-900 bg-stone-50 border dark:border-neutral-700 border-stone-300 text-xs font-bold dark:text-white text-stone-900 focus:outline-none focus:border-amber-500 cursor-pointer"
+                  >
+                    {branches.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        📍 {b.code ? `${b.code.toUpperCase()} – ${b.name}` : b.name}
+                      </option>
                     ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Financial Totals */}
-              <div className="space-y-1.5 border-t border-slate-100 pt-3">
-                <div className="flex justify-between text-slate-600">
-                  <span>Tạm tính:</span>
-                  <span>{selectedOrder.subtotal.toLocaleString('vi-VN')} đ</span>
-                </div>
-                <div className="flex justify-between text-rose-600 font-semibold">
-                  <span>Khuyến mãi / Giảm giá:</span>
-                  <span>-{selectedOrder.discount_amount.toLocaleString('vi-VN')} đ</span>
-                </div>
-                <div className="flex justify-between text-base font-extrabold text-blue-700 border-t border-slate-200 pt-2">
-                  <span>Tổng tiền thanh toán:</span>
-                  <span>{selectedOrder.final_amount.toLocaleString('vi-VN')} đ</span>
+                  </select>
                 </div>
               </div>
 
-              {/* Quick Status Action Buttons */}
-              <div className={`grid ${user?.role === 'STAFF' || user?.role === 'BRANCH_STAFF' ? 'grid-cols-2' : 'grid-cols-3'} gap-2 pt-2`}>
+              <div>
+                <label className="text-xs font-bold dark:text-neutral-300 text-stone-700 block mb-1">
+                  Địa Chỉ Nhận Hàng Chi Tiết (*)
+                </label>
+                <input
+                  type="text"
+                  value={formDeliveryAddress}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setFormDeliveryAddress(val);
+                    const autoBranch = detectBranchIdFromText(val, branches);
+                    if (autoBranch) setFormBranchId(autoBranch);
+                  }}
+                  placeholder="VD: Tòa S2.05 Vin Smart City, Tây Mỗ, Nam Từ Liêm, Hà Nội"
+                  className="w-full px-3 py-2 rounded-xl dark:bg-neutral-900 bg-stone-50 border dark:border-neutral-700 border-stone-300 text-xs dark:text-white text-stone-900 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              {/* Order Notes Field & 4 Quick Tags */}
+              <div>
+                <label className="text-xs font-bold dark:text-neutral-300 text-stone-700 block mb-1">
+                  📝 Ghi Chú Đơn Hàng / Yêu Cầu Thêm:
+                </label>
+                <input
+                  type="text"
+                  value={formNotes}
+                  onChange={(e) => setFormNotes(e.target.value)}
+                  placeholder="Ví dụ: Để nguyên con không chặt, xin thêm 2 bịch sốt ớt xanh, giao ngoài giờ hành chính..."
+                  className="w-full px-3 py-2 rounded-xl dark:bg-neutral-900 bg-stone-50 border dark:border-neutral-700 border-stone-300 text-xs dark:text-white text-stone-900 focus:outline-none focus:border-amber-500"
+                />
+
+                {/* 4 Quick Tags */}
+                <div className="flex items-center gap-1.5 mt-2 flex-wrap text-[11px]">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFormNotes((prev) => (prev.trim() ? `${prev}, Để nguyên con không chặt` : 'Để nguyên con không chặt'))
+                    }
+                    className="px-2.5 py-1 rounded-lg dark:bg-neutral-800 bg-stone-200 dark:text-amber-400 text-amber-800 font-medium hover:opacity-80 transition cursor-pointer"
+                  >
+                    🍗 Để nguyên con (Không chặt)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFormNotes((prev) => (prev.trim() ? `${prev}, Chặt sẵn vừa ăn` : 'Chặt sẵn vừa ăn'))
+                    }
+                    className="px-2.5 py-1 rounded-lg dark:bg-neutral-800 bg-stone-200 dark:text-amber-400 text-amber-800 font-medium hover:opacity-80 transition cursor-pointer"
+                  >
+                    🔪 Chặt sẵn vừa ăn
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFormNotes((prev) => (prev.trim() ? `${prev}, Xin thêm sốt chấm` : 'Xin thêm sốt chấm'))
+                    }
+                    className="px-2.5 py-1 rounded-lg dark:bg-neutral-800 bg-stone-200 dark:text-amber-400 text-amber-800 font-medium hover:opacity-80 transition cursor-pointer"
+                  >
+                    🌶️ Xin thêm sốt chấm
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFormNotes((prev) => (prev.trim() ? `${prev}, Giao gấp / Giờ cụ thể` : 'Giao gấp / Giờ cụ thể'))
+                    }
+                    className="px-2.5 py-1 rounded-lg dark:bg-neutral-800 bg-stone-200 dark:text-amber-400 text-amber-800 font-medium hover:opacity-80 transition cursor-pointer"
+                  >
+                    ⏰ Giao gấp / Giờ cụ thể
+                  </button>
+                </div>
+              </div>
+
+              {/* Items Selected Table */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-bold text-amber-500 uppercase tracking-wider block">
+                    🛒 DANH SÁCH MÓN ĐÃ CHỌN ({formItems.length} MÓN)
+                  </label>
+
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={selectedAddProductId}
+                      onChange={(e) => setSelectedAddProductId(e.target.value)}
+                      className="px-2 py-1 rounded-lg dark:bg-neutral-900 bg-stone-100 border border-stone-300 dark:border-neutral-700 text-xs dark:text-white text-stone-900"
+                    >
+                      <option value="">+ Chọn món thêm thủ công...</option>
+                      {dbProducts.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name} ({p.price.toLocaleString('vi-VN')}đ)
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={handleAddManualProduct}
+                      className="px-2.5 py-1 bg-neutral-800 hover:bg-neutral-700 text-white rounded-lg text-xs font-bold"
+                    >
+                      Thêm
+                    </button>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border dark:border-neutral-800 border-stone-200 overflow-hidden">
+                  <table className="w-full text-left text-xs">
+                    <thead className="dark:bg-neutral-900 bg-stone-100 dark:text-neutral-400 text-stone-600 font-semibold">
+                      <tr>
+                        <th className="py-2.5 px-3">TÊN MÓN</th>
+                        <th className="py-2.5 px-3">ĐƠN GIÁ</th>
+                        <th className="py-2.5 px-3 text-center">SỐ LƯỢNG</th>
+                        <th className="py-2.5 px-3">THÀNH TIỀN</th>
+                        <th className="py-2.5 px-3 text-right">XÓA</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y dark:divide-neutral-800 divide-stone-200 font-medium">
+                      {formItems.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="py-6 text-center text-xs text-neutral-500 italic">
+                            Chưa có món nào được chọn. Vui lòng chọn món từ menu bên trên hoặc dùng AI Phân Tích Tin Nhắn.
+                          </td>
+                        </tr>
+                      ) : (
+                        formItems.map((item, idx) => (
+                          <tr key={idx}>
+                            <td className="py-2.5 px-3 font-bold dark:text-white text-stone-900">
+                              {item.productName}
+                            </td>
+                            <td className="py-2.5 px-3 dark:text-neutral-300 text-stone-700">
+                              {item.price.toLocaleString('vi-VN')} đ
+                            </td>
+                            <td className="py-2.5 px-3 text-center">
+                              <div className="inline-flex items-center border border-stone-300 dark:border-neutral-700 rounded-lg overflow-hidden">
+                                <button
+                                  type="button"
+                                  onClick={() => handleItemQtyChange(idx, -1)}
+                                  className="px-2 py-0.5 dark:bg-neutral-800 bg-stone-200 font-bold hover:bg-neutral-700"
+                                >
+                                  -
+                                </button>
+                                <span className="px-2.5 text-xs font-bold">{item.quantity}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleItemQtyChange(idx, 1)}
+                                  className="px-2 py-0.5 dark:bg-neutral-800 bg-stone-200 font-bold hover:bg-neutral-700"
+                                >
+                                  +
+                                </button>
+                              </div>
+                            </td>
+                            <td className="py-2.5 px-3 font-bold text-amber-500">
+                              {item.subtotal.toLocaleString('vi-VN')} đ
+                            </td>
+                            <td className="py-2.5 px-3 text-right">
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveFormItem(idx)}
+                                className="text-rose-500 hover:text-rose-400 p-1"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Payment Summary Calculations */}
+              <div className="p-4 rounded-xl dark:bg-neutral-900 bg-stone-50 border dark:border-neutral-800 border-stone-200 space-y-2 text-xs">
+                <div className="flex justify-between dark:text-neutral-300 text-stone-700">
+                  <span>Tiền hàng ({formItems.length} món):</span>
+                  <span className="font-bold">{formSubtotal.toLocaleString('vi-VN')} đ</span>
+                </div>
+
+                <div className="flex justify-between items-center dark:text-neutral-300 text-stone-700">
+                  <span>
+                    Phí vận chuyển:
+                    {formSubtotal >= 355000 && formSubtotal > 0 && (
+                      <span className="text-[10px] text-emerald-500 ml-1.5 font-bold">
+                        (Miễn phí ship bill ≥ 355k)
+                      </span>
+                    )}
+                  </span>
+                  <input
+                    type="number"
+                    value={formShippingFee}
+                    onChange={(e) => setFormShippingFee(Number(e.target.value) || 0)}
+                    className="w-24 px-2 py-1 text-right rounded border dark:border-neutral-700 border-stone-300 font-bold dark:bg-[#141820] bg-white"
+                  />
+                </div>
+
+                <div className="flex justify-between items-center dark:text-neutral-300 text-stone-700">
+                  <span>Giảm giá / Chiết khấu:</span>
+                  <input
+                    type="number"
+                    value={formDiscountAmount}
+                    onChange={(e) => setFormDiscountAmount(Number(e.target.value) || 0)}
+                    className="w-24 px-2 py-1 text-right rounded border dark:border-neutral-700 border-stone-300 font-bold text-rose-500 dark:bg-[#141820] bg-white"
+                  />
+                </div>
+
+                <div className="flex justify-between items-center text-sm font-extrabold pt-2 border-t dark:border-neutral-800 border-stone-200">
+                  <span className="dark:text-white text-stone-900">TỔNG CỘNG THANH TOÁN:</span>
+                  <span className="text-xl font-black text-emerald-500">
+                    {formFinalTotal.toLocaleString('vi-VN')} đ
+                  </span>
+                </div>
+              </div>
+
+              {/* Payment Method & Source Tag */}
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-bold dark:text-neutral-300 text-stone-700 block mb-1">
+                      Hình Thức Thanh Toán
+                    </label>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setFormPaymentMethod('COD')}
+                        className={`py-2 px-1 text-center rounded-xl text-[11px] font-bold border transition cursor-pointer ${
+                          formPaymentMethod === 'COD'
+                            ? 'bg-amber-500/20 text-amber-500 border-amber-500 shadow-2xs font-extrabold'
+                            : 'dark:bg-neutral-900 bg-stone-100 text-neutral-400 border-transparent hover:text-stone-700 dark:hover:text-stone-300'
+                        }`}
+                      >
+                        💵 Tiền Mặt
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFormPaymentMethod('BANK_TRANSFER')}
+                        className={`py-2 px-1 text-center rounded-xl text-[11px] font-bold border transition cursor-pointer ${
+                          formPaymentMethod === 'BANK_TRANSFER'
+                            ? 'bg-blue-500/20 text-blue-400 border-blue-500 shadow-2xs font-extrabold'
+                            : 'dark:bg-neutral-900 bg-stone-100 text-neutral-400 border-transparent hover:text-stone-700 dark:hover:text-stone-300'
+                        }`}
+                      >
+                        📱 Chuyển Khoản
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSelectSplit}
+                        className={`py-2 px-1 text-center rounded-xl text-[11px] font-bold border transition cursor-pointer ${
+                          formPaymentMethod === 'SPLIT'
+                            ? 'bg-purple-500/20 text-purple-400 border-purple-500 shadow-2xs font-extrabold'
+                            : 'dark:bg-neutral-900 bg-stone-100 text-neutral-400 border-transparent hover:text-stone-700 dark:hover:text-stone-300'
+                        }`}
+                      >
+                        🔄 Tiền Mặt + CK
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold dark:text-neutral-300 text-stone-700 block mb-1">
+                      Nguồn Đơn / Ghi Chú
+                    </label>
+                  <select
+                    value={formSourceTag}
+                    onChange={(e) => setFormSourceTag(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl dark:bg-neutral-900 bg-stone-50 border dark:border-neutral-700 border-stone-300 text-xs font-bold dark:text-white text-stone-900 focus:outline-none focus:border-amber-500"
+                  >
+                    <option value="Đơn Mới Web">🌐 Đơn Mới Web</option>
+                    <option value="AI Bot Chat">🤖 AI Bot Chat</option>
+                    <option value="POS Tại Quầy">🏪 POS Tại Quầy</option>
+                    <option value="Hotline Zalo">📞 Hotline Zalo</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* 2 Parallel Inputs for SPLIT Payment Method */}
+              {formPaymentMethod === 'SPLIT' && (
+                <div className="p-3.5 rounded-xl dark:bg-purple-950/20 bg-purple-50/60 border dark:border-purple-500/30 border-purple-200 space-y-2 animate-in fade-in duration-200">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[11px] font-bold text-amber-500 block mb-1">
+                        💵 Tiền Mặt (VNĐ):
+                      </label>
+                      <input
+                        type="number"
+                        value={formCashAmount}
+                        onChange={(e) => handleCashChange(Number(e.target.value) || 0)}
+                        placeholder="VD: 200,000"
+                        className="w-full px-3 py-2 rounded-xl dark:bg-neutral-900 bg-white border dark:border-neutral-700 border-stone-300 text-xs font-bold dark:text-white text-stone-900 focus:outline-none focus:border-amber-500"
+                      />
+                      <span className="text-[10px] text-neutral-400 mt-0.5 block font-medium">
+                        {formCashAmount.toLocaleString('vi-VN')} đ
+                      </span>
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-bold text-blue-400 block mb-1">
+                        📱 Chuyển Khoản (VNĐ):
+                      </label>
+                      <input
+                        type="number"
+                        value={formTransferAmount}
+                        onChange={(e) => handleTransferChange(Number(e.target.value) || 0)}
+                        placeholder="VD: 125,000"
+                        className="w-full px-3 py-2 rounded-xl dark:bg-neutral-900 bg-white border dark:border-neutral-700 border-stone-300 text-xs font-bold dark:text-white text-stone-900 focus:outline-none focus:border-blue-500"
+                      />
+                      <span className="text-[10px] text-neutral-400 mt-0.5 block font-medium">
+                        {formTransferAmount.toLocaleString('vi-VN')} đ
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Validation Alert */}
+                  {formCashAmount + formTransferAmount !== formFinalTotal && (
+                    <p className="text-[11px] font-bold text-amber-400 bg-amber-500/10 p-2 rounded-lg border border-amber-500/30 flex items-center gap-1.5">
+                      <span>⚠️ Tổng 2 khoản ({(formCashAmount + formTransferAmount).toLocaleString('vi-VN')} đ) chưa khớp với tổng thanh toán ({formFinalTotal.toLocaleString('vi-VN')} đ).</span>
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+
+              {/* Action Buttons */}
+              <div className="pt-4 flex items-center justify-end gap-3 border-t dark:border-neutral-800 border-stone-200">
                 <button
-                  onClick={() => handleStatusChange(selectedOrder.id, 'PAID')}
-                  className="py-2.5 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 transition cursor-pointer text-center text-[11px]"
+                  type="button"
+                  onClick={() => setShowCreateModal(false)}
+                  className="px-4 py-2.5 rounded-xl text-xs font-semibold text-neutral-400 hover:bg-neutral-800 transition cursor-pointer"
                 >
-                  ✓ Đã Thanh Toán
+                  Hủy Bỏ
                 </button>
+                <button
+                  type="submit"
+                  disabled={submittingOrder || formItems.length === 0}
+                  className="px-6 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black rounded-xl text-xs shadow-lg flex items-center gap-2 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>{submittingOrder ? 'Đang tạo đơn...' : '💾 TẠO ĐƠN & IN BILL K80'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 5.5. Modal "Chỉnh Sửa Đơn Hàng" */}
+      {editingOrder && (
+        <div className="fixed inset-0 z-50 bg-neutral-950/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+          <div className="w-full max-w-3xl dark:bg-[#141820] bg-white rounded-2xl border dark:border-neutral-800 border-stone-300 shadow-2xl p-6 relative my-8 animate-in fade-in zoom-in-95 duration-200">
+            <button
+              onClick={() => setEditingOrder(null)}
+              className="absolute top-4 right-4 p-1.5 text-neutral-400 hover:text-white rounded-lg dark:hover:bg-neutral-800 hover:bg-stone-100 transition"
+            >
+              <X className="w-5 h-5 stroke-[1.5]" />
+            </button>
+
+            <h3 className="text-lg font-extrabold dark:text-white text-stone-900 mb-1 flex items-center gap-2">
+              <Pencil className="w-5 h-5 text-amber-500" />
+              <span>Chỉnh Sửa Đơn Hàng #{editingOrder.orderCode}</span>
+            </h3>
+            <p className="text-xs dark:text-neutral-400 text-stone-500 mb-4">
+              Cập nhật thông tin khách hàng, số lượng món ăn, hình thức thanh toán và trạng thái đơn hàng.
+            </p>
+
+            {editFormError && (
+              <div className="p-3 mb-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-500 text-xs font-bold flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                <span>{editFormError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSubmitEditOrder} className="space-y-4">
+              {/* 1. Customer & Delivery Info */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold dark:text-neutral-300 text-stone-700 block mb-1">
+                    Tên Khách Hàng (*)
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editCustomerName}
+                    onChange={(e) => setEditCustomerName(e.target.value)}
+                    placeholder="VD: Anh Minh"
+                    className="w-full px-3 py-2 rounded-xl dark:bg-neutral-900 bg-stone-50 border dark:border-neutral-700 border-stone-300 text-xs font-bold dark:text-white text-stone-900 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold dark:text-neutral-300 text-stone-700 block mb-1">
+                    Số Điện Thoại (*)
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editCustomerPhone}
+                    onChange={(e) => setEditCustomerPhone(e.target.value)}
+                    placeholder="VD: 0988 123 456"
+                    className="w-full px-3 py-2 rounded-xl dark:bg-neutral-900 bg-stone-50 border dark:border-neutral-700 border-stone-300 text-xs font-bold dark:text-white text-stone-900 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="text-xs font-bold dark:text-neutral-300 text-stone-700 block mb-1">
+                    Địa Chỉ Chi Tiết (*)
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editDeliveryAddress}
+                    onChange={(e) => setEditDeliveryAddress(e.target.value)}
+                    placeholder="VD: Số 12 Ngõ 34 Cầu Giấy, Q. Cầu Giấy, Hà Nội"
+                    className="w-full px-3 py-2 rounded-xl dark:bg-neutral-900 bg-stone-50 border dark:border-neutral-700 border-stone-300 text-xs font-bold dark:text-white text-stone-900 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold dark:text-neutral-300 text-stone-700 block mb-1">
+                    Cơ Sở Xuất Hàng (*)
+                  </label>
+                  <select
+                    value={editBranchId}
+                    onChange={(e) => setEditBranchId(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl dark:bg-neutral-900 bg-stone-50 border dark:border-neutral-700 border-stone-300 text-xs font-bold dark:text-white text-stone-900 focus:outline-none focus:border-amber-500"
+                  >
+                    {availableBranches.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.code ? b.code.toUpperCase() + ' - ' : ''}{b.name} ({b.city})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold dark:text-neutral-300 text-stone-700 block mb-1">
+                    Ghi Chú Đơn Hàng
+                  </label>
+                  <input
+                    type="text"
+                    value={editNote}
+                    onChange={(e) => setEditNote(e.target.value)}
+                    placeholder="Ghi chú đóng gói, giao nhận..."
+                    className="w-full px-3 py-2 rounded-xl dark:bg-neutral-900 bg-stone-50 border dark:border-neutral-700 border-stone-300 text-xs font-bold dark:text-white text-stone-900 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+              </div>
+
+              {/* 2. Items & Quantities */}
+              <div className="space-y-2 pt-2 border-t dark:border-neutral-800 border-stone-200">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold dark:text-neutral-300 text-stone-700 flex items-center gap-1.5">
+                    <ShoppingBag className="w-4 h-4 text-amber-500" />
+                    <span>Danh Sách Món Ăn Trong Đơn ({editItems.length} món)</span>
+                  </label>
+                </div>
+
+                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                  {editItems.map((item, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between p-2.5 rounded-xl dark:bg-neutral-900/80 bg-stone-50 border dark:border-neutral-800 border-stone-200 text-xs"
+                    >
+                      <div className="font-bold dark:text-white text-stone-900 max-w-[220px] truncate">
+                        {item.productName}
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleEditDecreaseQty(idx)}
+                          className="w-6 h-6 rounded-lg dark:bg-neutral-800 bg-stone-200 flex items-center justify-center font-bold text-xs hover:bg-stone-300 dark:hover:bg-neutral-700 transition"
+                        >
+                          -
+                        </button>
+                        <span className="font-extrabold px-1 dark:text-white text-stone-900">{item.quantity}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleEditIncreaseQty(idx)}
+                          className="w-6 h-6 rounded-lg dark:bg-neutral-800 bg-stone-200 flex items-center justify-center font-bold text-xs hover:bg-stone-300 dark:hover:bg-neutral-700 transition"
+                        >
+                          +
+                        </button>
+                      </div>
+
+                      <div className="font-extrabold text-amber-500 whitespace-nowrap min-w-[80px] text-right">
+                        {(item.price * item.quantity).toLocaleString('vi-VN')} đ
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleEditRemoveItem(idx)}
+                        className="p-1 text-rose-500 hover:text-rose-400 transition"
+                        title="Xóa món khỏi đơn"
+                      >
+                        <Trash2 className="w-4 h-4 stroke-[1.5]" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Add product to edit list */}
+                <div className="flex gap-2 pt-1">
+                  <select
+                    value={editSelectedProductId}
+                    onChange={(e) => setEditSelectedProductId(e.target.value)}
+                    className="flex-1 px-3 py-2 rounded-xl dark:bg-neutral-900 bg-stone-50 border dark:border-neutral-700 border-stone-300 text-xs font-bold dark:text-white text-stone-900 focus:outline-none focus:border-amber-500"
+                  >
+                    <option value="">-- Chọn món để thêm vào đơn --</option>
+                    {dbProducts.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} - {p.price.toLocaleString('vi-VN')} đ
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={handleEditAddProduct}
+                    disabled={!editSelectedProductId}
+                    className="px-3 py-2 bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold rounded-xl text-xs flex items-center gap-1 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Thêm Món</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* 3. Totals, Shipping & Discount */}
+              <div className="p-3.5 rounded-xl dark:bg-neutral-900 bg-stone-100 border dark:border-neutral-800 border-stone-200 space-y-2 text-xs">
+                <div className="flex justify-between dark:text-neutral-300 text-stone-700">
+                  <span>Tiền hàng ({editItems.length} món):</span>
+                  <span className="font-bold">{editSubtotal.toLocaleString('vi-VN')} đ</span>
+                </div>
+
+                <div className="flex justify-between items-center dark:text-neutral-300 text-stone-700">
+                  <span>Phí vận chuyển:</span>
+                  <input
+                    type="number"
+                    value={editShippingFee}
+                    onChange={(e) => setEditShippingFee(Number(e.target.value) || 0)}
+                    className="w-24 px-2 py-1 text-right rounded border dark:border-neutral-700 border-stone-300 font-bold dark:bg-[#141820] bg-white"
+                  />
+                </div>
+
+                <div className="flex justify-between items-center dark:text-neutral-300 text-stone-700">
+                  <span>Giảm giá / Chiết khấu:</span>
+                  <input
+                    type="number"
+                    value={editDiscountAmount}
+                    onChange={(e) => setEditDiscountAmount(Number(e.target.value) || 0)}
+                    className="w-24 px-2 py-1 text-right rounded border dark:border-neutral-700 border-stone-300 font-bold text-rose-500 dark:bg-[#141820] bg-white"
+                  />
+                </div>
+
+                <div className="flex justify-between items-center text-sm font-extrabold pt-2 border-t dark:border-neutral-800 border-stone-200">
+                  <span className="dark:text-white text-stone-900">TỔNG CỘNG THANH TOÁN:</span>
+                  <span className="text-xl font-black text-emerald-500">
+                    {editFinalTotal.toLocaleString('vi-VN')} đ
+                  </span>
+                </div>
+              </div>
+
+              {/* 4. Payment Method & Statuses */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div>
+                  <label className="text-xs font-bold dark:text-neutral-300 text-stone-700 block mb-1">
+                    Hình Thức Thanh Toán
+                  </label>
+                  <div className="grid grid-cols-3 gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setEditPaymentMethod('COD')}
+                      className={`py-2 px-1 text-center rounded-xl text-[10px] font-bold border transition cursor-pointer ${
+                        editPaymentMethod === 'COD'
+                          ? 'bg-amber-500/20 text-amber-500 border-amber-500 font-extrabold'
+                          : 'dark:bg-neutral-900 bg-stone-100 text-neutral-400 border-transparent'
+                      }`}
+                    >
+                      💵 Tiền Mặt
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditPaymentMethod('BANK_TRANSFER')}
+                      className={`py-2 px-1 text-center rounded-xl text-[10px] font-bold border transition cursor-pointer ${
+                        editPaymentMethod === 'BANK_TRANSFER'
+                          ? 'bg-blue-500/20 text-blue-400 border-blue-500 font-extrabold'
+                          : 'dark:bg-neutral-900 bg-stone-100 text-neutral-400 border-transparent'
+                      }`}
+                    >
+                      📱 CK
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSelectEditSplit}
+                      className={`py-2 px-1 text-center rounded-xl text-[10px] font-bold border transition cursor-pointer ${
+                        editPaymentMethod === 'SPLIT'
+                          ? 'bg-purple-500/20 text-purple-400 border-purple-500 font-extrabold'
+                          : 'dark:bg-neutral-900 bg-stone-100 text-neutral-400 border-transparent'
+                      }`}
+                    >
+                      🔄 Hỗn Hợp
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold dark:text-neutral-300 text-stone-700 block mb-1">
+                    Trạng Thái Đơn Hàng
+                  </label>
+                  <select
+                    value={editStatus}
+                    onChange={(e) => setEditStatus(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl dark:bg-neutral-900 bg-stone-50 border dark:border-neutral-700 border-stone-300 text-xs font-bold dark:text-white text-stone-900 focus:outline-none focus:border-amber-500"
+                  >
+                    <option value="PENDING">🟡 Chờ xác nhận</option>
+                    <option value="CONFIRMED">🔵 Đã xác nhận (Bếp làm)</option>
+                    <option value="DELIVERING">🟣 Đang giao hàng</option>
+                    <option value="COMPLETED">🟢 Thành công</option>
+                    <option value="CANCELLED">🔴 Đã hủy</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold dark:text-neutral-300 text-stone-700 block mb-1">
+                    Trạng Thái Thanh Toán
+                  </label>
+                  <select
+                    value={editPaymentStatus}
+                    onChange={(e) => setEditPaymentStatus(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl dark:bg-neutral-900 bg-stone-50 border dark:border-neutral-700 border-stone-300 text-xs font-bold dark:text-white text-stone-900 focus:outline-none focus:border-amber-500"
+                  >
+                    <option value="UNPAID">❌ Chưa thanh toán</option>
+                    <option value="PAID">✅ Đã nhận tiền</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Split Payment inputs if selected */}
+              {editPaymentMethod === 'SPLIT' && (
+                <div className="p-3.5 rounded-xl dark:bg-purple-950/20 bg-purple-50/60 border dark:border-purple-500/30 border-purple-200 space-y-2">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[11px] font-bold text-amber-500 block mb-1">
+                        💵 Tiền Mặt (VNĐ):
+                      </label>
+                      <input
+                        type="number"
+                        value={editCashAmount}
+                        onChange={(e) => handleEditCashChange(Number(e.target.value) || 0)}
+                        placeholder="VD: 200,000"
+                        className="w-full px-3 py-2 rounded-xl dark:bg-neutral-900 bg-white border dark:border-neutral-700 border-stone-300 text-xs font-bold dark:text-white text-stone-900 focus:outline-none focus:border-amber-500"
+                      />
+                      <span className="text-[10px] text-neutral-400 mt-0.5 block font-medium">
+                        {editCashAmount.toLocaleString('vi-VN')} đ
+                      </span>
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-bold text-blue-400 block mb-1">
+                        📱 Chuyển Khoản (VNĐ):
+                      </label>
+                      <input
+                        type="number"
+                        value={editTransferAmount}
+                        onChange={(e) => handleEditTransferChange(Number(e.target.value) || 0)}
+                        placeholder="VD: 125,000"
+                        className="w-full px-3 py-2 rounded-xl dark:bg-neutral-900 bg-white border dark:border-neutral-700 border-stone-300 text-xs font-bold dark:text-white text-stone-900 focus:outline-none focus:border-blue-500"
+                      />
+                      <span className="text-[10px] text-neutral-400 mt-0.5 block font-medium">
+                        {editTransferAmount.toLocaleString('vi-VN')} đ
+                      </span>
+                    </div>
+                  </div>
+
+                  {editCashAmount + editTransferAmount !== editFinalTotal && (
+                    <p className="text-[11px] font-bold text-amber-400 bg-amber-500/10 p-2 rounded-lg border border-amber-500/30 flex items-center gap-1.5">
+                      <span>⚠️ Tổng 2 khoản ({(editCashAmount + editTransferAmount).toLocaleString('vi-VN')} đ) chưa khớp với tổng thanh toán ({editFinalTotal.toLocaleString('vi-VN')} đ).</span>
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="pt-4 flex items-center justify-end gap-3 border-t dark:border-neutral-800 border-stone-200">
+                <button
+                  type="button"
+                  onClick={() => setEditingOrder(null)}
+                  className="px-4 py-2.5 rounded-xl text-xs font-semibold text-neutral-400 hover:bg-neutral-800 transition cursor-pointer"
+                >
+                  Hủy Bỏ
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingEdit || editItems.length === 0}
+                  className="px-6 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-stone-950 font-black rounded-xl text-xs shadow-lg flex items-center gap-2 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <Pencil className="w-4 h-4 stroke-[2.5]" />
+                  <span>{submittingEdit ? 'Đang cập nhật...' : '💾 LƯU THAY ĐỔI & CẬP NHẬT'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 6. Modal Detail Order View */}
+      {selectedOrder && (
+        <div className="fixed inset-0 z-50 bg-neutral-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-lg dark:bg-[#141820] bg-white rounded-2xl border dark:border-neutral-800 border-stone-300 shadow-2xl p-6 relative space-y-4">
+            <button
+              onClick={() => setSelectedOrder(null)}
+              className="absolute top-4 right-4 text-neutral-400 hover:text-white"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="border-b dark:border-neutral-800 border-stone-200 pb-3">
+              <h3 className="font-black text-base text-amber-500 flex items-center gap-2">
+                <ShoppingBag className="w-5 h-5" />
+                <span>Chi Tiết Đơn Hàng #{selectedOrder.orderCode}</span>
+              </h3>
+              <span className="text-xs text-neutral-400 font-mono">
+                {new Date(selectedOrder.createdAt).toLocaleString('vi-VN')}
+              </span>
+            </div>
+
+            <div className="text-xs space-y-1.5 dark:text-neutral-300 text-stone-700">
+              <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-[#0B0D11] border border-slate-200 dark:border-neutral-800 mb-2">
+                <PhoneActionCell name={selectedOrder.customerName} phone={selectedOrder.customerPhone} />
+              </div>
+              <p>
+                <strong className="dark:text-white text-stone-900">Địa chỉ giao:</strong> {selectedOrder.deliveryAddress}
+              </p>
+              <p>
+                <strong className="dark:text-white text-stone-900">Nguồn đơn:</strong> {selectedOrder.sourceTag || 'Web POS'}
+              </p>
+              {selectedOrder.note && (
+                <p>
+                  <strong className="dark:text-white text-stone-900">Ghi chú:</strong> {selectedOrder.note}
+                </p>
+              )}
+            </div>
+
+            <div className="p-3 rounded-xl dark:bg-neutral-900 bg-stone-50 border dark:border-neutral-800 border-stone-200 space-y-2">
+              <h4 className="font-extrabold text-xs text-amber-500 uppercase tracking-wider">Danh Sách Món</h4>
+              {selectedOrder.items.map((item, i) => (
+                <div key={i} className="flex justify-between text-xs font-semibold">
+                  <span>
+                    {item.productName} x <strong className="text-amber-500">{item.quantity}</strong>
+                  </span>
+                  <span>{item.subtotal.toLocaleString('vi-VN')} đ</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex justify-between items-center pt-2 border-t dark:border-neutral-800 border-stone-200">
+              <span className="font-bold text-xs dark:text-neutral-400 text-stone-600">Tổng Tiền Thanh Toán:</span>
+              <span className="font-black text-xl text-emerald-500">
+                {selectedOrder.totalAmount.toLocaleString('vi-VN')} đ
+              </span>
+            </div>
+
+            {/* Quick Status Change Action Buttons inside Detail Modal */}
+            <div className="pt-2 flex items-center justify-end gap-2 flex-wrap">
+              {selectedOrder.status === 'PENDING' && (
                 <button
                   onClick={() => {
-                    setTransferOrder(selectedOrder);
-                    setSelectedOrder(null);
+                    handleUpdateOrderStatus(selectedOrder.id, 'CONFIRMED');
                   }}
-                  className="py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition cursor-pointer text-center text-[11px]"
+                  className="px-3.5 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs"
                 >
-                  ⇄ Chuyển Cơ Sở
+                  ✓ Xác Nhận Đơn (Bếp làm)
                 </button>
-                {user?.role !== 'STAFF' && user?.role !== 'BRANCH_STAFF' && (
+              )}
+              {selectedOrder.status === 'CONFIRMED' && (
+                <button
+                  onClick={() => {
+                    handleUpdateOrderStatus(selectedOrder.id, 'DELIVERING');
+                  }}
+                  className="px-3.5 py-2 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl text-xs"
+                >
+                  🚚 Giao Hàng (Delivering)
+                </button>
+              )}
+              {selectedOrder.status === 'DELIVERING' && (
+                <button
+                  onClick={() => {
+                    handleUpdateOrderStatus(selectedOrder.id, 'COMPLETED');
+                  }}
+                  className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs"
+                >
+                  🟢 Hoàn Thành Đơn
+                </button>
+              )}
+              {selectedOrder.status !== 'CANCELLED' && selectedOrder.status !== 'COMPLETED' && (
+                <button
+                  onClick={() => handleUpdateOrderStatus(selectedOrder.id, 'CANCELLED')}
+                  className="px-3 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl text-xs"
+                >
+                  Hủy Đơn
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 7. Modal In Bill K80 Thermal Receipt (With 3 Bottom Buttons: Close, Print K80, Confirm Order) */}
+      {printBillOrder && (
+        <div className="fixed inset-0 z-50 bg-neutral-950/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+          <div className="w-full max-w-sm bg-white text-stone-900 rounded-2xl shadow-2xl p-6 relative font-mono text-xs my-6 animate-in fade-in zoom-in-95 duration-200">
+            <button
+              onClick={() => setPrintBillOrder(null)}
+              className="absolute top-3 right-3 text-stone-400 hover:text-stone-900 font-bold text-sm"
+            >
+              ✕
+            </button>
+
+            {/* K80 Header */}
+            <div className="text-center pb-3 border-b border-dashed border-stone-400 space-y-1">
+              <div className="font-black text-lg text-stone-950 flex items-center justify-center gap-1">
+                <Flame className="w-5 h-5 text-amber-600" />
+                <span>GÀ Ủ MUỐI SMART</span>
+              </div>
+              <p className="text-[10px] text-stone-600 font-sans">Đỉnh Cao Vị Giác - Giòn Rụm Đậm Đà</p>
+              <p className="text-[10px] text-stone-600">
+                {branches.find((b) => b.id === printBillOrder.branchId)?.address || '12 Đường Cầu Giấy, Q. Cầu Giấy, HN'}
+              </p>
+              <p className="text-[10px] text-stone-600 font-bold">Hotline: 0988.888.901</p>
+            </div>
+
+            {/* Bill Details */}
+            <div className="py-3 border-b border-dashed border-stone-400 space-y-1 text-[11px]">
+              <div className="flex justify-between font-bold">
+                <span>HÓA ĐƠN BÁN HÀNG:</span>
+                <span className="text-amber-700">#{printBillOrder.orderCode}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Ngày:</span>
+                <span>{new Date(printBillOrder.createdAt).toLocaleString('vi-VN')}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Khách hàng:</span>
+                <span className="font-bold">{printBillOrder.customerName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>SĐT:</span>
+                <span>{printBillOrder.customerPhone}</span>
+              </div>
+              <div className="text-[10px] text-stone-700 line-clamp-2">
+                <span>Đ/C: </span>
+                <span>{printBillOrder.deliveryAddress}</span>
+              </div>
+            </div>
+
+            {/* Items Table */}
+            <div className="py-3 border-b border-dashed border-stone-400 space-y-2">
+              <div className="flex justify-between font-bold text-[10px] text-stone-500 uppercase border-b border-stone-200 pb-1">
+                <span>Tên Món</span>
+                <span>SL x Giá</span>
+                <span>T.Tiền</span>
+              </div>
+              {printBillOrder.items.map((item, idx) => (
+                <div key={idx} className="flex justify-between text-[11px]">
+                  <div className="w-1/2">
+                    <span className="font-bold block">{item.productName}</span>
+                  </div>
+                  <div className="w-1/4 text-center">
+                    {item.quantity} x {item.price.toLocaleString('vi-VN')}
+                  </div>
+                  <div className="w-1/4 text-right font-bold">
+                    {item.subtotal.toLocaleString('vi-VN')}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Note Section in K80 for Kitchen & Shipper */}
+            {printBillOrder.note && (
+              <div className="py-2 px-2.5 bg-amber-50 rounded-lg border border-amber-300 my-2 text-[11px] text-amber-950 font-sans">
+                <strong className="text-amber-900 font-extrabold block uppercase tracking-wider text-[10px] mb-0.5">
+                  📝 GHI CHÚ BẾP & SHIPPER:
+                </strong>
+                <p className="font-bold italic text-stone-900 leading-tight">
+                  {printBillOrder.note}
+                </p>
+              </div>
+            )}
+
+            {/* Summary */}
+            <div className="py-3 border-b border-dashed border-stone-400 space-y-1 text-[11px]">
+              <div className="flex justify-between">
+                <span>Phí Ship:</span>
+                <span>{(printBillOrder.shippingFee || 0).toLocaleString('vi-VN')} đ</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Giảm Giá:</span>
+                <span>-{(printBillOrder.discountAmount || 0).toLocaleString('vi-VN')} đ</span>
+              </div>
+              <div className="flex justify-between font-black text-sm pt-1 border-t border-stone-300">
+                <span>TỔNG THÀNH TIỀN:</span>
+                <span className="text-amber-700">{printBillOrder.totalAmount.toLocaleString('vi-VN')} đ</span>
+              </div>
+              <div className="flex justify-between text-[10px] text-stone-600">
+                <span>Hình thức:</span>
+                <span className="font-bold">{printBillOrder.paymentMethod === 'COD' ? 'Tiền mặt (COD)' : 'Chuyển khoản QR'}</span>
+              </div>
+            </div>
+
+            {/* Bank Transfer QR Code if Bank Transfer */}
+            {printBillOrder.paymentMethod === 'BANK_TRANSFER' && (
+              <div className="my-3 text-center space-y-1 bg-amber-50 p-2 rounded-lg border border-amber-200">
+                <p className="text-[10px] font-bold text-amber-800">QUÉT MÃ QR CHUYỂN KHOẢN HỎA TỐC</p>
+                <img
+                  src={`https://img.vietqr.io/image/${paymentConfig.bankId || 'MB'}-${paymentConfig.accountNumber || '0988888888'}-${paymentConfig.qrTemplate || 'compact2'}.png?amount=${printBillOrder.totalAmount}&addInfo=${encodeURIComponent((paymentConfig.transferSyntax || 'GUM [Mã_Đơn]').replace('[Mã_Đơn]', printBillOrder.orderCode).replace('[SĐT]', printBillOrder.customerPhone || ''))}&accountName=${encodeURIComponent(paymentConfig.accountName || 'GA U MUOI SMART')}`}
+                  alt="VietQR"
+                  className="w-32 h-32 mx-auto rounded border border-amber-300 object-contain bg-white"
+                />
+                <p className="text-[9px] text-stone-600 font-mono font-bold">
+                  {paymentConfig.bankName || paymentConfig.bankId} - STK: {paymentConfig.accountNumber}
+                </p>
+                <p className="text-[9px] text-stone-500 font-bold uppercase">
+                  Chủ TK: {paymentConfig.accountName}
+                </p>
+              </div>
+            )}
+
+            {/* Footer */}
+            <div className="pt-3 text-center space-y-1">
+              <p className="font-bold text-[11px]">CẢM ƠN QUÝ KHÁCH HÀNG & HẸN GẶP LẠI!</p>
+              <p className="text-[9px] text-stone-500">Website: gaumuoismart.vn • Hotline: 0988.888.901</p>
+            </div>
+
+            {/* 3 Bottom Action Buttons */}
+            <div className="mt-4 flex items-center justify-between gap-2 pt-3 border-t border-stone-200">
+              {/* Button 1 (Left): Close */}
+              <button
+                type="button"
+                onClick={() => setPrintBillOrder(null)}
+                className="px-3 py-2 bg-stone-200 hover:bg-stone-300 text-stone-700 rounded-xl font-bold text-xs cursor-pointer transition"
+              >
+                Đóng
+              </button>
+
+              <div className="flex items-center gap-2">
+                {/* Button 2 (Right): Print K80 */}
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-md cursor-pointer transition"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>In K80</span>
+                </button>
+
+                {/* Button 3 (Right Prominent): Confirm Order */}
+                {printBillOrder.status === 'PENDING' && (
                   <button
-                    onClick={() => handleStatusChange(selectedOrder.id, 'CANCELLED')}
-                    className="py-2.5 bg-rose-600 text-white font-bold rounded-xl hover:bg-rose-700 transition cursor-pointer text-center text-[11px]"
+                    type="button"
+                    onClick={handleConfirmOrderFromK80Modal}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-xl text-xs flex items-center gap-1.5 shadow-lg shadow-emerald-600/30 cursor-pointer transition"
                   >
-                    ✕ Hủy Đơn &amp; Hoàn Kho
+                    <Check className="w-4 h-4 stroke-[3]" />
+                    <span>✓ Xác Nhận Đơn</span>
                   </button>
                 )}
               </div>
@@ -898,26 +2429,189 @@ export default function CentralizedOrdersPage() {
         </div>
       )}
 
-      {/* PRINT BILL & VIETQR MODAL K80 */}
-      {printOrder && (
-        <ReceiptModal
-          order={printOrder}
-          onClose={() => setPrintOrder(null)}
-          onPaymentConfirmed={() => {
-            handleStatusChange(printOrder.id, 'PAID');
-          }}
-        />
+      {/* 8. Confirmation Popup: Ask Payment Status when changing status to COMPLETED */}
+      {confirmPaidOrderModal && (
+        <div className="fixed inset-0 z-50 bg-neutral-950/85 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-sm dark:bg-[#141820] bg-white rounded-2xl border dark:border-neutral-800 border-stone-300 shadow-2xl p-6 text-center animate-in fade-in zoom-in-95 duration-200">
+            <div className="w-12 h-12 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center justify-center mx-auto mb-3 border border-emerald-500/20">
+              <CheckCircle2 className="w-6 h-6 stroke-[1.75]" />
+            </div>
+            <h3 className="text-base font-bold dark:text-white text-stone-900 mb-1">
+              Xác Nhận Thanh Toán Khi Hoàn Thành Đơn
+            </h3>
+            <p className="text-xs dark:text-neutral-400 text-stone-600 mb-6">
+              Khách hàng đã thanh toán tiền cho đơn hàng này chưa?
+            </p>
+
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={() => {
+                  const modalObj = confirmPaidOrderModal;
+                  setConfirmPaidOrderModal(null);
+                  handleUpdateOrderStatus(modalObj.id, 'COMPLETED', true);
+                }}
+                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs shadow-md cursor-pointer transition"
+              >
+                ✅ Có, Đã Nhận Đủ Tiền (PAID)
+              </button>
+              <button
+                onClick={() => {
+                  const modalObj = confirmPaidOrderModal;
+                  setConfirmPaidOrderModal(null);
+                  handleUpdateOrderStatus(modalObj.id, 'COMPLETED', false);
+                }}
+                className="w-full py-2 bg-stone-200 dark:bg-neutral-800 hover:bg-stone-300 dark:hover:bg-neutral-700 dark:text-neutral-300 text-stone-700 font-semibold rounded-xl text-xs cursor-pointer transition"
+              >
+                ❌ Chưa, Vẫn Chờ Thanh Toán (UNPAID)
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
-      {/* BRANCH TRANSFER MODAL */}
-      {transferOrder && (
-        <TransferBranchModal
-          order={transferOrder}
-          onClose={() => setTransferOrder(null)}
-          onSuccess={() => loadData()}
-        />
-      )}
+      {/* 9. Modal "Cập Nhật Thông Tin Vận Chuyển (Shipper / Tracking)" */}
+      {shippingModalOrder && (
+        <div className="fixed inset-0 z-50 bg-neutral-950/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+          <div className="w-full max-w-md dark:bg-[#141820] bg-white rounded-2xl border border-purple-500/40 shadow-2xl p-6 relative animate-in fade-in zoom-in-95 duration-200">
+            <button
+              type="button"
+              onClick={() => setShippingModalOrder(null)}
+              className="absolute top-4 right-4 text-neutral-400 hover:text-white p-1 rounded-lg hover:bg-neutral-800 cursor-pointer"
+            >
+              <X className="w-5 h-5 stroke-[1.5]" />
+            </button>
 
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-2xl bg-purple-500/20 text-purple-400 flex items-center justify-center text-2xl border border-purple-500/30">
+                🛵
+              </div>
+              <div>
+                <h3 className="font-extrabold text-base dark:text-white text-stone-900">
+                  Cập Nhật Thông Tin Vận Chuyển
+                </h3>
+                <p className="text-xs text-purple-400 font-mono font-bold">
+                  Mã Đơn: #{shippingModalOrder.orderCode}
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handleSubmitShippingInfo} className="space-y-4 text-xs">
+              {/* Carrier Selection */}
+              <div>
+                <label className="font-bold dark:text-neutral-300 text-stone-700 block mb-1">
+                  Đơn Vị Vận Chuyển (*)
+                </label>
+                <select
+                  value={shippingCarrierName}
+                  onChange={(e) => setShippingCarrierName(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl dark:bg-neutral-900 bg-stone-50 border dark:border-neutral-700 border-stone-300 font-bold dark:text-white text-stone-900 focus:outline-none focus:border-purple-500 cursor-pointer"
+                >
+                  <option value="GrabExpress">🟢 GrabExpress</option>
+                  <option value="BeDelivery">🟡 BeDelivery</option>
+                  <option value="Xanh SM">🌿 Xanh SM Delivery</option>
+                </select>
+              </div>
+
+              {/* Driver Info */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold dark:text-neutral-300 text-stone-700 block mb-1">
+                    Tên Tài Xế / Shipper
+                  </label>
+                  <input
+                    type="text"
+                    value={shippingDriverName}
+                    onChange={(e) => setShippingDriverName(e.target.value)}
+                    placeholder="VD: Bác Tuấn Grab"
+                    className="w-full px-3 py-2 rounded-xl dark:bg-neutral-900 bg-stone-50 border dark:border-neutral-700 border-stone-300 dark:text-white text-stone-900 focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold dark:text-neutral-300 text-stone-700 block mb-1">
+                    Số Điện Thoại Tài Xế
+                  </label>
+                  <input
+                    type="text"
+                    value={shippingDriverPhone}
+                    onChange={(e) => setShippingDriverPhone(e.target.value)}
+                    placeholder="VD: 0912345678"
+                    className="w-full px-3 py-2 rounded-xl dark:bg-neutral-900 bg-stone-50 border dark:border-neutral-700 border-stone-300 dark:text-white text-stone-900 focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+              </div>
+
+              {/* Tracking URL */}
+              <div>
+                <label className="font-bold dark:text-neutral-300 text-stone-700 block mb-1">
+                  Link Theo Dõi Hành Trình Đơn Hàng (Tracking URL) (*)
+                </label>
+                <input
+                  type="url"
+                  value={shippingTrackingUrl}
+                  onChange={(e) => setShippingTrackingUrl(e.target.value)}
+                  placeholder="Dán link Grab / Be / Xanh SM tracking... (VD: https://grab.com/express/track/...)"
+                  className="w-full px-3 py-2 rounded-xl dark:bg-neutral-900 bg-stone-50 border dark:border-neutral-700 border-stone-300 dark:text-white text-stone-900 focus:outline-none focus:border-purple-500 font-mono text-[11px]"
+                />
+              </div>
+
+              {/* Quick Presets */}
+              <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 text-[11px] text-purple-300 space-y-1.5">
+                <span className="font-bold block">💡 Gợi Ý Nhanh Tracking Link:</span>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShippingCarrierName('GrabExpress');
+                      setShippingTrackingUrl(`https://grab.com/express/track/${shippingModalOrder.orderCode}`);
+                    }}
+                    className="px-2.5 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 rounded-lg text-[10px] font-bold text-emerald-300 border border-emerald-500/40 cursor-pointer flex items-center gap-1 transition"
+                  >
+                    <span>🟢 Grab Link</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShippingCarrierName('BeDelivery');
+                      setShippingTrackingUrl(`https://be.com.vn/track/${shippingModalOrder.orderCode}`);
+                    }}
+                    className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 rounded-lg text-[10px] font-bold text-amber-300 border border-amber-500/40 cursor-pointer flex items-center gap-1 transition"
+                  >
+                    <span>🟡 Be Link</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShippingCarrierName('Xanh SM');
+                      setShippingTrackingUrl(`https://xanhsm.com/track/${shippingModalOrder.orderCode}`);
+                    }}
+                    className="px-2.5 py-1 bg-teal-500/20 hover:bg-teal-500/30 rounded-lg text-[10px] font-bold text-teal-300 border border-teal-500/40 cursor-pointer flex items-center gap-1 transition"
+                  >
+                    <span>🌿 Xanh SM Link</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pt-2 flex items-center justify-end gap-2 border-t dark:border-neutral-800 border-stone-200">
+                <button
+                  type="button"
+                  onClick={() => setShippingModalOrder(null)}
+                  className="px-4 py-2.5 rounded-xl text-neutral-400 hover:bg-neutral-800 font-semibold cursor-pointer"
+                >
+                  Hủy Bỏ
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingShipping}
+                  className="px-5 py-2.5 bg-gradient-to-r from-purple-600 via-purple-700 to-indigo-700 hover:from-purple-500 hover:to-indigo-600 text-white font-extrabold rounded-xl shadow-lg flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  <span>{submittingShipping ? 'Đang cập nhật...' : '🚀 Xác Nhận Xuất Bếp & Bắt Đầu Giao'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

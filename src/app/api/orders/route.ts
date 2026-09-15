@@ -1,77 +1,240 @@
-import { NextResponse } from 'next/server';
-import { 
-  getCloudOrders, 
-  getCloudNotifs, 
-  addCloudOrder, 
-  setCloudOrders 
-} from '@/lib/serverStore';
+import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
+import prisma from '@/lib/prisma';
+import { verifyJWT } from '@/lib/auth';
 
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
-
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get('auth_token')?.value;
+    const userPayload = token ? await verifyJWT(token) : null;
+
     const { searchParams } = new URL(request.url);
-    const since = Number(searchParams.get('since') || 0);
+    const search = searchParams.get('search')?.trim();
+    const phone = searchParams.get('phone')?.trim();
+    const orderCode = searchParams.get('orderCode')?.trim();
+    const status = searchParams.get('status')?.trim();
+    const paymentMethod = searchParams.get('paymentMethod')?.trim();
+    const branchId = searchParams.get('branchId')?.trim();
+    const fromDate = searchParams.get('fromDate')?.trim();
+    const toDate = searchParams.get('toDate')?.trim();
 
-    const allOrders = getCloudOrders();
-    const allNotifs = getCloudNotifs();
+    const whereCondition: any = {};
 
-    const newOrders = since > 0 
-      ? allOrders.filter(o => new Date(o.createdAt || o.created_at || 0).getTime() > since)
-      : [];
+    if (search) {
+      whereCondition.OR = [
+        { orderCode: { contains: search } },
+        { customerName: { contains: search } },
+        { customerPhone: { contains: search } },
+      ];
+    } else {
+      if (orderCode) whereCondition.orderCode = { contains: orderCode };
+      if (phone) whereCondition.customerPhone = { contains: phone };
+    }
 
-    return NextResponse.json({
-      success: true,
-      orders: allOrders,
-      notifications: allNotifs,
-      newOrders,
-      hasNew: newOrders.length > 0,
-      timestamp: Date.now()
-    }, {
-      headers: {
-        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-        'Content-Type': 'application/json'
+    if (status && status !== 'ALL') {
+      whereCondition.status = status;
+    }
+
+    if (paymentMethod && paymentMethod !== 'ALL') {
+      whereCondition.paymentMethod = paymentMethod;
+    }
+
+    if (userPayload && userPayload.role === 'MANAGER' && userPayload.branchIds && userPayload.branchIds.length > 0) {
+      if (branchId && branchId !== 'ALL' && userPayload.branchIds.includes(branchId)) {
+        whereCondition.branchId = branchId;
+      } else {
+        whereCondition.branchId = { in: userPayload.branchIds };
       }
+    } else if (userPayload && (userPayload.role === 'STAFF' || userPayload.role === 'CASHIER') && userPayload.branchId) {
+      whereCondition.branchId = userPayload.branchId;
+    } else if (branchId && branchId !== 'ALL') {
+      whereCondition.branchId = branchId;
+    }
+
+    if (fromDate || toDate) {
+      whereCondition.createdAt = {};
+      if (fromDate) {
+        whereCondition.createdAt.gte = new Date(`${fromDate}T00:00:00.000+07:00`);
+      }
+      if (toDate) {
+        whereCondition.createdAt.lte = new Date(`${toDate}T23:59:59.999+07:00`);
+      }
+    }
+
+    const orders = await prisma.order.findMany({
+      where: whereCondition,
+      include: {
+        items: true,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
     });
-  } catch (error) {
-    return NextResponse.json({ success: false, error: 'Failed to fetch orders' }, { status: 500 });
+
+    return NextResponse.json({ success: true, orders });
+  } catch (error: any) {
+    console.error('Error fetching orders:', error);
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get('auth_token')?.value;
+    const userPayload = token ? await verifyJWT(token) : null;
+
     const body = await request.json();
-    const result = addCloudOrder(body);
+    const {
+      customerName,
+      customerPhone,
+      deliveryAddress,
+      note,
+      paymentMethod = 'CASH',
+      branchId = 'cs1',
+      discountAmount = 0,
+      shippingFee = 0,
+      sellerName = 'Thu ngân POS',
+      sourceTag = 'Đơn Mới Web',
+      items,
+      cashAmountInput,
+      cashAmount,
+      transferAmount,
+    } = body;
 
-    return NextResponse.json({
-      success: true,
-      order: result.orders[0],
-      notification: result.notification,
-      orders: result.orders,
-      timestamp: Date.now()
-    }, {
-      headers: {
-        'Cache-Control': 'no-store',
-        'Content-Type': 'application/json'
+    const effectiveBranchId = (userPayload && userPayload.role !== 'ADMIN' && userPayload.branchId)
+      ? userPayload.branchId
+      : (branchId || 'cs1');
+
+    if (!customerName || !customerPhone || !deliveryAddress || !items || !Array.isArray(items) || items.length === 0) {
+      return NextResponse.json({ success: false, error: 'Thiếu thông tin người nhận hoặc danh sách món' }, { status: 400 });
+    }
+
+    // Generate unique order code DH-XXXXX
+    const randomDigits = Math.floor(10000 + Math.random() * 90000);
+    const orderCode = `DH-${randomDigits}`;
+
+    // Calculate subTotal & finalTotal
+    let itemsTotal = 0;
+    const formattedItems = items.map((item: any) => {
+      const subtotal = (Number(item.price) || 0) * (Number(item.quantity) || 1);
+      itemsTotal += subtotal;
+      return {
+        productId: item.productId || null,
+        productName: item.productName || item.name || 'Món ăn',
+        quantity: Number(item.quantity) || 1,
+        price: Number(item.price) || 0,
+        subtotal,
+      };
+    });
+
+    const finalTotal = Math.max(0, itemsTotal + Number(shippingFee) - Number(discountAmount));
+
+    // Calculate Cash vs Transfer Amounts
+    let finalCashAmount = 0;
+    let finalTransferAmount = 0;
+
+    if (paymentMethod === 'BANK_TRANSFER') {
+      finalCashAmount = 0;
+      finalTransferAmount = finalTotal;
+    } else if (paymentMethod === 'SPLIT') {
+      const inputCash = cashAmountInput !== undefined ? cashAmountInput : cashAmount;
+      finalCashAmount = Math.max(0, Number(inputCash) || 0);
+      finalTransferAmount = transferAmount !== undefined 
+        ? Math.max(0, Number(transferAmount) || 0)
+        : Math.max(0, finalTotal - finalCashAmount);
+    } else {
+      // CASH or COD
+      finalCashAmount = finalTotal;
+      finalTransferAmount = 0;
+    }
+
+    // Find active shift at branch
+    const activeShift = await prisma.shift.findFirst({
+      where: { status: 'OPEN', branchId: effectiveBranchId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // Create Order in PENDING status (Step 1 Telesales -> Branch)
+    const newOrder = await prisma.order.create({
+      data: {
+        orderCode,
+        customerName,
+        customerPhone,
+        deliveryAddress,
+        note: note || '',
+        paymentMethod,
+        subTotal: itemsTotal,
+        discountAmount: Number(discountAmount) || 0,
+        shippingFee: Number(shippingFee) || 0,
+        totalAmount: finalTotal,
+        cashAmount: finalCashAmount,
+        transferAmount: finalTransferAmount,
+        branchId: effectiveBranchId,
+        sellerName: sellerName || 'Thu ngân POS',
+        sourceTag: sourceTag || 'TỔNG ĐÀI TELESALES',
+        status: 'PENDING',
+        paymentStatus: 'UNPAID',
+        shiftId: activeShift ? activeShift.id : null,
+        createdById: userPayload?.username || userPayload?.fullName || 'Telesales',
+        items: {
+          create: formattedItems,
+        },
+      },
+      include: {
+        items: true,
+      },
+    });
+
+    // Auto Stock Deduction for SINGLE & COMBO products
+    try {
+      for (const item of formattedItems) {
+        if (!item.productId) continue;
+        const prod = await prisma.product.findUnique({
+          where: { id: item.productId },
+          include: {
+            comboItems: {
+              include: {
+                product: true,
+              },
+            },
+          },
+        });
+
+        if (!prod) continue;
+
+        if (prod.type === 'COMBO' && prod.comboItems && prod.comboItems.length > 0) {
+          for (const ci of prod.comboItems) {
+            const childQtyToDeduct = (ci.quantity || 1) * (item.quantity || 1);
+            await prisma.product.update({
+              where: { id: ci.productId },
+              data: {
+                stockQuantity: {
+                  decrement: childQtyToDeduct,
+                },
+              },
+            });
+          }
+        } else {
+          const qtyToDeduct = item.quantity || 1;
+          await prisma.product.update({
+            where: { id: prod.id },
+            data: {
+              stockQuantity: {
+                decrement: qtyToDeduct,
+              },
+            },
+          });
+        }
       }
-    });
-  } catch (error) {
-    return NextResponse.json({ success: false, error: 'Failed to create cloud order' }, { status: 500 });
-  }
-}
+    } catch (stockDeductError) {
+      console.error('Stock deduction error:', stockDeductError);
+    }
 
-export async function PATCH(request: Request) {
-  try {
-    const { orderId, status } = await request.json();
-    const currentOrders = getCloudOrders();
-    const updatedOrders = currentOrders.map(o => (o.id === orderId || o.order_code === orderId) ? { ...o, status } : o);
-    setCloudOrders(updatedOrders);
-
-    return NextResponse.json({ success: true, orders: updatedOrders }, {
-      headers: { 'Content-Type': 'application/json' }
-    });
-  } catch (error) {
-    return NextResponse.json({ success: false, error: 'Failed to update order status' }, { status: 500 });
+    return NextResponse.json({ success: true, order: newOrder });
+  } catch (error: any) {
+    console.error('Error creating order:', error);
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }

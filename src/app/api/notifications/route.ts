@@ -1,67 +1,116 @@
-import { NextResponse } from 'next/server';
-import { getCloudNotifs, addCloudNotif, setCloudNotifs } from '@/lib/serverStore';
+import { NextRequest, NextResponse } from 'next/server';
+import prisma from '@/lib/prisma';
 
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
-
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const notifications = getCloudNotifs();
-    return NextResponse.json({ success: true, notifications, timestamp: Date.now() }, {
-      headers: {
-        'Cache-Control': 'no-store, no-cache',
-        'Content-Type': 'application/json'
-      }
+    const now = new Date();
+
+    // 1. Fetch PENDING Orders
+    const pendingOrders = await prisma.order.findMany({
+      where: {
+        status: 'PENDING',
+      },
+      include: {
+        items: true,
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
     });
-  } catch (error) {
-    return NextResponse.json({ success: false, error: 'Failed to fetch cloud notifications' }, { status: 500 });
-  }
-}
 
-export async function POST(request: Request) {
-  try {
-    const body = await request.json();
-    const newNotif = {
-      id: body.id || `notif_${Date.now()}`,
-      type: body.type || 'ORDER',
-      title: body.title || 'Thông báo mới',
-      content: body.content || body.message || '',
-      message: body.message || body.content || '',
-      time: body.time || body.timestamp || 'Vừa xong',
-      timestamp: body.timestamp || body.time || 'Vừa xong',
-      createdAt: new Date().toISOString(),
-      isRead: false,
-      read: false,
-      link: body.link || '/admin/orders'
-    };
-
-    const updated = addCloudNotif(newNotif);
-
-    return NextResponse.json({ success: true, notification: newNotif, notifications: updated }, {
-      headers: { 'Content-Type': 'application/json' }
+    // 2. Fetch Products with Shelf Life <= 5 Days
+    const products = await prisma.product.findMany({
+      where: {
+        stockQuantity: { gt: 0 },
+      },
+      orderBy: { createdAt: 'desc' },
     });
-  } catch (error) {
-    return NextResponse.json({ success: false, error: 'Failed to create cloud notification' }, { status: 500 });
-  }
-}
 
-export async function PATCH(request: Request) {
-  try {
-    const body = await request.json();
-    const current = getCloudNotifs();
-    let updated = current;
-
-    if (body.markAllRead) {
-      updated = current.map(n => ({ ...n, isRead: true, read: true }));
-    } else if (body.id) {
-      updated = current.map(n => n.id === body.id ? { ...n, isRead: true, read: true } : n);
-    }
-
-    setCloudNotifs(updated);
-    return NextResponse.json({ success: true, notifications: updated }, {
-      headers: { 'Content-Type': 'application/json' }
+    const expiringProducts = products.filter((p) => {
+      const createdTime = p.createdAt ? new Date(p.createdAt).getTime() : now.getTime();
+      const expDate = p.expiryDate ? new Date(p.expiryDate) : new Date(createdTime + 14 * 24 * 60 * 60 * 1000);
+      const diffDays = Math.ceil((expDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      return diffDays <= 5;
     });
-  } catch (error) {
-    return NextResponse.json({ success: false, error: 'Failed to update cloud notification' }, { status: 500 });
+
+    // 3. Fetch CRM Customers (> 30 Days Since Last Order)
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    const crmCustomers = await prisma.customer.findMany({
+      where: {
+        lastOrderAt: {
+          lte: thirtyDaysAgo,
+        },
+        OR: [
+          { lastContactedAt: null },
+          { lastContactedAt: { lte: sevenDaysAgo } },
+        ],
+      },
+      orderBy: { lastOrderAt: 'asc' },
+      take: 10,
+    });
+
+    // Formatted Notification Items
+    const notifications: any[] = [];
+
+    // Map Orders
+    pendingOrders.forEach((o) => {
+      const code = o.orderCode || `#${o.id.slice(-6)}`;
+      const itemCount = o.items ? o.items.length : 1;
+      notifications.push({
+        id: `order-${o.id}`,
+        type: 'ORDER',
+        title: `Đơn Hàng Mới ${code}`,
+        detail: `Khách ${o.customerName || 'Khách Vô Danh'} (${o.customerPhone || 'SĐT không có'}) vừa đặt ${itemCount} món - Tổng: ${o.totalAmount.toLocaleString('vi-VN')}đ. Cần xác nhận ngay!`,
+        targetUrl: `/admin/orders`,
+        createdAt: o.createdAt.toISOString(),
+      });
+    });
+
+    // Map Expiring Products
+    expiringProducts.forEach((p) => {
+      const createdTime = p.createdAt ? new Date(p.createdAt).getTime() : now.getTime();
+      const expDate = p.expiryDate ? new Date(p.expiryDate) : new Date(createdTime + 14 * 24 * 60 * 60 * 1000);
+      const daysLeft = Math.ceil((expDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      const expDateFormatted = expDate.toLocaleDateString('vi-VN');
+
+      notifications.push({
+        id: `exp-${p.id}`,
+        type: 'EXPIRY',
+        title: `Cảnh Báo Hạn Dùng Mẻ Gà`,
+        detail: `Món "${p.name}" (Lô: ${p.batchCode || 'LÔ-GUM-DEFAULT'}) chỉ còn ${daysLeft <= 0 ? 0 : daysLeft} ngày là hết hạn (HSD: ${expDateFormatted}). Ưu tiên xuất bán trước!`,
+        targetUrl: `/admin/products?expiryFilter=expiring`,
+        createdAt: p.createdAt ? p.createdAt.toISOString() : now.toISOString(),
+      });
+    });
+
+    // Map CRM Customers
+    crmCustomers.forEach((c) => {
+      notifications.push({
+        id: `crm-${c.id}`,
+        type: 'CRM',
+        title: `Nhắc Nhở Chăm Sóc Khách Quen`,
+        detail: `Khách ${c.name} (${c.phone}) đã hơn 30 ngày chưa đặt lại món gà. Bấm để gửi ưu đãi Zalo!`,
+        targetUrl: `/admin/customers?filter=reorder`,
+        createdAt: c.lastOrderAt ? c.lastOrderAt.toISOString() : c.createdAt.toISOString(),
+      });
+    });
+
+    // Sort all notifications by newest date
+    notifications.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    return NextResponse.json({
+      success: true,
+      notifications,
+      summary: {
+        orderCount: pendingOrders.length,
+        expiryCount: expiringProducts.length,
+        crmCount: crmCustomers.length,
+        total: notifications.length,
+      },
+    });
+  } catch (error: any) {
+    console.error('Error fetching notifications:', error);
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }

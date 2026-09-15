@@ -1,0 +1,348 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Category {
+  id          String    @id @default(cuid())
+  name        String
+  slug        String    @unique
+  description String?
+  products    Product[]
+  createdAt   DateTime  @default(now())
+}
+
+model Product {
+  id          String      @id @default(cuid())
+  name        String
+  type        String      @default("SINGLE") // SINGLE (Món thường), COMBO (Combo đóng gói)
+  description String?
+  price       Float
+  costPrice   Float?      @default(0)
+  image       String?
+  isAvailable Boolean     @default(true)
+  isBestSeller Boolean    @default(false)
+  expiryDate  DateTime?
+  batchCode   String?
+  aiKeywords  String?
+  stockQuantity Float     @default(50)
+  unit        String?     @default("Con")
+  categoryId  String?
+  category    Category?   @relation(fields: [categoryId], references: [id])
+  orderItems  OrderItem[]
+
+  // Combo relations
+  comboItems  ComboItem[] @relation("ParentCombo")
+  inCombos    ComboItem[] @relation("ChildProduct")
+
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+model ComboItem {
+  id          String   @id @default(uuid())
+  comboId     String   // ID của sản phẩm Combo mẹ
+  productId   String   // ID của sản phẩm thường con
+  quantity    Int      @default(1)
+
+  combo       Product  @relation("ParentCombo", fields: [comboId], references: [id], onDelete: Cascade)
+  product     Product  @relation("ChildProduct", fields: [productId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Order {
+  id              String      @id @default(cuid())
+  orderCode       String      @unique
+  customerName    String
+  customerPhone   String
+  deliveryAddress String
+  note            String?
+  status          String      @default("PENDING") // PENDING, CONFIRMED, DELIVERING, COMPLETED, CANCELLED
+  paymentStatus   String      @default("UNPAID") // UNPAID, PAID
+  paymentMethod   String      @default("CASH") // CASH, BANK_TRANSFER, SPLIT
+  subTotal        Float       @default(0)
+  discountAmount  Float?      @default(0)
+  shippingFee     Float?      @default(0)
+  totalAmount     Float
+  cashAmount      Float       @default(0)
+  transferAmount  Float       @default(0)
+  branchId        String?     @default("cs1")
+  sellerName      String?     @default("Thu ngân POS")
+  sourceTag       String?     @default("Đơn Mới Web")
+  carrierName     String?     // AhaMove, GrabExpress, Shipper quán...
+  driverName      String?     // Tên tài xế
+  driverPhone     String?     // SĐT tài xế
+  trackingUrl     String?     // Link theo dõi đơn hàng thời gian thực
+  shippedAt       DateTime?   // Thời điểm bàn giao cho shipper
+  paidAt          DateTime?   // Thời điểm tự động xác nhận tiền về qua Web2M
+  completedAt     DateTime?   // Thời điểm hoàn thành đơn hàng
+  shiftId         String?
+  shift           Shift?      @relation(fields: [shiftId], references: [id], onDelete: SetNull)
+  createdById     String?
+  confirmedById   String?
+  items           OrderItem[]
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+}
+
+model OrderItem {
+  id          String   @id @default(cuid())
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId   String?
+  product     Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  productName String
+  quantity    Int
+  price       Float
+  subtotal    Float
+}
+
+model Shift {
+  id                String    @id @default(cuid())
+  staffName         String
+  shiftName         String?   @default("Ca Sáng")
+  branchId          String?   @default("cs1")
+  teamMembers       String?
+  initialCash       Float
+  initialInventory  String?
+  finalCashExpected Float?
+  finalCashActual   Float?
+  finalInventory    String?
+  inventoryNote     String?   // Ghi chú đếm tồn kho tự do lúc nhận/bàn giao ca
+  startTime         DateTime  @default(now())
+  endTime           DateTime?
+  status            String    @default("OPEN") // OPEN, CLOSED
+  note              String?
+  orders            Order[]
+  expenses          Expense[]
+  createdAt         DateTime  @default(now())
+}
+
+model Expense {
+  id            String   @id @default(cuid())
+  expenseCode   String?
+  title         String
+  amount        Float
+  paymentMethod String   @default("CASH") // CASH, BANK_TRANSFER
+  paymentSource String   @default("CASH") // CASH, BANK_TRANSFER
+  category      String
+  creatorName   String?  @default("Quản trị viên")
+  receiptPhoto  String?
+  note          String?
+  branchId      String?  @default("cs1")
+  shiftId       String?
+  shift         Shift?   @relation(fields: [shiftId], references: [id], onDelete: SetNull)
+  date          DateTime @default(now())
+  createdAt     DateTime @default(now())
+}
+
+model InventoryItem {
+  id              String                 @id @default(cuid())
+  code            String?                @default("VT-01")
+  name            String
+  unit            String
+  category        String                 @default("Thịt gà & Phụ phẩm tươi")
+  branchId        String                 @default("bep-tong")
+  currentQuantity Float
+  minQuantity     Float
+  costPerUnit     Float
+  supplier        String
+  hotline         String?                @default("0988.888.999")
+  updatedAt       DateTime               @updatedAt
+  transactions    InventoryTransaction[]
+}
+
+model InventoryTransaction {
+  id        String        @id @default(cuid())
+  itemId    String
+  item      InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  type      String // IN, OUT
+  quantity  Float
+  note      String?
+  createdAt DateTime      @default(now())
+}
+
+model InventoryReceipt {
+  id            String                 @id @default(cuid())
+  receiptCode   String                 @unique
+  branchId      String                 @default("cs1")
+  supplierName  String
+  totalAmount   Float
+  paymentMethod String                 @default("CASH") // CASH, BANK_TRANSFER, CREDIT
+  paymentStatus String                 @default("PAID") // PAID, UNPAID
+  creatorName   String                 @default("Quản lý kho")
+  notes         String?
+  receivedAt    DateTime               @default(now())
+  createdAt     DateTime               @default(now())
+  items         InventoryReceiptItem[]
+}
+
+model InventoryReceiptItem {
+  id          String           @id @default(cuid())
+  receiptId   String
+  receipt     InventoryReceipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  productId   String?
+  productName String
+  unit        String           @default("Con")
+  batchCode   String?
+  expiryDate  DateTime?
+  quantity    Float
+  unitPrice   Float
+  subtotal    Float
+}
+
+model InventoryExport {
+  id             String                @id @default(cuid())
+  exportCode     String                @unique
+  branchId       String                @default("cs1")
+  reasonCategory String                @default("PROCESSING") // PROCESSING, DAMAGE_EXPIRED, TRANSFER, SAMPLE_INTERNAL
+  targetBranchId String?
+  totalItems     Int                   @default(0)
+  totalValue     Float                 @default(0)
+  creatorName    String                @default("Quản lý kho")
+  notes          String?
+  exportedAt     DateTime              @default(now())
+  createdAt      DateTime              @default(now())
+  items          InventoryExportItem[]
+}
+
+model InventoryExportItem {
+  id          String          @id @default(cuid())
+  exportId    String
+  export      InventoryExport @relation(fields: [exportId], references: [id], onDelete: Cascade)
+  productId   String?
+  productName String
+  unit        String          @default("Con")
+  batchCode   String?
+  quantity    Float
+  unitCost    Float
+  subtotal    Float
+}
+
+model Staff {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String   @unique
+  role      String   @default("Thu ngân") // Admin, Thu ngân, Pha chế
+  status    String   @default("ACTIVE")
+  createdAt DateTime @default(now())
+}
+
+model Customer {
+  id              String    @id @default(cuid())
+  name            String
+  phone           String    @unique
+  address         String?
+  totalOrders     Int       @default(0)
+  totalSpent      Float     @default(0)
+  lastOrderAt     DateTime?
+  branchId        String?   @default("cs1")
+  tasteNotes      String?
+  favoriteDish    String?
+  lastContactedAt DateTime?
+  contactCount    Int       @default(0)
+  reorderNotes    String?
+  createdAt       DateTime  @default(now())
+}
+
+model Setting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  group     String // CMS, AI, STORE
+  updatedAt DateTime @updatedAt
+}
+
+model User {
+  id        String   @id @default(cuid())
+  staffCode String   @unique @default("NV-01")
+  name      String
+  username  String   @unique
+  password  String   // Lưu hashed password bằng bcrypt
+  phone     String?
+  role      String   @default("CASHIER") // ADMIN, MANAGER, CASHIER, STAFF, TELESALES
+  branchId  String?
+  branch    Branch?  @relation(fields: [branchId], references: [id])
+  branchIds String?  @default("[]")
+  avatar    String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Attendance {
+  id            String    @id @default(cuid())
+  staffId       String
+  staffName     String
+  branchId      String
+  branchName    String
+  date          String    // YYYY-MM-DD
+  checkInTime   DateTime?
+  checkInPhoto  String?   // Link or base64 image
+  checkOutTime  DateTime?
+  checkOutPhoto String?
+  totalHours    Float?
+  status        String    @default("ON_TIME") // ON_TIME, LATE, EARLY_LEAVE, ABSENT
+  logType       String    @default("CAMERA_POS") // CAMERA_POS, ADMIN_MANUAL
+  notes         String?
+  createdAt     DateTime  @default(now())
+}
+
+model Branch {
+  id            String   @id @default(cuid())
+  code          String   @unique
+  name          String
+  city          String   @default("Hà Nội")
+  address       String
+  hotline       String
+  openingHours  String   @default("08:00 - 22:00")
+  managerName   String?  @default("Quản lý cơ sở")
+  googleMapsUrl String?
+  image         String?
+  isActive      Boolean  @default(true)
+  sortOrder     Int      @default(0)
+  users         User[]
+  paymentConfig PaymentConfig?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model AIKnowledge {
+  id          String   @id @default(cuid())
+  category    String   @default("GENERAL") // STORAGE, RECIPE, POLICY, HEALTH, GENERAL
+  question    String?  // Dành cho dạng Q&A
+  answer      String   // Nội dung câu trả lời hoặc đoạn văn bản tri thức
+  isActive    Boolean  @default(true)
+  priority    Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model PaymentConfig {
+  id              String   @id @default(uuid())
+  branchId        String   @unique
+  branch          Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  
+  // Thông tin VietQR
+  bankId          String   @default("MB")       // MB, VCB, TCB, ACB...
+  bankName        String   @default("MBBank")
+  accountNumber   String   @default("")
+  accountName     String   @default("")
+  qrTemplate      String   @default("compact2") // compact2, qr_only
+  transferSyntax  String   @default("GUM [Mã_Đơn]") // Cú pháp CK
+  note            String?  @default("Vui lòng giữ nguyên nội dung chuyển khoản để hệ thống tự động kích hoạt đơn.")
+  
+  // Cấu hình kết nối Web2M Gateway
+  web2mToken      String?  // API Token từ Web2M
+  web2mPassword   String?  // Mật khẩu app bank (nếu dùng gói sync Web2M)
+  isAutoConfirm   Boolean  @default(false)      // Bật/tắt tự động xác nhận
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}

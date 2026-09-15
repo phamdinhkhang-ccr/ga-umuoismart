@@ -1,1201 +1,1558 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { 
-  Sparkles, Save, Upload, Store, MapPin, Phone, Clock, 
-  ExternalLink, CheckCircle2, Flame, Share2, Globe, ShieldCheck, 
-  X, Check, AlertCircle, Utensils, Plus, Trash2, Star, Eye, EyeOff, RefreshCw
+import React, { useEffect, useState } from 'react';
+import {
+  Save,
+  Layout,
+  Sparkles,
+  MapPin,
+  BookOpen,
+  CheckCircle2,
+  Image as ImageIcon,
+  Share2,
+  UtensilsCrossed,
+  Plus,
+  Edit2,
+  Trash2,
+  Search,
+  Star,
+  ToggleLeft,
+  ToggleRight,
+  Check,
+  X,
 } from 'lucide-react';
-import { 
-  getCmsSettings, saveCmsSettings, StorefrontCmsSettings, CmsBranchItem,
-  getProducts, saveProduct, deleteProduct, ProductRecord 
-} from '@/lib/store';
-import { supabase } from '@/lib/supabaseClient';
-import { useAuth } from '@/context/AuthContext';
 
-export default function AdminCmsPage() {
-  const { user } = useAuth();
-  const [settings, setSettings] = useState<StorefrontCmsSettings>({
-    hero_title: '',
-    hero_slogan: '',
-    hero_hotline: '',
-    hotline: '',
-    hotlineBadgeText: '',
-    hotlinePrefix: '',
-    promoBannerText: '',
-    brandName: '',
-    branches: [],
-    social_facebook: '',
-    social_tiktok: '',
-    social_zalo: '',
-    hotline_complaints: '',
-    bankInfo: {
-      bankName: '',
-      accountNumber: '',
-      accountHolder: ''
-    }
+interface BranchItem {
+  id: string;
+  badge: string;
+  name: string;
+  district: string;
+  address: string;
+  phone: string;
+  hours: string;
+  image: string;
+  mapsUrl: string;
+}
+
+export default function CMSConfigPage() {
+  const [activeTab, setActiveTab] = useState<'header' | 'hero' | 'branches' | 'story' | 'menu'>('header');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Tab 1: Header & Social Channels
+  const [headerConfig, setHeaderConfig] = useState({
+    logoText1: 'GÀ Ủ MUỐI',
+    logoText2: 'SMART',
+    hotline: '0988.888.999',
+    facebook_url: 'https://facebook.com',
+    zalo_url: 'https://zalo.me',
+    tiktok_url: 'https://tiktok.com',
   });
 
-  const [products, setProducts] = useState<ProductRecord[]>([]);
-  const [toastMsg, setToastMsg] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  // Add Product Modal State
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [newProduct, setNewProduct] = useState<Partial<ProductRecord>>({
-    name: '',
-    category: 'Món Gà Ủ Muối',
-    price: 100000,
-    original_price: 120000,
-    unit: 'Phần',
-    description: '',
-    is_storefront_visible: true,
-    is_best_seller: false,
-    image_url: ''
+  // Tab 2: Hero & Cam kết
+  const [heroConfig, setHeroConfig] = useState({
+    line1: 'Gà Ủ Muối Smart',
+    line2: 'Giao Hỏa Tốc Nội Thành',
   });
 
-  const [isSaving, setIsSaving] = useState(false);
+  const [promoConfig, setPromoConfig] = useState({
+    card1Title: 'Hỗ Trợ 35K Ship Từ Bill 355K',
+    card1Desc: 'Tự động áp dụng khi chốt đơn trực tiếp',
+    card2Title: 'Giao Hỏa Tốc 30-40 Phút',
+    card2Desc: 'Đảm bảo độ lạnh giòn và chuẩn vị khi giao tới',
+  });
 
-  const reloadData = async (isMounted = true) => {
-    try {
-      const localSettings = getCmsSettings();
-      const localProducts = getProducts();
+  // Tab 3: 6 Cơ Sở
+  const [branchesConfig, setBranchesConfig] = useState<BranchItem[]>([
+    {
+      id: 'cs1',
+      badge: 'CƠ SỞ 01',
+      name: 'Cơ Sở Cầu Giấy',
+      district: 'Q. Cầu Giấy',
+      address: '12 Đường Cầu Giấy, Q. Cầu Giấy, Hà Nội',
+      phone: '0988.888.901',
+      hours: '09:00 - 22:00',
+      image: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=600&q=80',
+      mapsUrl: 'https://maps.google.com/?q=12+C%E1%BA%A7u+Gi%E1%BA%A5y+H%C3%A0+N%E1%BB%99i',
+    },
+    {
+      id: 'cs2',
+      badge: 'CƠ SỞ 02',
+      name: 'Cơ Sở Đống Đa',
+      district: 'Q. Đống Đa',
+      address: '88 Phố Xã Đàn, Q. Đống Đa, Hà Nội',
+      phone: '0988.888.902',
+      hours: '09:00 - 22:00',
+      image: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=600&q=80',
+      mapsUrl: 'https://maps.google.com/?q=88+X%C3%A3+%C4%90%C3%A0n+H%C3%A0+N%E1%BB%99i',
+    },
+    {
+      id: 'cs3',
+      badge: 'CƠ SỞ 03',
+      name: 'Cơ Sở Hai Bà Trưng',
+      district: 'Q. Hai Bà Trưng',
+      address: '156 Phố Huế, Q. Hai Bà Trưng, Hà Nội',
+      phone: '0988.888.903',
+      hours: '09:00 - 22:00',
+      image: 'https://images.unsplash.com/photo-1550966871-3ed3cdb5ed0c?w=600&q=80',
+      mapsUrl: 'https://maps.google.com/?q=156+Ph%E1%BB%91+Hu%E1%BA%BF+H%C3%A0+N%E1%BB%99i',
+    },
+    {
+      id: 'cs4',
+      badge: 'CƠ SỞ 04',
+      name: 'Cơ Sở Thanh Xuân',
+      district: 'Q. Thanh Xuân',
+      address: '45 Đường Nguyễn Trãi, Q. Thanh Xuân, Hà Nội',
+      phone: '0988.888.904',
+      hours: '09:00 - 22:00',
+      image: 'https://images.unsplash.com/photo-1537047902294-62a40c20a6ae?w=600&q=80',
+      mapsUrl: 'https://maps.google.com/?q=45+Nguy%E1%BB%85n+Tr%C3%A3i+H%C3%A0+N%E1%BB%99i',
+    },
+    {
+      id: 'cs5',
+      badge: 'CƠ SỞ 05',
+      name: 'Cơ Sở Tây Hồ',
+      district: 'Q. Tây Hồ',
+      address: '210 Đường Lạc Long Quân, Q. Tây Hồ, Hà Nội',
+      phone: '0988.888.905',
+      hours: '09:00 - 22:00',
+      image: 'https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=600&q=80',
+      mapsUrl: 'https://maps.google.com/?q=210+L%E1%BA%A1c+Long+Qu%C3%A2n+H%C3%A0+N%E1%BB%99i',
+    },
+    {
+      id: 'cs6',
+      badge: 'CƠ SỞ 06',
+      name: 'Cơ Sở Nam Từ Liêm',
+      district: 'Q. Nam Từ Liêm',
+      address: '18 Đường Lê Đức Thọ, Q. Nam Từ Liêm, Hà Nội',
+      phone: '0988.888.906',
+      hours: '09:00 - 22:00',
+      image: 'https://images.unsplash.com/photo-1552566626-52f8b828add9?w=600&q=80',
+      mapsUrl: 'https://maps.google.com/?q=18+L%C3%AA+%C4%90%E1%BB%A9c+Th%E1%BB%8D+H%C3%A0+N%E1%BB%99i',
+    },
+  ]);
 
-      if (isMounted) {
-        setSettings(localSettings);
-        setProducts(localProducts);
-      }
+  // Tab 4: Câu Chuyện Vị Giác
+  const [storyConfig, setStoryConfig] = useState({
+    tag: 'Artisan Heritage',
+    title: 'Câu Chuyện Vị Giác Gà Ủ Muối Smart',
+    desc: 'Mỗi con gà tại Gà Ủ Muối Smart được tuyển chọn khắt khe từ nguồn gà ta thả vườn đồi. Qua quy trình thẩm thấu muối hồng và thảo mộc tự nhiên theo công thức bí truyền 24 giờ, lớp da gà chuyển màu vàng óng giòn sần sật, giữ trọn vị ngọt đậm đà mọng nước từng thớ thịt.',
+    stat1Val: '100%',
+    stat1Label: 'Gà Ta Thả Vườn Đồi',
+    stat2Val: '24h',
+    stat2Label: 'Ủ Thảo Mộc Tự Nhiên',
+    image: 'https://images.unsplash.com/photo-1598515214211-89d3c73ae83b?w=800&q=80',
+    badgeTitle: 'Độc Quyền Sốt Ớt Xanh',
+    badgeSub: 'Chua cay mặn ngọt chuẩn vị',
+  });
 
-      const { data: record, error } = await supabase
-        .from('storefront_settings')
-        .select('*')
-        .eq('id', 'default_config')
-        .maybeSingle();
-      
-      if (error) {
-        console.warn('Lỗi đọc cấu hình storefront_settings:', error.message);
-      }
+  // Tab 5: Menu Management States
+  const [categories, setCategories] = useState<any[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
+  const [loadingMenu, setLoadingMenu] = useState(false);
+  const [menuSearch, setMenuSearch] = useState('');
+  const [menuCategoryFilter, setMenuCategoryFilter] = useState('ALL');
 
-      const safeData = record?.data ? { ...record.data, ...record } : (record || {});
+  // Product Modal State
+  const [modalProductOpen, setModalProductOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<any>(null);
+  const [prodName, setProdName] = useState('');
+  const [prodDesc, setProdDesc] = useState('');
+  const [prodPrice, setProdPrice] = useState<number | ''>('');
+  const [prodCostPrice, setProdCostPrice] = useState<number | ''>('');
+  const [prodImage, setProdImage] = useState('');
+  const [prodCategoryId, setProdCategoryId] = useState('');
+  const [prodIsAvailable, setProdIsAvailable] = useState(true);
+  const [prodIsBestSeller, setProdIsBestSeller] = useState(false);
 
-      if (isMounted && record) {
-        setSettings({
-          brandName: safeData.brand_name || safeData.brandName || '',
-          hero_title: safeData.hero_title || safeData.brand_name || safeData.brandName || '',
-          hotline: safeData.hotline || safeData.hero_hotline || '',
-          hero_hotline: safeData.hero_hotline || safeData.hotline || '',
-          hotlineBadgeText: safeData.hotline_badge || safeData.hotlineBadgeText || 'Hotline Đặt Ngay:',
-          hotlinePrefix: safeData.hotlinePrefix || safeData.hotline_badge || '',
-          heroHighlightTitle: safeData.hero_highlight || safeData.heroHighlightTitle || '',
-          heroSubtitle: safeData.hero_slogan || safeData.heroSubtitle || '',
-          hero_slogan: safeData.hero_slogan || safeData.heroSubtitle || '',
-          promoBannerText: safeData.promoBannerText || '',
-          featureTag1: safeData.badge_promo !== undefined ? safeData.badge_promo : (safeData.featureTag1 !== undefined ? safeData.featureTag1 : 'Giao hỏa tốc 30-40p'),
-          featureTag2: safeData.badge_ship !== undefined ? safeData.badge_ship : (safeData.featureTag2 !== undefined ? safeData.featureTag2 : 'Hỗ trợ 35k ship từ Bill 355k'),
-          hero_banner_image: safeData.banner_url || safeData.hero_banner_image || '',
-          branches: Array.isArray(safeData.branches) ? safeData.branches : [],
-          social_facebook: safeData.social_facebook || '',
-          social_tiktok: safeData.social_tiktok || '',
-          social_zalo: safeData.social_zalo || '',
-          hotline_complaints: safeData.hotline_complaints || '',
-          bankInfo: safeData.bankInfo || { bankName: '', accountNumber: '', accountHolder: '' }
-        });
+  // Category Modal State
+  const [modalCategoryOpen, setModalCategoryOpen] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<any>(null);
+  const [catName, setCatName] = useState('');
+  const [catDesc, setCatDesc] = useState('');
 
-        const cloudMenu = safeData.menuItems || safeData.products;
-        if (Array.isArray(cloudMenu)) {
-          setProducts(cloudMenu);
+  // Fetch CMS Settings safely
+  useEffect(() => {
+    fetch('/api/settings?group=CMS')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && data.success && data.settings) {
+          const s = data.settings;
+          if (s.CMS_HEADER_JSON) {
+            try {
+              const parsed = JSON.parse(s.CMS_HEADER_JSON);
+              if (parsed && typeof parsed === 'object') {
+                setHeaderConfig((prev) => ({ ...prev, ...parsed }));
+              }
+            } catch (e) {}
+          }
+          if (s.CMS_HERO_JSON) {
+            try {
+              const parsed = JSON.parse(s.CMS_HERO_JSON);
+              if (parsed && typeof parsed === 'object') {
+                setHeroConfig((prev) => ({ ...prev, ...parsed }));
+              }
+            } catch (e) {}
+          }
+          if (s.CMS_PROMO_JSON) {
+            try {
+              const parsed = JSON.parse(s.CMS_PROMO_JSON);
+              if (parsed && typeof parsed === 'object') {
+                setPromoConfig((prev) => ({ ...prev, ...parsed }));
+              }
+            } catch (e) {}
+          }
+          if (s.CMS_BRANCHES_JSON) {
+            try {
+              const parsed = JSON.parse(s.CMS_BRANCHES_JSON);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                setBranchesConfig(parsed);
+              }
+            } catch (e) {}
+          }
+          if (s.CMS_STORY_JSON) {
+            try {
+              const parsed = JSON.parse(s.CMS_STORY_JSON);
+              if (parsed && typeof parsed === 'object') {
+                setStoryConfig((prev) => ({ ...prev, ...parsed }));
+              }
+            } catch (e) {}
+          }
+
+          if (s.CMS_FACEBOOK_URL || s.facebook_url) {
+            setHeaderConfig((prev) => ({ ...prev, facebook_url: s.CMS_FACEBOOK_URL || s.facebook_url }));
+          }
+          if (s.CMS_ZALO_URL || s.zalo_url) {
+            setHeaderConfig((prev) => ({ ...prev, zalo_url: s.CMS_ZALO_URL || s.zalo_url }));
+          }
+          if (s.CMS_TIKTOK_URL || s.tiktok_url) {
+            setHeaderConfig((prev) => ({ ...prev, tiktok_url: s.CMS_TIKTOK_URL || s.tiktok_url }));
+          }
         }
+      })
+      .catch((err) => {
+        console.error('Failed to load CMS settings:', err);
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  // Fetch Categories & Products when Menu tab selected
+  const fetchMenuData = async () => {
+    setLoadingMenu(true);
+    try {
+      const [resCat, resProd] = await Promise.all([
+        fetch('/api/categories').then((r) => r.json()).catch(() => ({ success: false })),
+        fetch('/api/products').then((r) => r.json()).catch(() => ({ success: false })),
+      ]);
+      if (resCat && resCat.success && Array.isArray(resCat.categories)) {
+        setCategories(resCat.categories);
+      } else {
+        setCategories([]);
+      }
+      if (resProd && resProd.success && Array.isArray(resProd.products)) {
+        setProducts(resProd.products);
+      } else {
+        setProducts([]);
       }
     } catch (err) {
-      console.error('Lỗi khởi tạo CMS:', err);
+      console.error('Error fetching menu data:', err);
+      setCategories([]);
+      setProducts([]);
     } finally {
-      if (isMounted) {
-        setIsLoading(false);
-      }
+      setLoadingMenu(false);
     }
   };
 
   useEffect(() => {
-    let isMounted = true;
-    reloadData(isMounted);
-
-    const handleStoreUpdate = () => reloadData(isMounted);
-    window.addEventListener('gum_store_update', handleStoreUpdate);
-    return () => {
-      isMounted = false;
-      window.removeEventListener('gum_store_update', handleStoreUpdate);
-    };
-  }, []);
-
-  if (user?.role !== 'SUPER_ADMIN') {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 text-center space-y-3 max-w-md shadow-sm">
-          <AlertCircle className="w-8 h-8 text-rose-600 mx-auto" />
-          <h2 className="text-base font-bold text-slate-900">Truy Cập Bị Từ Chối</h2>
-          <p className="text-xs text-slate-600">Trang cấu hình CMS Storefront chỉ dành riêng cho Admin Tối Cao.</p>
-        </div>
-      </div>
-    );
-  }
-
-  const showToast = (msg: string) => {
-    setToastMsg(msg);
-    setTimeout(() => setToastMsg(null), 3500);
-  };
-
-  const notifyUpdate = () => {
-    window.dispatchEvent(new Event('gum_store_update'));
-  };
-
-  const handleDirectSave = async (e?: React.MouseEvent | React.FormEvent) => {
-    if (e) e.preventDefault();
-    setIsSaving(true);
-
-    try {
-      // 1. Chỉ lấy link ảnh dạng text hiện có, TUYỆT ĐỐI KHÔNG GỌI supabase.storage.upload hay bất kỳ hàm xử lý ảnh nào
-      const banner = settings.hero_banner_image || (settings as any)?.banner_url || '';
-
-      const currentMenuList = (products && products.length > 0) ? products : getProducts();
-      const formattedMenuItems = currentMenuList.map((item: any) => ({
-        id: item.id || `item_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-        name: item.name,
-        price: Number(item.price) || 0,
-        original_price: Number(item.originalPrice || item.original_price) || 0,
-        image_url: item.image || item.imageUrl || item.image_url || '',
-        description: item.description || '',
-        category: item.category || 'Món Gà Ủ Muối',
-        is_best_seller: Boolean(item.isBestSeller || item.is_best_seller),
-        is_storefront_visible: item.isVisible !== false && item.is_storefront_visible !== false,
-      }));
-
-      const fullConfigData = {
-        ...settings,
-        hero_banner_image: banner,
-        banner_url: banner,
-        products: formattedMenuItems,
-        menuItems: formattedMenuItems
-      };
-
-      // 2. Gom dữ liệu đơn giản
-      const saveObj = {
-        id: 'default_config',
-        brand_name: settings.brandName || settings.hero_title || 'Gà Ủ Muối Smart',
-        hero_slogan: settings.hero_slogan || settings.heroSubtitle || '',
-        hero_highlight: settings.heroHighlightTitle || settings.hero_title || '',
-        hotline: settings.hotline || settings.hero_hotline || '',
-        hotline_badge: settings.hotlineBadgeText || 'Hotline Đặt Ngay:',
-        banner_url: banner,
-        hero_banner_image: banner,
-        badge_ship: settings.featureTag2 !== undefined ? settings.featureTag2 : '',
-        badge_promo: settings.featureTag1 !== undefined ? settings.featureTag1 : '',
-        menu: formattedMenuItems,
-        products: formattedMenuItems,
-        data: fullConfigData,
-        updated_at: new Date().toISOString()
-      };
-
-      // 3. Chỉ gửi 1 request duy nhất vào storefront_settings
-      const { error } = await supabase
-        .from('storefront_settings')
-        .upsert(saveObj, { onConflict: 'id' });
-
-      if (error) {
-        alert("Lỗi database: " + error.message);
-        return;
-      }
-
-      saveCmsSettings(fullConfigData);
-      if (typeof window !== 'undefined') {
-        try {
-          localStorage.setItem('storefront_settings', JSON.stringify(fullConfigData));
-          localStorage.setItem('site_settings_cache', JSON.stringify(saveObj));
-        } catch (err) {}
-      }
-
-      alert("✅ ĐÃ CẬP NHẬT GIAO DIỆN THÀNH CÔNG!");
-      showToast('✅ Đã cập nhật giao diện thành công!');
-    } catch (err: any) {
-      alert("Lỗi hệ thống: " + (err?.message || "Không xác định"));
-    } finally {
-      setIsSaving(false);
+    if (activeTab === 'menu') {
+      fetchMenuData();
     }
+  }, [activeTab]);
 
-    notifyUpdate();
-  };
-
-  const handleBranchChange = (index: number, field: keyof CmsBranchItem, value: any) => {
-    setSettings((prev) => {
-      const newBranches = [...prev.branches];
-      newBranches[index] = { ...newBranches[index], [field]: value };
-      return { ...prev, branches: newBranches };
+  const handleBranchChange = (index: number, field: keyof BranchItem, value: string) => {
+    setBranchesConfig((prev) => {
+      const current = Array.isArray(prev) ? prev : [];
+      const next = [...current];
+      if (next[index]) {
+        next[index] = { ...next[index], [field]: value };
+      }
+      return next;
     });
   };
 
-  const syncProductsToSupabase = async (updatedProductList: ProductRecord[]) => {
+  const handleSaveAll = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    setSaveSuccess(false);
+
     try {
-      const { data: currentRecord } = await supabase
-        .from('storefront_settings')
-        .select('data')
-        .eq('id', 'default_config')
-        .maybeSingle();
-
-      const currentData = currentRecord?.data || {};
-
-      const updatedData = {
-        ...currentData,
-        products: updatedProductList,
-        menuItems: updatedProductList
+      const payload = {
+        CMS_HEADER_JSON: JSON.stringify(headerConfig),
+        CMS_HERO_JSON: JSON.stringify(heroConfig),
+        CMS_PROMO_JSON: JSON.stringify(promoConfig),
+        CMS_BRANCHES_JSON: JSON.stringify(branchesConfig),
+        CMS_STORY_JSON: JSON.stringify(storyConfig),
+        STORE_HOTLINE: headerConfig.hotline,
+        CMS_FACEBOOK_URL: headerConfig.facebook_url || 'https://facebook.com',
+        CMS_ZALO_URL: headerConfig.zalo_url || 'https://zalo.me',
+        CMS_TIKTOK_URL: headerConfig.tiktok_url || 'https://tiktok.com',
+        facebook_url: headerConfig.facebook_url || 'https://facebook.com',
+        zalo_url: headerConfig.zalo_url || 'https://zalo.me',
+        tiktok_url: headerConfig.tiktok_url || 'https://tiktok.com',
       };
 
-      const { error } = await supabase
-        .from('storefront_settings')
-        .upsert({
-          id: 'default_config',
-          data: updatedData,
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'id' });
-
-      if (error) {
-        console.error('Lỗi cập nhật Supabase:', error.message);
-      }
-    } catch (err: any) {
-      console.warn('Sync bypass:', err);
-    }
-  };
-
-  // Image Canvas Auto-Compression Helper (Max 500x500, JPEG 0.7, < 100KB)
-  const compressImage = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = (event) => {
-        const img = new Image();
-        img.src = event.target?.result as string;
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          const MAX_WIDTH = 500;
-          const MAX_HEIGHT = 500;
-          let width = img.width;
-          let height = img.height;
-
-          if (width > height) {
-            if (width > MAX_WIDTH) {
-              height *= MAX_WIDTH / width;
-              width = MAX_WIDTH;
-            }
-          } else {
-            if (height > MAX_HEIGHT) {
-              width *= MAX_HEIGHT / height;
-              height = MAX_HEIGHT;
-            }
-          }
-
-          canvas.width = Math.round(width);
-          canvas.height = Math.round(height);
-          const ctx = canvas.getContext('2d');
-          ctx?.drawImage(img, 0, 0, width, height);
-
-          // Xuất ra base64 dạng JPEG chất lượng 0.7 (dung lượng cực nhẹ ~30-50KB)
-          const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
-          resolve(compressedBase64);
-        };
-        img.onerror = (err) => reject(err);
-      };
-      reader.onerror = (err) => reject(err);
-    });
-  };
-
-  const sanitizeFileName = (fileName: string): string => {
-    const clean = fileName
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/đ/g, 'd')
-      .replace(/Đ/g, 'D')
-      .replace(/[^a-zA-Z0-9.-]/g, '_')
-      .toLowerCase();
-    const ext = clean.split('.').pop() || 'jpg';
-    return `banner_${Date.now()}.${ext}`;
-  };
-
-  const uploadBannerImage = async (file: File): Promise<string | null> => {
-    try {
-      if (file.size > 5 * 1024 * 1024) {
-        alert('Vui lòng chọn tệp ảnh dung lượng dưới 5MB!');
-        return null;
-      }
-      return await compressImage(file);
-    } catch (err: any) {
-      console.warn('Lỗi xử lý file ảnh, dùng fallback FileReader:', err?.message);
-      return new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result as string);
-        reader.onerror = () => resolve(null);
-        reader.readAsDataURL(file);
+      const res = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
       });
-    }
-  };
 
-  // Product Operations
-  const handleUpdateProductField = (id: string, field: keyof ProductRecord, value: any) => {
-    const target = products.find(p => p.id === id);
-    if (!target) return;
-
-    const updatedData = { ...target, [field]: value };
-    const updatedList = saveProduct(updatedData);
-    setProducts(updatedList);
-    syncProductsToSupabase(updatedList);
-    notifyUpdate();
-  };
-
-  const handleProductImageUpload = async (id: string, file: File) => {
-    showToast('⏳ Đang nén ảnh món ăn...');
-    try {
-      const compressedBase64 = await compressImage(file);
-      if (compressedBase64) {
-        handleUpdateProductField(id, 'image_url', compressedBase64);
-        showToast('📸 Đã nén & cập nhật ảnh món ăn thành công!');
+      const data = await res.json();
+      if (data.success) {
+        setSaveSuccess(true);
+        setTimeout(() => setSaveSuccess(false), 4000);
+      } else {
+        alert(data.error || 'Lỗi khi lưu cấu hình');
       }
     } catch (err) {
-      console.error('Lỗi nén ảnh món ăn:', err);
-      showToast('❌ Lỗi xử lý file ảnh!');
+      alert('Lỗi máy chủ khi lưu cấu hình');
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleDeleteProductClick = (id: string, name: string) => {
-    if (confirm(`Bạn có chắc chắn muốn xóa món "${name}" khỏi thực đơn trang chủ?`)) {
-      const updated = deleteProduct(id);
-      setProducts(updated);
-      syncProductsToSupabase(updated);
-      notifyUpdate();
-      showToast(`🗑️ Đã xóa món "${name}" thành công!`);
-    }
+  // --- Category Handlers ---
+  const handleOpenAddCategory = () => {
+    setEditingCategory(null);
+    setCatName('');
+    setCatDesc('');
+    setModalCategoryOpen(true);
   };
 
-  const handleSaveNewProductSubmit = (e: React.FormEvent) => {
+  const handleOpenEditCategory = (c: any) => {
+    setEditingCategory(c);
+    setCatName(c.name);
+    setCatDesc(c.description || '');
+    setModalCategoryOpen(true);
+  };
+
+  const handleSaveCategory = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newProduct.name?.trim()) return;
+    if (!catName) {
+      alert('Vui lòng điền tên danh mục');
+      return;
+    }
 
-    const updated = saveProduct({
-      name: newProduct.name.trim(),
-      category: newProduct.category as any || 'Món Gà Ủ Muối',
-      price: Number(newProduct.price) || 0,
-      original_price: newProduct.original_price ? Number(newProduct.original_price) : undefined,
-      description: newProduct.description || '',
-      unit: newProduct.unit || 'Phần',
-      is_storefront_visible: newProduct.is_storefront_visible !== undefined ? newProduct.is_storefront_visible : true,
-      is_best_seller: !!newProduct.is_best_seller,
-      image_url: newProduct.image_url || '',
-      is_available: true
-    });
+    const payload = {
+      id: editingCategory?.id,
+      name: catName,
+      description: catDesc,
+    };
 
-    setProducts(updated);
-    syncProductsToSupabase(updated);
-    notifyUpdate();
-    setIsAddModalOpen(false);
-    setNewProduct({
-      name: '',
-      category: 'Món Gà Ủ Muối',
-      price: 100000,
-      original_price: 120000,
-      unit: 'Phần',
-      description: '',
-      is_storefront_visible: true,
-      is_best_seller: false,
-      image_url: ''
-    });
-    showToast(`✨ Đã thêm món "${newProduct.name}" vào thực đơn trang chủ!`);
+    const method = editingCategory ? 'PUT' : 'POST';
+    try {
+      const res = await fetch('/api/categories', {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setModalCategoryOpen(false);
+        fetchMenuData();
+      } else {
+        alert(data.error || 'Lỗi khi lưu danh mục');
+      }
+    } catch (err) {
+      alert('Lỗi máy chủ');
+    }
   };
 
-  if (isLoading) {
+  const handleDeleteCategory = async (id: string) => {
+    if (!confirm('Bạn có chắc muốn xóa danh mục này? Tất cả món thuộc danh mục cần được gán lại.')) return;
+    try {
+      const res = await fetch(`/api/categories?id=${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        fetchMenuData();
+      } else {
+        alert(data.error || 'Lỗi khi xóa danh mục');
+      }
+    } catch (err) {
+      alert('Lỗi máy chủ');
+    }
+  };
+
+  // --- Product Handlers ---
+  const handleOpenAddProduct = () => {
+    setEditingProduct(null);
+    setProdName('');
+    setProdDesc('');
+    setProdPrice('');
+    setProdCostPrice(0);
+    setProdImage('https://images.unsplash.com/photo-1598515214211-89d3c73ae83b?w=600&q=80');
+    setProdCategoryId(categories[0]?.id || '');
+    setProdIsAvailable(true);
+    setProdIsBestSeller(false);
+    setModalProductOpen(true);
+  };
+
+  const handleOpenEditProduct = (p: any) => {
+    setEditingProduct(p);
+    setProdName(p.name);
+    setProdDesc(p.description || '');
+    setProdPrice(p.price);
+    setProdCostPrice(p.costPrice || 0);
+    setProdImage(p.image || '');
+    setProdCategoryId(p.categoryId);
+    setProdIsAvailable(p.isAvailable);
+    setProdIsBestSeller(p.isBestSeller || false);
+    setModalProductOpen(true);
+  };
+
+  const handleSaveProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!prodName || !prodPrice || !prodCategoryId) {
+      alert('Vui lòng điền đủ Tên món, Giá bán và Danh mục');
+      return;
+    }
+
+    const payload = {
+      id: editingProduct?.id,
+      name: prodName,
+      description: prodDesc,
+      price: Number(prodPrice),
+      costPrice: Number(prodCostPrice) || 0,
+      image: prodImage,
+      categoryId: prodCategoryId,
+      isAvailable: prodIsAvailable,
+      isBestSeller: prodIsBestSeller,
+    };
+
+    const method = editingProduct ? 'PUT' : 'POST';
+    try {
+      const res = await fetch('/api/products', {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setModalProductOpen(false);
+        fetchMenuData();
+      } else {
+        alert(data.error || 'Lỗi khi lưu món');
+      }
+    } catch (err) {
+      alert('Lỗi máy chủ');
+    }
+  };
+
+  const handleDeleteProduct = async (id: string) => {
+    if (!confirm('Bạn có chắc muốn xóa món này khỏi menu?')) return;
+    try {
+      const res = await fetch(`/api/products?id=${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        fetchMenuData();
+      } else {
+        alert(data.error || 'Lỗi khi xóa món');
+      }
+    } catch (err) {
+      alert('Lỗi máy chủ');
+    }
+  };
+
+  const handleToggleProductAvailable = async (product: any) => {
+    try {
+      const res = await fetch('/api/products', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: product.id, isAvailable: !product.isAvailable }),
+      });
+      const data = await res.json();
+      if (data.success) fetchMenuData();
+    } catch (e) {}
+  };
+
+  const handleToggleProductBestSeller = async (product: any) => {
+    try {
+      const res = await fetch('/api/products', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: product.id, isBestSeller: !product.isBestSeller }),
+      });
+      const data = await res.json();
+      if (data.success) fetchMenuData();
+    } catch (e) {}
+  };
+
+  const filteredProducts = products.filter((p) => {
+    const matchesSearch =
+      p.name.toLowerCase().includes(menuSearch.toLowerCase()) ||
+      (p.description && p.description.toLowerCase().includes(menuSearch.toLowerCase()));
+    const matchesCategory = menuCategoryFilter === 'ALL' || p.categoryId === menuCategoryFilter;
+    return matchesSearch && matchesCategory;
+  });
+
+  if (loading) {
     return (
-      <div className="min-h-[400px] flex items-center justify-center p-8 text-slate-500 font-bold text-xs">
-        <div className="flex flex-col items-center gap-3 bg-white p-6 rounded-2xl border border-slate-200 shadow-md">
-          <div className="w-8 h-8 border-3 border-orange-500 border-t-transparent rounded-full animate-spin" />
-          <span>Đang nạp cấu hình trang chủ Storefront CMS...</span>
-        </div>
+      <div className="min-h-[400px] flex items-center justify-center text-neutral-400 text-sm font-medium">
+        Đang tải dữ liệu CMS Trang Chủ...
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 p-4 sm:p-6 lg:p-8 space-y-6">
-      
-      {/* Toast Notification */}
-      {toastMsg && (
-        <div className="fixed top-6 right-6 z-50 bg-slate-900 text-white font-extrabold text-xs px-4 py-3 rounded-2xl shadow-2xl border border-slate-700 flex items-center space-x-2 animate-in fade-in slide-in-from-top-4 duration-300">
-          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-          <span>{toastMsg}</span>
+    <div className="max-w-6xl mx-auto space-y-8 pb-16">
+      {/* Page Title Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-neutral-800 pb-5">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-[#FAFAF9] tracking-tight">
+            Quản Lý Cấu Hình Trang Chủ (CMS)
+          </h1>
+          <p className="text-xs text-neutral-400 mt-1">
+            Chỉnh sửa 100% nội dung Header, Hero, 2 Thẻ Cam Kết, 6 Cơ Sở, Câu Chuyện Vị Giác và Toàn Bộ Thực Đơn Món Ăn.
+          </p>
+        </div>
+
+        {/* Global Save Button top shortcut */}
+        {activeTab !== 'menu' && (
+          <button
+            onClick={handleSaveAll}
+            disabled={saving}
+            className="self-start sm:self-auto px-6 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-neutral-950 font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg transition-all flex items-center gap-2 cursor-pointer"
+          >
+            <Save className="w-4 h-4 stroke-[2]" />
+            <span>{saving ? 'Đang Lưu...' : 'Lưu Thay Đổi CMS'}</span>
+          </button>
+        )}
+      </div>
+
+      {/* Success Notification Alert */}
+      {saveSuccess && (
+        <div className="bg-emerald-500/10 border border-emerald-500/40 text-emerald-400 p-4 rounded-2xl flex items-center gap-3 text-xs font-semibold shadow-lg">
+          <CheckCircle2 className="w-5 h-5 shrink-0 stroke-[2]" />
+          <span>Đã lưu thành công tất cả cấu hình CMS! Trang khách hàng sẽ tự động cập nhật thông tin mới nhất.</span>
         </div>
       )}
 
-      {/* PAGE HEADER */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center space-x-3">
-          <div className="p-3 bg-orange-50 text-orange-600 rounded-xl border border-orange-200">
-            <Sparkles className="w-6 h-6 animate-pulse" />
-          </div>
-          <div>
-            <h1 className="text-xl font-black text-slate-900 flex items-center gap-2">
-              Quản Trị Nội Dung Trang Chủ (Storefront CMS)
-            </h1>
-            <p className="text-xs text-slate-500 font-medium mt-0.5">
-              Cấu hình Banner Hero, Slogan, thực đơn món ngoài trang chủ, 5 cơ sở &amp; kênh truyền thông.
-            </p>
-          </div>
-        </div>
+      {/* 5 Navigation Tabs */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-neutral-800 pb-3">
+        <button
+          type="button"
+          onClick={() => setActiveTab('header')}
+          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+            activeTab === 'header'
+              ? 'bg-amber-500/15 border border-amber-500/50 text-amber-300 shadow-md'
+              : 'bg-neutral-900/60 border border-neutral-800 text-neutral-400 hover:text-white hover:bg-neutral-800'
+          }`}
+        >
+          <Layout className="w-4 h-4 stroke-[1.75]" />
+          <span>1. Header & Liên Hệ</span>
+        </button>
 
         <button
           type="button"
-          onClick={handleDirectSave}
-          className="bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-extrabold px-5 py-2.5 rounded-xl text-xs shadow-md transition flex items-center justify-center space-x-2 cursor-pointer shrink-0"
+          onClick={() => setActiveTab('hero')}
+          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+            activeTab === 'hero'
+              ? 'bg-amber-500/15 border border-amber-500/50 text-amber-300 shadow-md'
+              : 'bg-neutral-900/60 border border-neutral-800 text-neutral-400 hover:text-white hover:bg-neutral-800'
+          }`}
         >
-          <Save className="w-4 h-4" />
-          <span>💾 Lưu Cấu Hình Trang Chủ</span>
+          <Sparkles className="w-4 h-4 stroke-[1.75]" />
+          <span>2. Hero & Cam Kết</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('branches')}
+          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+            activeTab === 'branches'
+              ? 'bg-amber-500/15 border border-amber-500/50 text-amber-300 shadow-md'
+              : 'bg-neutral-900/60 border border-neutral-800 text-neutral-400 hover:text-white hover:bg-neutral-800'
+          }`}
+        >
+          <MapPin className="w-4 h-4 stroke-[1.75]" />
+          <span>3. Quản Lý 6 Cơ Sở ({(branchesConfig || []).length})</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('story')}
+          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+            activeTab === 'story'
+              ? 'bg-amber-500/15 border border-amber-500/50 text-amber-300 shadow-md'
+              : 'bg-neutral-900/60 border border-neutral-800 text-neutral-400 hover:text-white hover:bg-neutral-800'
+          }`}
+        >
+          <BookOpen className="w-4 h-4 stroke-[1.75]" />
+          <span>4. Câu Chuyện Vị Giác</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('menu')}
+          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+            activeTab === 'menu'
+              ? 'bg-amber-500/15 border border-amber-500/50 text-amber-300 shadow-md'
+              : 'bg-neutral-900/60 border border-neutral-800 text-neutral-400 hover:text-white hover:bg-neutral-800'
+          }`}
+        >
+          <UtensilsCrossed className="w-4 h-4 stroke-[1.75]" />
+          <span>🍽️ 5. Quản Lý Thực Đơn (Menu)</span>
         </button>
       </div>
 
-      <form onSubmit={handleDirectSave} className="space-y-6">
-        
-        {/* 1. KHỐI CẤU HÌNH BANNER & KHẨU HIỆU (HERO SECTION) */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
-          <div className="flex items-center space-x-2 border-b border-slate-100 pb-3">
-            <Flame className="w-5 h-5 text-orange-600" />
-            <h2 className="font-extrabold text-slate-900 text-sm">A. Cấu Hình Banner Đầu Trang &amp; Khẩu Hiệu (Hero Section)</h2>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-            
-            <div className="space-y-1">
-              <label className="font-bold text-slate-700">Tiêu đề thương hiệu chính (*)</label>
-              <input
-                type="text"
-                required
-                value={settings.hero_title}
-                onChange={(e) => setSettings({ ...settings, hero_title: e.target.value })}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-extrabold text-slate-900 outline-none focus:border-orange-500 focus:bg-white transition"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="font-bold text-slate-700">Tiền tố Badge Hotline (VD: Hotline Đặt Ngay:)</label>
-              <input
-                type="text"
-                value={settings.hotlineBadgeText || 'Hotline Đặt Ngay:'}
-                onChange={(e) => setSettings({ ...settings, hotlineBadgeText: e.target.value })}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 outline-none focus:border-orange-500 focus:bg-white transition"
-              />
-            </div>
-
-            <div className="sm:col-span-2 space-y-1">
-              <label className="font-bold text-slate-700 block">
-                Tiêu đề nổi bật màu cam (Hero Highlight Text)
-              </label>
-              <input
-                type="text"
-                value={settings.heroHighlightTitle ?? ''}
-                onChange={(e) => setSettings({ ...settings, heroHighlightTitle: e.target.value })}
-                placeholder="VD: Thơm Ngon Đậm Đà • Giao Hỏa Tốc"
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-orange-600 outline-none focus:border-orange-500 focus:bg-white transition"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="font-bold text-slate-700 block">Số điện thoại Hotline gọi nhanh (*)</label>
-              <input
-                type="text"
-                value={settings.hotline ?? settings.hero_hotline ?? ''}
-                onChange={(e) => setSettings(prev => ({ ...prev, hotline: e.target.value, hero_hotline: e.target.value }))}
-                placeholder="Nhập số hotline (hoặc để trống nếu không muốn hiện)"
-                className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl font-bold text-orange-600 outline-none focus:border-orange-500 transition"
-              />
-            </div>
-
-            <div className="sm:col-span-2 space-y-1">
-              <label className="font-bold text-slate-700">Thông báo ưu đãi nổi bật (Chạy thanh Banner)</label>
-              <input
-                type="text"
-                value={settings.promoBannerText || ''}
-                onChange={(e) => setSettings({ ...settings, promoBannerText: e.target.value })}
-                placeholder="VD: 🔥 Khuyến mãi đặc biệt: Đồng giá Gà Ủ Muối Nguyên Con 190.000đ!"
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-orange-700 outline-none focus:border-orange-500 focus:bg-white transition"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="font-bold text-slate-700">Thẻ Cam Kết 1 (⚡ Tag Giao Hàng)</label>
-              <input
-                type="text"
-                value={settings.featureTag1 !== undefined ? settings.featureTag1 : 'Giao hỏa tốc 30-40p'}
-                onChange={(e) => setSettings({ ...settings, featureTag1: e.target.value })}
-                placeholder="VD: Giao hỏa tốc 30-40p (để trống để ẩn)"
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 outline-none focus:border-orange-500 focus:bg-white transition"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="font-bold text-slate-700">Thẻ Cam Kết 2 (🚚 Tag Ưu Đãi Ship)</label>
-              <input
-                type="text"
-                value={settings.featureTag2 !== undefined ? settings.featureTag2 : 'Hỗ trợ 35k ship từ Bill 355k'}
-                onChange={(e) => setSettings({ ...settings, featureTag2: e.target.value })}
-                placeholder="VD: Hỗ trợ 35k ship từ Bill 355k (để trống để ẩn)"
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 outline-none focus:border-orange-500 focus:bg-white transition"
-              />
-            </div>
-
-            <div className="sm:col-span-2 space-y-1">
-              <label className="font-bold text-slate-700">Câu khẩu hiệu / Slogan thương hiệu (*)</label>
-              <textarea
-                rows={2}
-                required
-                value={settings.hero_slogan}
-                onChange={(e) => setSettings({ ...settings, hero_slogan: e.target.value })}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800 outline-none focus:border-orange-500 focus:bg-white transition"
-              />
-            </div>
-
-            {/* Banner Background Image Drag & Drop */}
-            <div className="sm:col-span-2 space-y-1">
-              <label className="font-bold text-slate-700">Ảnh nền Banner chính (Hero Background / Banner Món)</label>
-              {settings.hero_banner_image ? (
-                <div className="flex items-center gap-3 bg-orange-50/60 p-3 rounded-2xl border border-orange-200">
-                  <img src={settings.hero_banner_image} alt="Banner Preview" className="w-32 h-20 object-cover rounded-xl border border-orange-300 shadow-2xs shrink-0" />
-                  <div className="space-y-1 text-xs">
-                    <span className="font-extrabold text-orange-800 block">✓ Đã tải ảnh banner lên thành công</span>
-                    <button
-                      type="button"
-                      onClick={() => setSettings({ ...settings, hero_banner_image: '' })}
-                      className="px-3 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold rounded-lg text-[11px] cursor-pointer transition flex items-center gap-1"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                      <span>Xóa ảnh banner</span>
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <label className="border-2 border-dashed border-slate-300 hover:border-orange-500 rounded-2xl p-5 flex flex-col items-center justify-center text-center cursor-pointer bg-slate-50/50 hover:bg-orange-50/30 transition group">
-                  <input
-                    type="file"
-                    accept="image/png, image/jpeg, image/webp"
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        showToast('⏳ Đang xử lý & tải ảnh banner...');
-                        try {
-                          const bannerUrl = await uploadBannerImage(file);
-                          if (bannerUrl) {
-                            setSettings(prev => ({ ...prev, hero_banner_image: bannerUrl }));
-                            showToast('📸 Đã cập nhật ảnh banner thành công!');
-                          }
-                        } catch (err: any) {
-                          console.error('Lỗi xử lý ảnh banner:', err);
-                          showToast('❌ Lỗi tải ảnh banner!');
-                        }
-                      }
-                    }}
-                    className="hidden"
-                  />
-                  <Upload className="w-6 h-6 text-orange-600 mb-1 group-hover:scale-110 transition" />
-                  <span className="font-bold text-slate-800 text-xs">Bấm để chọn tệp từ máy hoặc kéo thả ảnh Banner</span>
-                  <span className="text-[10px] text-slate-500 mt-0.5">Hỗ trợ JPG, PNG, WebP (Tự động lưu Base64 Data URL)</span>
-                </label>
-              )}
-            </div>
-
-          </div>
-        </div>
-
-        {/* 1.5. KHỐI CẤU HÌNH NGÂN HÀNG THANH TOÁN (VIETQR) */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
-          <div className="flex items-center space-x-2 border-b border-slate-100 pb-3">
-            <Sparkles className="w-5 h-5 text-orange-600" />
-            <h2 className="font-extrabold text-slate-900 text-sm">B. Cấu Hình Tài Khoản Ngân Hàng Thanh Toán (Chuyển Khoản / VietQR)</h2>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
-            <div className="space-y-1">
-              <label className="font-bold text-slate-700">Tên Ngân hàng (VD: MB Bank, Vietcombank)</label>
-              <input
-                type="text"
-                value={settings.bankInfo?.bankName || 'MB Bank'}
-                onChange={(e) => setSettings({
-                  ...settings,
-                  bankInfo: { ...(settings.bankInfo || { accountNumber: '', accountHolder: '' }), bankName: e.target.value }
-                })}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 outline-none focus:border-orange-500 focus:bg-white transition"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="font-bold text-slate-700">Số tài khoản nhận tiền (*)</label>
-              <input
-                type="text"
-                value={settings.bankInfo?.accountNumber || '0988123456'}
-                onChange={(e) => setSettings({
-                  ...settings,
-                  bankInfo: { ...(settings.bankInfo || { bankName: 'MB Bank', accountHolder: '' }), accountNumber: e.target.value }
-                })}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-orange-600 outline-none focus:border-orange-500 focus:bg-white transition"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="font-bold text-slate-700">Tên chủ tài khoản (*)</label>
-              <input
-                type="text"
-                value={settings.bankInfo?.accountHolder || 'CHI NHANH VIN SMART CITY'}
-                onChange={(e) => setSettings({
-                  ...settings,
-                  bankInfo: { ...(settings.bankInfo || { bankName: 'MB Bank', accountNumber: '' }), accountHolder: e.target.value }
-                })}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 outline-none focus:border-orange-500 focus:bg-white transition"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* 2. KHỐI QUẢN LÝ 5 CƠ SỞ HIỂN THỊ TRANG CHỦ */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
-          <div className="flex items-center space-x-2 border-b border-slate-100 pb-3 justify-between">
-            <div className="flex items-center space-x-2">
-              <Store className="w-5 h-5 text-orange-600" />
-              <h2 className="font-extrabold text-slate-900 text-sm">C. Quản Lý Danh Sách 5 Cơ Sở Hiển Thị Ngoài Trang Chủ</h2>
-            </div>
-            <span className="text-[11px] font-bold text-slate-500">Cơ sở bật/tắt sẽ tự động cập nhật ngoài trang chủ</span>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 text-xs">
-            {settings.branches.map((b, idx) => (
-              <div key={b.id || idx} className={`border rounded-2xl p-4 space-y-3 transition ${b.is_active ? 'bg-white border-slate-200 shadow-2xs' : 'bg-slate-50 border-slate-200 opacity-60'}`}>
-                
-                <div className="flex justify-between items-center border-b border-slate-100 pb-2">
-                  <span className="font-extrabold text-slate-900 flex items-center gap-1.5">
-                    <MapPin className="w-3.5 h-3.5 text-orange-600" />
-                    Cơ sở #{idx + 1}: {b.name}
-                  </span>
-
-                  {/* Toggle Switch */}
-                  <label className="flex items-center space-x-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={b.is_active}
-                      onChange={(e) => handleBranchChange(idx, 'is_active', e.target.checked)}
-                      className="sr-only peer"
-                    />
-                    <div className="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500 relative"></div>
-                    <span className={`text-[10px] font-bold ${b.is_active ? 'text-emerald-700' : 'text-slate-400'}`}>
-                      {b.is_active ? 'Hiển thị' : 'Đang ẩn'}
-                    </span>
-                  </label>
-                </div>
-
-                <div className="space-y-2">
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-600">Tên cơ sở:</label>
-                    <input
-                      type="text"
-                      value={b.name}
-                      onChange={(e) => handleBranchChange(idx, 'name', e.target.value)}
-                      className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg font-bold text-slate-900 outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-600">Địa chỉ hiển thị:</label>
-                    <input
-                      type="text"
-                      value={b.address}
-                      onChange={(e) => handleBranchChange(idx, 'address', e.target.value)}
-                      className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800 outline-none"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-600">Hotline:</label>
-                      <input
-                        type="text"
-                        value={b.phone}
-                        onChange={(e) => handleBranchChange(idx, 'phone', e.target.value)}
-                        className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg font-bold text-orange-600 outline-none"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-600">Giờ mở cửa:</label>
-                      <input
-                        type="text"
-                        value={b.hours}
-                        onChange={(e) => handleBranchChange(idx, 'hours', e.target.value)}
-                        className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800 outline-none"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-600">Link Google Maps:</label>
-                    <input
-                      type="text"
-                      value={b.maps_url}
-                      onChange={(e) => handleBranchChange(idx, 'maps_url', e.target.value)}
-                      className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg font-mono text-[11px] text-slate-700 outline-none"
-                    />
-                  </div>
-                </div>
-
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* 3. KHỐI CẤU HÌNH & QUẢN LÝ THỰC ĐƠN MENU HIỂN THỊ NGOÀI TRANG CHỦ */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-5">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-3 gap-3">
-            <div className="flex items-center space-x-2">
-              <Utensils className="w-5 h-5 text-orange-600" />
-              <div>
-                <h2 className="font-extrabold text-slate-900 text-sm">
-                  C. Cấu Hình &amp; Quản Lý Thực Đơn Menu Hiển Thị Ngoài Trang Chủ
+      {/* Main Form Tabs */}
+      {activeTab !== 'menu' && (
+        <form onSubmit={handleSaveAll} className="space-y-8">
+          {/* TAB 1: HEADER & LIÊN HỆ */}
+          {activeTab === 'header' && (
+            <div className="bg-[#14171D] rounded-2xl border border-neutral-800 p-6 space-y-6">
+              <div className="border-b border-neutral-800/80 pb-4">
+                <h2 className="text-base font-bold text-white flex items-center gap-2">
+                  <Layout className="w-4 h-4 text-amber-400 stroke-[2]" />
+                  Cấu Hình Thanh Header & Hotline Chăm Sóc Sức Khỏe / Đặt Hàng
                 </h2>
-                <p className="text-[11px] text-slate-500 font-medium">
-                  Admin toàn quyền tải ảnh món, điều chỉnh giá bán, bật/tắt hiển thị món hoặc ghim món nổi bật (Best Seller) lên đầu trang chủ khách hàng.
-                </p>
+                <p className="text-xs text-neutral-400 mt-1">Cấu hình tên thương hiệu và số điện thoại hotline 24/7 hiển thị trên Header</p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5 text-xs">
+                <div>
+                  <label className="block font-bold text-neutral-300 mb-2">Tên Thương Hiệu - Dòng 1 (*):</label>
+                  <input
+                    type="text"
+                    required
+                    value={headerConfig.logoText1}
+                    onChange={(e) => setHeaderConfig({ ...headerConfig, logoText1: e.target.value })}
+                    className="w-full px-4 py-3 bg-[#0B0D11] border border-neutral-800 rounded-xl font-bold text-sm text-[#FAFAF9] focus:border-amber-500 focus:outline-none"
+                  />
+                  <span className="text-[11px] text-neutral-500 mt-1 block">Ví dụ: GÀ Ủ MUỐI</span>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-neutral-300 mb-2">Tên Thương Hiệu - Dòng 2 (Nổi bật vàng) (*):</label>
+                  <input
+                    type="text"
+                    required
+                    value={headerConfig.logoText2}
+                    onChange={(e) => setHeaderConfig({ ...headerConfig, logoText2: e.target.value })}
+                    className="w-full px-4 py-3 bg-[#0B0D11] border border-neutral-800 rounded-xl font-bold text-sm text-amber-400 focus:border-amber-500 focus:outline-none"
+                  />
+                  <span className="text-[11px] text-neutral-500 mt-1 block">Ví dụ: SMART</span>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-neutral-300 mb-2">Số Hotline 24/7 (*):</label>
+                  <input
+                    type="text"
+                    required
+                    value={headerConfig.hotline}
+                    onChange={(e) => setHeaderConfig({ ...headerConfig, hotline: e.target.value })}
+                    className="w-full px-4 py-3 bg-[#0B0D11] border border-neutral-800 rounded-xl font-mono font-bold text-sm text-emerald-400 focus:border-amber-500 focus:outline-none"
+                  />
+                  <span className="text-[11px] text-neutral-500 mt-1 block">Hotline đặt hàng hỏa tốc</span>
+                </div>
+              </div>
+
+              {/* Social Channels Config Section */}
+              <div className="border-t border-neutral-800/80 pt-6 space-y-4">
+                <div>
+                  <h3 className="text-sm font-bold text-amber-400 flex items-center gap-2">
+                    <Share2 className="w-4 h-4 text-amber-400 stroke-[2]" />
+                    Kênh Truyền Thông Chính Thức (Social Channels Footer)
+                  </h3>
+                  <p className="text-xs text-neutral-400 mt-1">
+                    Cấu hình đường dẫn Fanpage Facebook, Zalo Official OA và TikTok Channel liên kết trực tiếp ở khu vực Footer ngoài trang chủ.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-5 text-xs">
+                  <div>
+                    <label className="block font-bold text-neutral-300 mb-2">1. Link Fanpage Facebook (*):</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="https://facebook.com/gaumuoismart"
+                      value={headerConfig.facebook_url}
+                      onChange={(e) => setHeaderConfig({ ...headerConfig, facebook_url: e.target.value })}
+                      className="w-full px-4 py-3 bg-[#0B0D11] border border-neutral-800 rounded-xl font-mono text-xs text-[#FAFAF9] focus:border-amber-500 focus:outline-none"
+                    />
+                    <span className="text-[11px] text-neutral-500 mt-1 block">Key: `facebook_url`</span>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-neutral-300 mb-2">2. Link Zalo Official (*):</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="https://zalo.me/0988888999"
+                      value={headerConfig.zalo_url}
+                      onChange={(e) => setHeaderConfig({ ...headerConfig, zalo_url: e.target.value })}
+                      className="w-full px-4 py-3 bg-[#0B0D11] border border-neutral-800 rounded-xl font-mono text-xs text-[#FAFAF9] focus:border-amber-500 focus:outline-none"
+                    />
+                    <span className="text-[11px] text-neutral-500 mt-1 block">Key: `zalo_url`</span>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-neutral-300 mb-2">3. Link TikTok Channel (*):</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="https://tiktok.com/@gaumuoismart"
+                      value={headerConfig.tiktok_url}
+                      onChange={(e) => setHeaderConfig({ ...headerConfig, tiktok_url: e.target.value })}
+                      className="w-full px-4 py-3 bg-[#0B0D11] border border-neutral-800 rounded-xl font-mono text-xs text-[#FAFAF9] focus:border-amber-500 focus:outline-none"
+                    />
+                    <span className="text-[11px] text-neutral-500 mt-1 block">Key: `tiktok_url`</span>
+                  </div>
+                </div>
               </div>
             </div>
+          )}
 
-            <div className="flex items-center space-x-3 shrink-0">
-              <label className="flex items-center space-x-2 text-xs font-bold text-slate-700 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200 cursor-pointer">
-                <input type="checkbox" defaultChecked className="accent-orange-600 rounded" />
-                <span>Đồng bộ giá &amp; món với POS</span>
-              </label>
+          {/* TAB 2: HERO & CAM KẾT */}
+          {activeTab === 'hero' && (
+            <div className="space-y-6">
+              {/* Hero Main Headline */}
+              <div className="bg-[#14171D] rounded-2xl border border-neutral-800 p-6 space-y-6">
+                <div className="border-b border-neutral-800/80 pb-4">
+                  <h2 className="text-base font-bold text-white flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-amber-400 stroke-[2]" />
+                    Tiêu Đề Banner Chính (Hero Section)
+                  </h2>
+                  <p className="text-xs text-neutral-400 mt-1">
+                    Tiêu đề chuẩn Sans-Serif sắc nét (Montserrat 800/700) được căn giữa nổi bật ở đầu trang
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-xs">
+                  <div>
+                    <label className="block font-bold text-neutral-300 mb-2">Dòng 1: Tên Thương Hiệu / Thông Điệp Chính (*):</label>
+                    <input
+                      type="text"
+                      required
+                      value={heroConfig.line1}
+                      onChange={(e) => setHeroConfig({ ...heroConfig, line1: e.target.value })}
+                      className="w-full px-4 py-3 bg-[#0B0D11] border border-neutral-800 rounded-xl font-bold text-base text-white focus:border-amber-500 focus:outline-none"
+                    />
+                    <span className="text-[11px] text-neutral-500 mt-1 block">Mặc định: Gà Ủ Muối Smart</span>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-neutral-300 mb-2">Dòng 2: Thông Điệp Phụ Vàng Hổ Phách (*):</label>
+                    <input
+                      type="text"
+                      required
+                      value={heroConfig.line2}
+                      onChange={(e) => setHeroConfig({ ...heroConfig, line2: e.target.value })}
+                      className="w-full px-4 py-3 bg-[#0B0D11] border border-neutral-800 rounded-xl font-bold text-base text-amber-400 focus:border-amber-500 focus:outline-none"
+                    />
+                    <span className="text-[11px] text-neutral-500 mt-1 block">Mặc định: Giao Hỏa Tốc Nội Thành</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 2 Feature Cards */}
+              <div className="bg-[#14171D] rounded-2xl border border-neutral-800 p-6 space-y-6">
+                <div className="border-b border-neutral-800/80 pb-4">
+                  <h2 className="text-base font-bold text-white flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-amber-400 stroke-[2]" />
+                    Nội Dung 2 Thẻ Cam Kết Dưới Tiêu Đề
+                  </h2>
+                  <p className="text-xs text-neutral-400 mt-1">Cấu hình 2 ô cam kết vận chuyển và khuyến mãi</p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs">
+                  {/* Card 1 */}
+                  <div className="bg-[#0B0D11] p-5 rounded-2xl border border-neutral-800 space-y-4">
+                    <h3 className="font-extrabold text-amber-400 text-xs uppercase tracking-wider">Thẻ 1: Khuyến Mãi / Ship</h3>
+                    <div>
+                      <label className="block font-semibold text-neutral-300 mb-1">Tiêu Đề Thẻ 1:</label>
+                      <input
+                        type="text"
+                        required
+                        value={promoConfig.card1Title}
+                        onChange={(e) => setPromoConfig({ ...promoConfig, card1Title: e.target.value })}
+                        className="w-full px-3.5 py-2.5 bg-[#14171D] border border-neutral-800 rounded-xl font-bold text-white focus:border-amber-500 focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-neutral-300 mb-1">Mô Tả Thẻ 1:</label>
+                      <input
+                        type="text"
+                        required
+                        value={promoConfig.card1Desc}
+                        onChange={(e) => setPromoConfig({ ...promoConfig, card1Desc: e.target.value })}
+                        className="w-full px-3.5 py-2.5 bg-[#14171D] border border-neutral-800 rounded-xl text-neutral-300 focus:border-amber-500 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Card 2 */}
+                  <div className="bg-[#0B0D11] p-5 rounded-2xl border border-neutral-800 space-y-4">
+                    <h3 className="font-extrabold text-amber-400 text-xs uppercase tracking-wider">Thẻ 2: Thời Gian Giao Hàng</h3>
+                    <div>
+                      <label className="block font-semibold text-neutral-300 mb-1">Tiêu Đề Thẻ 2:</label>
+                      <input
+                        type="text"
+                        required
+                        value={promoConfig.card2Title}
+                        onChange={(e) => setPromoConfig({ ...promoConfig, card2Title: e.target.value })}
+                        className="w-full px-3.5 py-2.5 bg-[#14171D] border border-neutral-800 rounded-xl font-bold text-white focus:border-amber-500 focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-neutral-300 mb-1">Mô Tả Thẻ 2:</label>
+                      <input
+                        type="text"
+                        required
+                        value={promoConfig.card2Desc}
+                        onChange={(e) => setPromoConfig({ ...promoConfig, card2Desc: e.target.value })}
+                        className="w-full px-3.5 py-2.5 bg-[#14171D] border border-neutral-800 rounded-xl text-neutral-300 focus:border-amber-500 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 3: QUẢN LÝ 6 CƠ SỞ */}
+          {activeTab === 'branches' && (
+            <div className="bg-[#14171D] rounded-2xl border border-neutral-800 p-6 space-y-6">
+              <div className="border-b border-neutral-800/80 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <h2 className="text-base font-bold text-white flex items-center gap-2">
+                    <MapPin className="w-4 h-4 text-amber-400 stroke-[2]" />
+                    Danh Sách 6 Cơ Sở Phục Vụ Hỏa Tốc
+                  </h2>
+                  <p className="text-xs text-neutral-400 mt-1">
+                    Chỉnh sửa tên cơ sở, quận, địa chỉ, hotline riêng, giờ hoạt động, URL hình ảnh mặt tiền và link Google Maps.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 text-xs">
+                {(Array.isArray(branchesConfig) ? branchesConfig : []).map((branch, idx) => (
+                  <div key={branch.id || idx} className="bg-[#0B0D11] border border-neutral-800 rounded-2xl p-5 space-y-4 relative">
+                    <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+                      <span className="bg-amber-500/10 border border-amber-500/30 text-amber-400 font-bold px-3 py-1 rounded-full text-[11px]">
+                        {branch.badge || `CƠ SỞ 0${idx + 1}`}
+                      </span>
+                      <span className="text-[11px] text-neutral-400 font-medium">ID: {branch.id}</span>
+                    </div>
+
+                    {/* Image Preview */}
+                    <div className="relative h-32 rounded-xl overflow-hidden border border-neutral-800 group">
+                      <img
+                        src={branch.image || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=600&q=80'}
+                        alt={branch.name}
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        <span className="text-white text-[11px] font-medium flex items-center gap-1">
+                          <ImageIcon className="w-3.5 h-3.5" /> Xem trước ảnh
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block font-semibold text-neutral-300 mb-1">Badge Hiển Thị:</label>
+                        <input
+                          type="text"
+                          value={branch.badge}
+                          onChange={(e) => handleBranchChange(idx, 'badge', e.target.value)}
+                          className="w-full px-3 py-2 bg-[#14171D] border border-neutral-800 rounded-xl text-neutral-200 focus:border-amber-500 focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-neutral-300 mb-1">Tên Quận / Khu Vực:</label>
+                        <input
+                          type="text"
+                          value={branch.district}
+                          onChange={(e) => handleBranchChange(idx, 'district', e.target.value)}
+                          className="w-full px-3 py-2 bg-[#14171D] border border-neutral-800 rounded-xl text-amber-400 font-medium focus:border-amber-500 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block font-semibold text-neutral-300 mb-1">Tên Cơ Sở (*):</label>
+                      <input
+                        type="text"
+                        required
+                        value={branch.name}
+                        onChange={(e) => handleBranchChange(idx, 'name', e.target.value)}
+                        className="w-full px-3 py-2 bg-[#14171D] border border-neutral-800 rounded-xl font-bold text-white focus:border-amber-500 focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block font-semibold text-neutral-300 mb-1">Địa Chỉ Chi Tiết (*):</label>
+                      <input
+                        type="text"
+                        required
+                        value={branch.address}
+                        onChange={(e) => handleBranchChange(idx, 'address', e.target.value)}
+                        className="w-full px-3 py-2 bg-[#14171D] border border-neutral-800 rounded-xl text-neutral-200 focus:border-amber-500 focus:outline-none"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block font-semibold text-neutral-300 mb-1">Hotline Riêng (*):</label>
+                        <input
+                          type="text"
+                          required
+                          value={branch.phone}
+                          onChange={(e) => handleBranchChange(idx, 'phone', e.target.value)}
+                          className="w-full px-3 py-2 bg-[#14171D] border border-neutral-800 rounded-xl font-mono text-emerald-400 focus:border-amber-500 focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-neutral-300 mb-1">Giờ Hoạt Động:</label>
+                        <input
+                          type="text"
+                          value={branch.hours}
+                          onChange={(e) => handleBranchChange(idx, 'hours', e.target.value)}
+                          className="w-full px-3 py-2 bg-[#14171D] border border-neutral-800 rounded-xl text-neutral-300 focus:border-amber-500 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block font-semibold text-neutral-300 mb-1">URL Ảnh Mặt Tiền Unsplash (*):</label>
+                      <input
+                        type="text"
+                        required
+                        value={branch.image}
+                        onChange={(e) => handleBranchChange(idx, 'image', e.target.value)}
+                        className="w-full px-3 py-2 bg-[#14171D] border border-neutral-800 rounded-xl text-neutral-400 font-mono text-[11px] focus:border-amber-500 focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block font-semibold text-neutral-300 mb-1">Link Google Maps (*):</label>
+                      <input
+                        type="text"
+                        required
+                        value={branch.mapsUrl}
+                        onChange={(e) => handleBranchChange(idx, 'mapsUrl', e.target.value)}
+                        className="w-full px-3 py-2 bg-[#14171D] border border-neutral-800 rounded-xl text-neutral-400 font-mono text-[11px] focus:border-amber-500 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* TAB 4: CÂU CHUYỆN VỊ GIÁC */}
+          {activeTab === 'story' && (
+            <div className="bg-[#14171D] rounded-2xl border border-neutral-800 p-6 space-y-6">
+              <div className="border-b border-neutral-800/80 pb-4">
+                <h2 className="text-base font-bold text-white flex items-center gap-2">
+                  <BookOpen className="w-4 h-4 text-amber-400 stroke-[2]" />
+                  Cấu Hình Khối "Câu Chuyện Vị Giác"
+                </h2>
+                <p className="text-xs text-neutral-400 mt-1">Tùy biến nội dung giới thiệu di sản ẩm thực và các thông số cam kết</p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs">
+                <div className="space-y-4">
+                  <div>
+                    <label className="block font-bold text-neutral-300 mb-1">Thẻ Phụ (Tagline Upper):</label>
+                    <input
+                      type="text"
+                      value={storyConfig.tag}
+                      onChange={(e) => setStoryConfig({ ...storyConfig, tag: e.target.value })}
+                      className="w-full px-3.5 py-2.5 bg-[#0B0D11] border border-neutral-800 rounded-xl text-amber-400 font-bold focus:border-amber-500 focus:outline-none uppercase tracking-wider"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-neutral-300 mb-1">Tiêu Đề Khối (*):</label>
+                    <input
+                      type="text"
+                      required
+                      value={storyConfig.title}
+                      onChange={(e) => setStoryConfig({ ...storyConfig, title: e.target.value })}
+                      className="w-full px-3.5 py-2.5 bg-[#0B0D11] border border-neutral-800 rounded-xl text-white font-extrabold text-sm focus:border-amber-500 focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-neutral-300 mb-1">Đoạn Văn Giới Thiệu (*):</label>
+                    <textarea
+                      rows={4}
+                      required
+                      value={storyConfig.desc}
+                      onChange={(e) => setStoryConfig({ ...storyConfig, desc: e.target.value })}
+                      className="w-full px-3.5 py-2.5 bg-[#0B0D11] border border-neutral-800 rounded-xl text-neutral-300 leading-relaxed focus:border-amber-500 focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-[#0B0D11] p-4 rounded-xl border border-neutral-800 space-y-2">
+                      <label className="block font-semibold text-neutral-400">Thông Số 1 (Giá trị):</label>
+                      <input
+                        type="text"
+                        value={storyConfig.stat1Val}
+                        onChange={(e) => setStoryConfig({ ...storyConfig, stat1Val: e.target.value })}
+                        className="w-full px-3 py-2 bg-[#14171D] border border-neutral-800 rounded-lg text-amber-400 font-extrabold focus:border-amber-500 focus:outline-none"
+                      />
+                      <label className="block font-semibold text-neutral-400">Nhãn Thông Số 1:</label>
+                      <input
+                        type="text"
+                        value={storyConfig.stat1Label}
+                        onChange={(e) => setStoryConfig({ ...storyConfig, stat1Label: e.target.value })}
+                        className="w-full px-3 py-2 bg-[#14171D] border border-neutral-800 rounded-lg text-white font-medium focus:border-amber-500 focus:outline-none"
+                      />
+                    </div>
+
+                    <div className="bg-[#0B0D11] p-4 rounded-xl border border-neutral-800 space-y-2">
+                      <label className="block font-semibold text-neutral-400">Thông Số 2 (Giá trị):</label>
+                      <input
+                        type="text"
+                        value={storyConfig.stat2Val}
+                        onChange={(e) => setStoryConfig({ ...storyConfig, stat2Val: e.target.value })}
+                        className="w-full px-3 py-2 bg-[#14171D] border border-neutral-800 rounded-lg text-amber-400 font-extrabold focus:border-amber-500 focus:outline-none"
+                      />
+                      <label className="block font-semibold text-neutral-400">Nhãn Thông Số 2:</label>
+                      <input
+                        type="text"
+                        value={storyConfig.stat2Label}
+                        onChange={(e) => setStoryConfig({ ...storyConfig, stat2Label: e.target.value })}
+                        className="w-full px-3 py-2 bg-[#14171D] border border-neutral-800 rounded-lg text-white font-medium focus:border-amber-500 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Story Right: Image & Badge */}
+                <div className="space-y-4">
+                  <div>
+                    <label className="block font-bold text-neutral-300 mb-1">URL Ảnh Banner Câu Chuyện (*):</label>
+                    <input
+                      type="text"
+                      required
+                      value={storyConfig.image}
+                      onChange={(e) => setStoryConfig({ ...storyConfig, image: e.target.value })}
+                      className="w-full px-3.5 py-2.5 bg-[#0B0D11] border border-neutral-800 rounded-xl text-neutral-400 font-mono text-[11px] focus:border-amber-500 focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="bg-[#0B0D11] p-4 rounded-xl border border-neutral-800 space-y-3">
+                    <h4 className="font-bold text-amber-400 text-xs">Cấu Hình Badge Nổi Trên Ảnh</h4>
+                    <div>
+                      <label className="block font-semibold text-neutral-300 mb-1">Tiêu Đề Badge:</label>
+                      <input
+                        type="text"
+                        value={storyConfig.badgeTitle}
+                        onChange={(e) => setStoryConfig({ ...storyConfig, badgeTitle: e.target.value })}
+                        className="w-full px-3 py-2 bg-[#14171D] border border-neutral-800 rounded-lg text-white font-bold focus:border-amber-500 focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-neutral-300 mb-1">Mô Tả Phụ Badge:</label>
+                      <input
+                        type="text"
+                        value={storyConfig.badgeSub}
+                        onChange={(e) => setStoryConfig({ ...storyConfig, badgeSub: e.target.value })}
+                        className="w-full px-3 py-2 bg-[#14171D] border border-neutral-800 rounded-lg text-neutral-300 focus:border-amber-500 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Preview Box */}
+                  <div className="relative h-44 rounded-2xl overflow-hidden border border-neutral-800">
+                    <img src={storyConfig.image} alt="Preview" className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
+                    <div className="absolute bottom-3 left-3 bg-neutral-950/90 border border-amber-500/40 p-2.5 rounded-xl">
+                      <span className="font-extrabold text-[11px] text-amber-300 uppercase block">{storyConfig.badgeTitle}</span>
+                      <span className="text-[10px] text-neutral-400">{storyConfig.badgeSub}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Global Floating Bottom Bar Action */}
+          <div className="sticky bottom-4 z-30 bg-neutral-950/90 backdrop-blur-md border border-neutral-800 p-4 rounded-2xl shadow-2xl flex items-center justify-between gap-4">
+            <div className="text-xs text-neutral-400 hidden sm:block">
+              Nhấn <strong className="text-white font-semibold">"Lưu Thay Đổi CMS"</strong> để áp dụng ngay lập tức ngoài Trang chủ Storefront.
+            </div>
+
+            <button
+              type="submit"
+              disabled={saving}
+              className="w-full sm:w-auto px-8 py-3.5 bg-gradient-to-r from-amber-500 via-amber-600 to-orange-600 hover:from-amber-400 hover:to-amber-500 text-neutral-950 font-black text-xs uppercase tracking-wider rounded-xl shadow-[0_4px_20px_rgba(245,158,11,0.3)] transition-all flex items-center justify-center gap-2 shrink-0 cursor-pointer"
+            >
+              <Save className="w-4 h-4 stroke-[2]" />
+              <span>{saving ? 'Đang Cập Nhật Hệ Thống...' : 'Lưu Cấu Hình CMS Trang Chủ'}</span>
+            </button>
+          </div>
+        </form>
+      )}
+
+      {/* TAB 5: QUẢN LÝ THỰC ĐƠN (MENU) */}
+      {activeTab === 'menu' && (
+        <div className="space-y-8 animate-in fade-in duration-200">
+          {/* Header Action Bar */}
+          <div className="bg-[#14171D] rounded-2xl border border-neutral-800 p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
+            <div>
+              <h2 className="text-base font-extrabold text-white flex items-center gap-2">
+                <UtensilsCrossed className="w-5 h-5 text-amber-400 stroke-[2]" />
+                Quản Lý Thực Đơn & Danh Mục Món (Realtime DB Sync)
+              </h2>
+              <p className="text-xs text-neutral-400 mt-1">
+                Tất cả thay đổi giá, ảnh, bật/tắt món hoặc danh mục tại đây sẽ lập tức đồng bộ 100% ngoài Trang chủ, POS & AI Chatbot.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={handleOpenAddCategory}
+                className="px-4 py-2.5 bg-neutral-900 hover:bg-neutral-800 text-neutral-200 border border-neutral-700 font-bold text-xs rounded-xl transition flex items-center gap-2 cursor-pointer shadow-xs"
+              >
+                <Plus className="w-4 h-4 text-amber-400 stroke-[2]" />
+                <span>Thêm Danh Mục</span>
+              </button>
 
               <button
                 type="button"
-                onClick={() => setIsAddModalOpen(true)}
-                className="bg-orange-600 hover:bg-orange-700 text-white font-extrabold px-3.5 py-1.5 rounded-xl text-xs shadow-xs transition flex items-center space-x-1.5 cursor-pointer"
+                onClick={handleOpenAddProduct}
+                className="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-neutral-950 font-bold text-xs uppercase tracking-wider rounded-xl transition shadow-lg flex items-center gap-2 cursor-pointer"
               >
-                <Plus className="w-4 h-4" />
-                <span>+ Thêm Món Ăn Mới Vào Trang Chủ</span>
+                <Plus className="w-4 h-4 stroke-[2]" />
+                <span>+ Thêm Món Mới Vào Menu</span>
               </button>
             </div>
           </div>
 
-          {/* Inline Product Cards Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
-            {products.map((p) => (
-              <div
-                key={p.id}
-                className={`border rounded-2xl p-4 space-y-3 transition flex flex-col justify-between ${
-                  p.is_storefront_visible !== false
-                    ? 'bg-white border-slate-200 shadow-2xs hover:border-orange-300'
-                    : 'bg-slate-50 border-slate-200 opacity-60'
-                }`}
-              >
-                <div className="space-y-3">
-                  
-                  {/* Top Image Preview & Upload Header */}
-                  <div className="flex gap-3">
-                    <div className="relative shrink-0">
-                      {p.image_url ? (
-                        <div className="relative group">
-                          <img
-                            src={p.image_url}
-                            alt={p.name}
-                            className="w-24 h-24 object-cover rounded-xl border border-slate-200 shadow-2xs"
-                          />
-                          <label className="absolute inset-0 bg-black/50 text-white font-bold text-[10px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition rounded-xl cursor-pointer">
-                            <span>Đổi ảnh</span>
-                            <input
-                              type="file"
-                              accept="image/png, image/jpeg, image/webp"
-                              onChange={(e) => {
-                                const file = e.target.files?.[0];
-                                if (file) handleProductImageUpload(p.id, file);
-                              }}
-                              className="hidden"
-                            />
-                          </label>
-                        </div>
-                      ) : (
-                        <label className="w-24 h-24 border-2 border-dashed border-slate-300 hover:border-orange-500 bg-slate-50 hover:bg-orange-50/40 rounded-xl flex flex-col items-center justify-center text-center p-1 cursor-pointer transition">
-                          <Upload className="w-5 h-5 text-orange-600 mb-0.5" />
-                          <span className="text-[10px] font-bold text-slate-700">Tải ảnh món</span>
-                          <input
-                            type="file"
-                            accept="image/png, image/jpeg, image/webp"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0];
-                              if (file) handleProductImageUpload(p.id, file);
-                            }}
-                            className="hidden"
-                          />
-                        </label>
-                      )}
-                    </div>
+          {/* Section 1: Categories Bar / Cards */}
+          <div className="bg-[#14171D] rounded-2xl border border-neutral-800 p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-neutral-800/80 pb-3">
+              <h3 className="text-sm font-bold text-amber-400 uppercase tracking-wider">
+                1. Danh Mục Phân Loại Món ({categories.length})
+              </h3>
+              <span className="text-xs text-neutral-500">Bấm nút Sửa/Xóa để quản lý từng danh mục</span>
+            </div>
 
-                    {/* Inputs: Name, Category */}
-                    <div className="flex-1 space-y-2">
-                      <div>
-                        <label className="text-[10px] font-bold text-slate-600 block">Tên món (*):</label>
-                        <input
-                          type="text"
-                          value={p.name}
-                          onChange={(e) => handleUpdateProductField(p.id, 'name', e.target.value)}
-                          className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg font-bold text-slate-900 outline-none focus:border-orange-500 focus:bg-white transition"
-                        />
-                      </div>
+            <div className="flex flex-wrap items-center gap-3">
+              {categories.map((cat) => (
+                <div
+                  key={cat.id}
+                  className="bg-[#0B0D11] border border-neutral-800 px-4 py-2.5 rounded-xl flex items-center gap-3 text-xs font-semibold text-neutral-200 group hover:border-amber-500/40 transition-all"
+                >
+                  <span className="text-white font-bold">{cat.name}</span>
+                  <span className="bg-amber-500/10 text-amber-400 text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-500/20">
+                    {cat._count?.products ?? 0} món
+                  </span>
 
-                      <div>
-                        <label className="text-[10px] font-bold text-slate-600 block">Link ảnh online (Imgur/CDN...):</label>
-                        <input
-                          type="text"
-                          value={p.image_url || ''}
-                          onChange={(e) => handleUpdateProductField(p.id, 'image_url', e.target.value)}
-                          placeholder="https://..."
-                          className="w-full p-1.5 bg-slate-50 border border-slate-200 rounded-lg font-mono text-[10px] text-slate-800 outline-none focus:border-orange-500 focus:bg-white"
-                        />
-                      </div>
-                    </div>
+                  <div className="flex items-center gap-1 border-l border-neutral-800 pl-2 opacity-80 group-hover:opacity-100 transition-opacity">
+                    <button
+                      type="button"
+                      onClick={() => handleOpenEditCategory(cat)}
+                      className="p-1 hover:text-amber-400 text-neutral-400 transition"
+                      title="Sửa danh mục"
+                    >
+                      <Edit2 className="w-3.5 h-3.5 stroke-[1.75]" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteCategory(cat.id)}
+                      className="p-1 hover:text-rose-400 text-neutral-400 transition"
+                      title="Xóa danh mục"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 stroke-[1.75]" />
+                    </button>
                   </div>
-
-                  {/* Inputs: Retail Price & Original Price */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-600 block">Giá bán (*):</label>
-                      <div className="relative">
-                        <input
-                          type="number"
-                          value={p.price}
-                          onChange={(e) => handleUpdateProductField(p.id, 'price', Number(e.target.value))}
-                          className="w-full p-2 pr-6 bg-slate-50 border border-slate-200 rounded-lg font-black text-orange-600 outline-none focus:border-orange-500 focus:bg-white"
-                        />
-                        <span className="absolute right-2 top-2 text-[10px] font-bold text-slate-400">đ</span>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-600 block">Giá gốc (gạch):</label>
-                      <div className="relative">
-                        <input
-                          type="number"
-                          value={p.original_price || ''}
-                          onChange={(e) => handleUpdateProductField(p.id, 'original_price', e.target.value ? Number(e.target.value) : undefined)}
-                          placeholder="220.000"
-                          className="w-full p-2 pr-6 bg-slate-50 border border-slate-200 rounded-lg font-semibold text-slate-500 line-through outline-none focus:border-orange-500 focus:bg-white"
-                        />
-                        <span className="absolute right-2 top-2 text-[10px] font-bold text-slate-400">đ</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Description Input */}
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-600 block">Mô tả ngắn hương vị:</label>
-                    <input
-                      type="text"
-                      value={p.description || ''}
-                      onChange={(e) => handleUpdateProductField(p.id, 'description', e.target.value)}
-                      placeholder="VD: Da giòn sần sật, thịt ngọt tự nhiên..."
-                      className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-700 outline-none focus:border-orange-500 focus:bg-white"
-                    />
-                  </div>
-
                 </div>
+              ))}
 
-                {/* Bottom Toggles & Actions */}
-                <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2 text-[11px]">
-                  
-                  <div className="flex items-center space-x-3">
-                    {/* Toggle 1: Visible on Storefront */}
-                    <label className="flex items-center space-x-1.5 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={p.is_storefront_visible !== false}
-                        onChange={(e) => handleUpdateProductField(p.id, 'is_storefront_visible', e.target.checked)}
-                        className="sr-only peer"
-                      />
-                      <div className="w-7 h-4 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-500 relative"></div>
-                      <span className={`font-bold text-[10px] ${p.is_storefront_visible !== false ? 'text-emerald-700' : 'text-slate-400'}`}>
-                        {p.is_storefront_visible !== false ? 'Hiện' : 'Ẩn'}
-                      </span>
-                    </label>
+              {categories.length === 0 && (
+                <div className="text-xs text-neutral-500 italic py-2">Chưa có danh mục nào. Hãy bấm "Thêm Danh Mục".</div>
+              )}
+            </div>
+          </div>
 
-                    {/* Toggle 2: Best Seller */}
-                    <label className="flex items-center space-x-1.5 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={!!p.is_best_seller}
-                        onChange={(e) => handleUpdateProductField(p.id, 'is_best_seller', e.target.checked)}
-                        className="sr-only peer"
-                      />
-                      <div className="w-7 h-4 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-amber-500 relative"></div>
-                      <span className={`font-bold text-[10px] flex items-center gap-0.5 ${p.is_best_seller ? 'text-amber-800' : 'text-slate-400'}`}>
-                        <Star className="w-3 h-3 fill-amber-400 text-amber-500" />
-                        <span>Ghim</span>
-                      </span>
-                    </label>
-                  </div>
-
-                  {/* Delete Button */}
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteProductClick(p.id, p.name)}
-                    className="p-1.5 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg transition cursor-pointer"
-                    title="Xóa khỏi danh sách trang chủ"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-
-                </div>
-
+          {/* Section 2: Products List Table */}
+          <div className="bg-[#14171D] rounded-2xl border border-neutral-800 space-y-4 overflow-hidden">
+            {/* Search & Filter Bar */}
+            <div className="p-4 bg-[#0B0D11] border-b border-neutral-800 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs">
+              <div className="relative w-full sm:w-80">
+                <Search className="w-4 h-4 text-neutral-500 absolute left-3 top-3 stroke-[1.5]" />
+                <input
+                  type="text"
+                  placeholder="Tìm món theo tên hoặc mô tả..."
+                  value={menuSearch}
+                  onChange={(e) => setMenuSearch(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 bg-[#14171D] border border-neutral-800 rounded-xl text-neutral-200 focus:border-amber-500 focus:outline-none placeholder:text-neutral-600"
+                />
               </div>
-            ))}
+
+              <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0">
+                <button
+                  type="button"
+                  onClick={() => setMenuCategoryFilter('ALL')}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition shrink-0 ${
+                    menuCategoryFilter === 'ALL'
+                      ? 'bg-amber-500 text-neutral-950 shadow-sm'
+                      : 'bg-[#14171D] text-neutral-400 hover:text-white border border-neutral-800'
+                  }`}
+                >
+                  Tất Cả ({products.length})
+                </button>
+
+                {categories.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => setMenuCategoryFilter(c.id)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-bold transition shrink-0 ${
+                      menuCategoryFilter === c.id
+                        ? 'bg-amber-500 text-neutral-950 shadow-sm'
+                        : 'bg-[#14171D] text-neutral-400 hover:text-white border border-neutral-800'
+                    }`}
+                  >
+                    {c.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Products Table */}
+            {loadingMenu ? (
+              <div className="p-12 text-center text-neutral-400 text-sm font-medium">Đang tải danh sách thực đơn...</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="bg-[#0B0D11] border-b border-neutral-800 text-neutral-400 font-semibold uppercase text-[10px] tracking-wider">
+                      <th className="py-3.5 px-4">Món Ăn</th>
+                      <th className="py-3.5 px-4">Danh Mục</th>
+                      <th className="py-3.5 px-4">Giá Bán</th>
+                      <th className="py-3.5 px-4">Giá Vốn</th>
+                      <th className="py-3.5 px-4">Trạng Thái Phục Vụ</th>
+                      <th className="py-3.5 px-4">Bán Chạy</th>
+                      <th className="py-3.5 px-4 text-right">Thao Tác</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-800/80 font-medium text-neutral-200">
+                    {filteredProducts.map((p) => (
+                      <tr key={p.id} className="hover:bg-neutral-900/60 transition-colors">
+                        <td className="py-3.5 px-4">
+                          <div className="flex items-center gap-3">
+                            <img
+                              src={p.image || 'https://images.unsplash.com/photo-1598515214211-89d3c73ae83b?w=600&q=80'}
+                              alt={p.name}
+                              className="w-12 h-12 rounded-xl object-cover border border-neutral-800 shrink-0"
+                            />
+                            <div>
+                              <span className="font-bold text-[#FAFAF9] block text-sm">{p.name}</span>
+                              <span className="text-[11px] text-neutral-400 font-light max-w-xs block truncate mt-0.5">
+                                {p.description || 'Không có mô tả'}
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+
+                        <td className="py-3.5 px-4">
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/30">
+                            {p.category?.name || 'Khác'}
+                          </span>
+                        </td>
+
+                        <td className="py-3.5 px-4 font-bold text-amber-400 text-sm">
+                          {p.price.toLocaleString('vi-VN')} đ
+                        </td>
+
+                        <td className="py-3.5 px-4 text-neutral-400 font-light">
+                          {p.costPrice ? `${p.costPrice.toLocaleString('vi-VN')} đ` : '-'}
+                        </td>
+
+                        <td className="py-3.5 px-4">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleProductAvailable(p)}
+                            className={`px-3 py-1 rounded-full text-[10px] font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                              p.isAvailable
+                                ? 'bg-emerald-950/80 text-emerald-400 border border-emerald-500/30'
+                                : 'bg-neutral-900 text-neutral-500 border border-neutral-800'
+                            }`}
+                          >
+                            <span className={`w-2 h-2 rounded-full ${p.isAvailable ? 'bg-emerald-400 animate-pulse' : 'bg-neutral-600'}`} />
+                            <span>{p.isAvailable ? 'Đang Phục Vụ' : 'Tạm Hết Hàng'}</span>
+                          </button>
+                        </td>
+
+                        <td className="py-3.5 px-4">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleProductBestSeller(p)}
+                            className={`px-2.5 py-1 rounded-full text-[10px] font-bold transition flex items-center gap-1 cursor-pointer ${
+                              p.isBestSeller
+                                ? 'bg-amber-950/90 text-amber-300 border border-amber-500/40 shadow-xs'
+                                : 'bg-neutral-900 text-neutral-500 border border-neutral-800 hover:text-neutral-300'
+                            }`}
+                          >
+                            <Star className={`w-3 h-3 ${p.isBestSeller ? 'fill-amber-400 text-amber-400' : 'text-neutral-500'}`} />
+                            <span>{p.isBestSeller ? 'Best Seller' : 'Thường'}</span>
+                          </button>
+                        </td>
+
+                        <td className="py-3.5 px-4 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditProduct(p)}
+                              className="p-2 bg-neutral-900 hover:bg-neutral-800 rounded-xl text-neutral-300 hover:text-amber-400 border border-neutral-800 transition"
+                              title="Chỉnh sửa món"
+                            >
+                              <Edit2 className="w-3.5 h-3.5 stroke-[1.75]" />
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteProduct(p.id)}
+                              className="p-2 bg-rose-950/80 hover:bg-rose-900 rounded-xl text-rose-400 border border-rose-500/30 transition"
+                              title="Xóa món"
+                            >
+                              <Trash2 className="w-3.5 h-3.5 stroke-[1.75]" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+
+                    {filteredProducts.length === 0 && (
+                      <tr>
+                        <td colSpan={7} className="py-12 text-center text-neutral-500 text-xs italic">
+                          Không tìm thấy món ăn nào khớp với bộ lọc. Hãy bấm "+ Thêm Món Mới Vào Menu".
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
+      )}
 
-        {/* 4. KHỐI CẤU HÌNH KÊNH TRUYỀN THÔNG & MẠNG XÃ HỘI */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
-          <div className="flex items-center space-x-2 border-b border-slate-100 pb-3">
-            <Globe className="w-5 h-5 text-orange-600" />
-            <h2 className="font-extrabold text-slate-900 text-sm">D. Cấu Hình Kênh Truyền Thông &amp; Mạng Xã Hội (Social Links)</h2>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-            <div className="space-y-1">
-              <label className="font-bold text-slate-700">Link Fanpage Facebook (*)</label>
-              <input
-                type="text"
-                required
-                value={settings.social_facebook}
-                onChange={(e) => setSettings({ ...settings, social_facebook: e.target.value })}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800 outline-none focus:border-orange-500 focus:bg-white transition"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="font-bold text-slate-700">Link Kênh TikTok Official (*)</label>
-              <input
-                type="text"
-                required
-                value={settings.social_tiktok}
-                onChange={(e) => setSettings({ ...settings, social_tiktok: e.target.value })}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800 outline-none focus:border-orange-500 focus:bg-white transition"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="font-bold text-slate-700">Link / Số Zalo OA Đặt Hàng (*)</label>
-              <input
-                type="text"
-                required
-                value={settings.social_zalo}
-                onChange={(e) => setSettings({ ...settings, social_zalo: e.target.value })}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800 outline-none focus:border-orange-500 focus:bg-white transition"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="font-bold text-slate-700">Hotline Phản Ánh Chất Lượng (*)</label>
-              <input
-                type="text"
-                required
-                value={settings.hotline_complaints}
-                onChange={(e) => setSettings({ ...settings, hotline_complaints: e.target.value })}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-extrabold text-orange-600 outline-none focus:border-orange-500 focus:bg-white transition"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* BOTTOM SAVE BAR */}
-        <div className="flex justify-end pt-2">
-          <button
-            type="button"
-            onClick={handleDirectSave}
-            className="w-full sm:w-auto bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-black px-8 py-3.5 rounded-2xl text-xs shadow-md transition flex items-center justify-center space-x-2 cursor-pointer"
-          >
-            <Save className="w-4 h-4" />
-            <span>💾 Lưu Cấu Hình Trang Chủ</span>
-          </button>
-        </div>
-
-      </form>
-
-      {/* QUICK ADD NEW PRODUCT MODAL */}
-      {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 max-w-lg w-full shadow-2xl border border-slate-200 space-y-4 animate-in zoom-in-95 duration-200">
-            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-              <h3 className="font-extrabold text-slate-900 text-base flex items-center gap-2">
-                <Utensils className="w-5 h-5 text-orange-600" />
-                Thêm Món Ăn Mới Vào Thực Đơn Trang Chủ
+      {/* MODAL 1: ADD / EDIT PRODUCT */}
+      {modalProductOpen && (
+        <div className="fixed inset-0 z-50 bg-neutral-950/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-[#121419] rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-5 border border-neutral-800 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b border-neutral-800 pb-4">
+              <h3 className="text-base font-bold text-[#FAFAF9] flex items-center gap-2">
+                <UtensilsCrossed className="w-4 h-4 text-amber-400 stroke-[2]" />
+                {editingProduct ? 'Chỉnh Sửa Món Ăn' : 'Thêm Món Mới Vào Menu'}
               </h3>
               <button
                 type="button"
-                onClick={() => setIsAddModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+                onClick={() => setModalProductOpen(false)}
+                className="text-neutral-400 hover:text-white p-1 rounded-lg"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveNewProductSubmit} className="space-y-4 text-xs">
-              <div className="space-y-1">
-                <label className="font-bold text-slate-700">Tên món ăn (*):</label>
+            <form onSubmit={handleSaveProduct} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-semibold text-neutral-300 mb-1.5">Tên Món Ăn (*):</label>
                 <input
                   type="text"
                   required
-                  placeholder="VD: Gà Ủ Muối Nguyên Con..."
-                  value={newProduct.name}
-                  onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 outline-none focus:border-orange-500"
+                  placeholder="Ví dụ: Gà Ủ Muối Hoa Tiêu Nguyên Con"
+                  value={prodName}
+                  onChange={(e) => setProdName(e.target.value)}
+                  className="w-full px-4 py-3 bg-[#0B0D11] border border-neutral-800 rounded-xl text-sm font-bold text-[#FAFAF9] focus:border-amber-500 focus:outline-none"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700">Danh mục món:</label>
-                  <select
-                    value={newProduct.category}
-                    onChange={(e) => setNewProduct({ ...newProduct, category: e.target.value as any })}
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none"
-                  >
-                    <option value="Món Gà Ủ Muối">Món Gà Ủ Muối</option>
-                    <option value="Món Ăn Kèm">Món Ăn Kèm</option>
-                    <option value="Nước Uống">Nước Uống</option>
-                    <option value="Gia Vị &amp; Extra">Gia Vị &amp; Extra</option>
-                  </select>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700">Đơn vị tính:</label>
-                  <input
-                    type="text"
-                    value={newProduct.unit}
-                    onChange={(e) => setNewProduct({ ...newProduct, unit: e.target.value })}
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none"
-                  />
-                </div>
+              <div>
+                <label className="block font-semibold text-neutral-300 mb-1.5">Danh Mục Phân Loại (*):</label>
+                <select
+                  value={prodCategoryId}
+                  onChange={(e) => setProdCategoryId(e.target.value)}
+                  className="w-full px-4 py-3 bg-[#0B0D11] border border-neutral-800 rounded-xl text-xs font-bold text-[#FAFAF9] focus:border-amber-500 focus:outline-none"
+                >
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700">Giá bán thực tế (*):</label>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block font-semibold text-neutral-300 mb-1.5">Giá Bán VNĐ (*):</label>
                   <input
                     type="number"
                     required
-                    value={newProduct.price}
-                    onChange={(e) => setNewProduct({ ...newProduct, price: Number(e.target.value) })}
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-black text-orange-600 outline-none"
+                    placeholder="Ví dụ: 195000"
+                    value={prodPrice}
+                    onChange={(e) => setProdPrice(e.target.value === '' ? '' : Number(e.target.value))}
+                    className="w-full px-4 py-3 bg-[#0B0D11] border border-neutral-800 rounded-xl font-bold text-amber-400 focus:border-amber-500 focus:outline-none"
                   />
                 </div>
 
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700">Giá gốc niêm yết (gạch):</label>
+                <div>
+                  <label className="block font-semibold text-neutral-300 mb-1.5">Giá Vốn VNĐ (POS):</label>
                   <input
                     type="number"
-                    value={newProduct.original_price || ''}
-                    onChange={(e) => setNewProduct({ ...newProduct, original_price: e.target.value ? Number(e.target.value) : undefined })}
-                    placeholder="VD: 220000"
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-500 outline-none"
+                    placeholder="Ví dụ: 110000"
+                    value={prodCostPrice}
+                    onChange={(e) => setProdCostPrice(e.target.value === '' ? '' : Number(e.target.value))}
+                    className="w-full px-4 py-3 bg-[#0B0D11] border border-neutral-800 rounded-xl text-neutral-300 focus:border-amber-500 focus:outline-none"
                   />
                 </div>
               </div>
 
-              <div className="space-y-1">
-                <label className="font-bold text-slate-700">Mô tả ngắn hương vị:</label>
+              <div>
+                <label className="block font-semibold text-neutral-300 mb-1.5">URL Đường Dẫn Ảnh Món (*):</label>
                 <input
                   type="text"
-                  value={newProduct.description}
-                  onChange={(e) => setNewProduct({ ...newProduct, description: e.target.value })}
-                  placeholder="VD: Da giòn sần sật, thơm lừng hoa tiêu..."
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800 outline-none"
+                  required
+                  placeholder="https://images.unsplash.com/..."
+                  value={prodImage}
+                  onChange={(e) => setProdImage(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-[#0B0D11] border border-neutral-800 rounded-xl font-mono text-[11px] text-neutral-300 focus:border-amber-500 focus:outline-none"
                 />
               </div>
 
-              <div className="space-y-1">
-                <label className="font-bold text-slate-700">Ảnh món ăn (Upload file Base64):</label>
-                {newProduct.image_url ? (
-                  <div className="flex items-center gap-3 bg-orange-50 p-2.5 rounded-xl border border-orange-200">
-                    <img src={newProduct.image_url} alt="Preview" className="w-12 h-12 object-cover rounded-lg" />
-                    <button
-                      type="button"
-                      onClick={() => setNewProduct({ ...newProduct, image_url: '' })}
-                      className="text-xs text-rose-600 font-bold hover:underline"
-                    >
-                      Xóa ảnh
-                    </button>
-                  </div>
-                ) : (
-                  <label className="border-2 border-dashed border-slate-300 rounded-xl p-3 flex flex-col items-center justify-center cursor-pointer bg-slate-50 hover:bg-orange-50/30 transition">
-                    <Upload className="w-5 h-5 text-orange-600 mb-1" />
-                    <span className="font-bold text-slate-700 text-[11px]">Bấm để chọn file ảnh món</span>
-                    <input
-                      type="file"
-                      accept="image/png, image/jpeg, image/webp"
-                      onChange={async (e) => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          showToast('⏳ Đang nén ảnh món mới...');
-                          try {
-                            const compressedBase64 = await compressImage(file);
-                            setNewProduct(prev => ({ ...prev, image_url: compressedBase64 }));
-                            showToast('📸 Đã nén ảnh món ăn mới thành công!');
-                          } catch (err) {
-                            console.error('Lỗi nén ảnh món mới:', err);
-                          }
-                        }
-                      }}
-                      className="hidden"
-                    />
-                  </label>
-                )}
+              {/* Image Preview */}
+              {prodImage && (
+                <div className="flex items-center gap-3 p-3 bg-[#0B0D11] rounded-xl border border-neutral-800">
+                  <img src={prodImage} alt="Preview" className="w-12 h-12 rounded-lg object-cover border border-neutral-700 shrink-0" />
+                  <span className="text-[11px] text-neutral-400">Xem trước hình ảnh hiển thị trên thực đơn trang chủ</span>
+                </div>
+              )}
+
+              <div>
+                <label className="block font-semibold text-neutral-300 mb-1.5">Mô Tả Short Hương Vị & Định Lượng:</label>
+                <textarea
+                  rows={3}
+                  placeholder="Ví dụ: Da giòn sần sật, vị hoa tiêu thơm nồng. Kèm sốt ớt xanh độc quyền..."
+                  value={prodDesc}
+                  onChange={(e) => setProdDesc(e.target.value)}
+                  className="w-full p-3 bg-[#0B0D11] border border-neutral-800 rounded-xl text-neutral-300 leading-relaxed focus:border-amber-500 focus:outline-none"
+                />
               </div>
 
-              <div className="flex items-center justify-between pt-2">
-                <label className="flex items-center space-x-2 cursor-pointer font-bold text-slate-700">
+              {/* Toggles */}
+              <div className="grid grid-cols-2 gap-4 pt-2 border-t border-neutral-800">
+                <label className="flex items-center gap-3 p-3 bg-[#0B0D11] rounded-xl border border-neutral-800 cursor-pointer">
                   <input
                     type="checkbox"
-                    checked={newProduct.is_storefront_visible}
-                    onChange={(e) => setNewProduct({ ...newProduct, is_storefront_visible: e.target.checked })}
-                    className="accent-emerald-600 rounded"
+                    checked={prodIsAvailable}
+                    onChange={(e) => setProdIsAvailable(e.target.checked)}
+                    className="w-4 h-4 accent-amber-500 rounded cursor-pointer"
                   />
-                  <span>Hiển thị ngoài trang chủ</span>
+                  <span className="font-semibold text-white">Đang Phục Vụ (Còn Hàng)</span>
                 </label>
 
-                <label className="flex items-center space-x-2 cursor-pointer font-bold text-amber-800">
+                <label className="flex items-center gap-3 p-3 bg-[#0B0D11] rounded-xl border border-neutral-800 cursor-pointer">
                   <input
                     type="checkbox"
-                    checked={newProduct.is_best_seller}
-                    onChange={(e) => setNewProduct({ ...newProduct, is_best_seller: e.target.checked })}
-                    className="accent-amber-500 rounded"
+                    checked={prodIsBestSeller}
+                    onChange={(e) => setProdIsBestSeller(e.target.checked)}
+                    className="w-4 h-4 accent-amber-500 rounded cursor-pointer"
                   />
-                  <span>Ghim Best Seller 🌟</span>
+                  <span className="font-semibold text-amber-300">Nổi Bật (Best Seller)</span>
                 </label>
               </div>
 
-              <div className="pt-3 border-t border-slate-100 flex justify-end space-x-2">
+              <div className="flex justify-end gap-3 pt-3 border-t border-neutral-800">
                 <button
                   type="button"
-                  onClick={() => setIsAddModalOpen(false)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl"
+                  onClick={() => setModalProductOpen(false)}
+                  className="px-4 py-2.5 bg-neutral-900 hover:bg-neutral-800 text-neutral-300 font-semibold rounded-xl"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-orange-600 hover:bg-orange-700 text-white font-extrabold rounded-xl shadow-xs"
+                  className="px-6 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-neutral-950 font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg"
                 >
-                  + Thêm Món Vào Menu
+                  {editingProduct ? 'Cập Nhật Món Ăn' : 'Thêm Vào Thực Đơn'}
                 </button>
               </div>
             </form>
-
           </div>
         </div>
       )}
 
+      {/* MODAL 2: ADD / EDIT CATEGORY */}
+      {modalCategoryOpen && (
+        <div className="fixed inset-0 z-50 bg-neutral-950/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-[#121419] rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-neutral-800 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+              <h3 className="text-base font-bold text-[#FAFAF9]">
+                {editingCategory ? 'Chỉnh Sửa Danh Mục' : 'Thêm Danh Mục Mới'}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setModalCategoryOpen(false)}
+                className="text-neutral-400 hover:text-white p-1 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveCategory} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-semibold text-neutral-300 mb-1">Tên Danh Mục (*):</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ví dụ: Combo Tiết Kiệm, Nước Giải Khát..."
+                  value={catName}
+                  onChange={(e) => setCatName(e.target.value)}
+                  className="w-full px-4 py-3 bg-[#0B0D11] border border-neutral-800 rounded-xl font-bold text-white focus:border-amber-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-neutral-300 mb-1">Mô Tả Danh Mục:</label>
+                <input
+                  type="text"
+                  placeholder="Mô tả ngắn gọn về nhóm món..."
+                  value={catDesc}
+                  onChange={(e) => setCatDesc(e.target.value)}
+                  className="w-full px-4 py-3 bg-[#0B0D11] border border-neutral-800 rounded-xl text-neutral-300 focus:border-amber-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-3 border-t border-neutral-800">
+                <button
+                  type="button"
+                  onClick={() => setModalCategoryOpen(false)}
+                  className="px-4 py-2 bg-neutral-900 hover:bg-neutral-800 text-neutral-300 font-semibold rounded-xl"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-neutral-950 font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg"
+                >
+                  {editingCategory ? 'Cập Nhật' : 'Tạo Danh Mục'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

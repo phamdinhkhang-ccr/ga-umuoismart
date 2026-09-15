@@ -1,348 +1,390 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import { 
-  BarChart3, TrendingUp, Award, ShoppingBag, 
-  UtensilsCrossed, Calendar, Filter, Download, 
-  ChefHat, AlertTriangle, Sparkles, PieChart as PieChartIcon, 
-  Boxes, RefreshCw
+import React, { useEffect, useState } from 'react';
+import {
+  BarChart3,
+  Download,
+  Calendar,
+  Filter,
+  RefreshCw,
+  TrendingUp,
+  PieChart as PieIcon,
+  Flame,
+  ChefHat,
+  Sparkles,
+  HelpCircle,
+  Award,
+  AlertCircle,
+  Zap,
+  Gem,
+  Info
 } from 'lucide-react';
-import { 
-  ResponsiveContainer, PieChart, Pie, Cell, Tooltip as RechartsTooltip, 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend 
+import { useBranches } from '@/hooks/useBranches';
+import {
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Legend
 } from 'recharts';
+import * as XLSX from 'xlsx';
 
-export interface ProductAnalyticItem {
+interface CategoryItem {
   id: string;
-  rank: number;
   name: string;
-  category: 'Gà ủ muối' | 'Món ăn kèm' | 'Đồ uống';
-  branch: string;
-  unit_price: number;
-  cost_price: number;
-  sold_qty: number;
-  total_gmv: number;
-  total_profit: number;
-  margin_percent: number;
-  stock_qty: number;
-  forecast_prep: string;
-  matrix_type: 'STAR' | 'CASH_COW' | 'PUZZLE' | 'DOG';
-  matrix_label: string;
+  _count?: {
+    products: number;
+  };
 }
 
-const MOCK_ANALYTICS_DATA: ProductAnalyticItem[] = [];
+interface AnalyticsItem {
+  rank: number;
+  id: string;
+  name: string;
+  categoryName: string;
+  image?: string;
+  price: number;
+  costPrice: number;
+  soldQty: number;
+  revenue: number;
+  profit: number;
+  profitMarginPct: number;
+  currentStock: number;
+  forecastQty: number;
+  matrixCategory: 'STAR' | 'PLOWHORSE' | 'PUZZLE' | 'DOG';
+  matrixLabel: string;
+  matrixBadgeBg: string;
+  matrixAdvice: string;
+}
 
-const DONUT_COLORS = ['#10B981', '#0284C7', '#F59E0B', '#6366F1'];
+const PIE_COLORS = ['#F59E0B', '#3B82F6', '#8B5CF6', '#10B981', '#EC4899', '#6366F1'];
 
 export default function ProductAnalyticsPage() {
-  const [mounted, setMounted] = useState(false);
-  
-  // Filter States
-  const [timeFilter, setTimeFilter] = useState<'today' | '7days' | 'month' | 'custom'>('7days');
-  const [fromDate, setFromDate] = useState('2026-09-01');
-  const [toDate, setToDate] = useState('2026-09-04');
-  const [branchFilter, setBranchFilter] = useState('ALL');
-  const [categoryFilter, setCategoryFilter] = useState('ALL');
+  const { branches } = useBranches();
+  const [loading, setLoading] = useState(true);
+  const [items, setItems] = useState<AnalyticsItem[]>([]);
+  const [categoryChartData, setCategoryChartData] = useState<any[]>([]);
+  const [top5Profit, setTop5Profit] = useState<any[]>([]);
+  const [categories, setCategories] = useState<CategoryItem[]>([]);
+  const [counts, setCounts] = useState({ totalProducts: 0, stars: 0, plowhorses: 0, puzzles: 0, dogs: 0 });
+
+  // Filters
+  const [timeRange, setTimeRange] = useState('7days'); // 'today', '7days', 'month', 'custom'
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [branchId, setBranchId] = useState('ALL');
+  const [categoryId, setCategoryId] = useState('ALL');
+
+  const fetchAnalytics = async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.append('timeRange', timeRange);
+      params.append('branchId', branchId);
+      params.append('categoryId', categoryId);
+      if (timeRange === 'custom' && startDate && endDate) {
+        params.append('startDate', startDate);
+        params.append('endDate', endDate);
+      }
+
+      const res = await fetch(`/api/analytics/menu-engineering?${params.toString()}`);
+      const data = await res.json();
+      if (data.success) {
+        setItems(data.items || []);
+        setCategoryChartData(data.categoryChartData || []);
+        setTop5Profit(data.top5Profit || []);
+        setCategories(data.categories || []);
+        if (data.counts) setCounts(data.counts);
+      }
+    } catch (err) {
+      console.error('Failed to load menu engineering analytics:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    setMounted(true);
+    fetch('/api/categories')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.categories)) {
+          setCategories(data.categories);
+        }
+      })
+      .catch(console.error);
   }, []);
 
-  // Filtered Products Logic
-  const filteredProducts = useMemo(() => {
-    return MOCK_ANALYTICS_DATA.filter(item => {
-      // Category filter
-      if (categoryFilter !== 'ALL' && item.category !== categoryFilter) {
-        return false;
-      }
-      // Branch filter
-      if (branchFilter !== 'ALL' && item.branch !== branchFilter) {
-        return false;
-      }
-      return true;
-    });
-  }, [categoryFilter, branchFilter]);
+  useEffect(() => {
+    fetchAnalytics();
+  }, [timeRange, branchId, categoryId, startDate, endDate]);
 
-  // Donut Chart Data: Revenue by Category
-  const categoryRevenueData = useMemo(() => {
-    const categoryMap: Record<string, number> = {};
-    filteredProducts.forEach(item => {
-      categoryMap[item.category] = (categoryMap[item.category] || 0) + item.total_gmv;
-    });
-    return Object.entries(categoryMap).map(([name, value]) => ({ name, value }));
-  }, [filteredProducts]);
+  const handleResetFilters = () => {
+    setTimeRange('7days');
+    setBranchId('ALL');
+    setCategoryId('ALL');
+    setStartDate('');
+    setEndDate('');
+  };
 
-  // Horizontal Bar Chart Data: Top 5 Profit Items
-  const topProfitData = useMemo(() => {
-    return [...filteredProducts]
-      .sort((a, b) => b.total_profit - a.total_profit)
-      .slice(0, 5)
-      .map(item => ({
-        name: item.name.length > 18 ? item.name.substring(0, 16) + '...' : item.name,
-        fullName: item.name,
-        profit: item.total_profit,
-        gmv: item.total_gmv
-      }));
-  }, [filteredProducts]);
+  const handleExportExcel = () => {
+    if (items.length === 0) {
+      alert('Chưa có dữ liệu để xuất Excel');
+      return;
+    }
 
-  // Export CSV Handler
-  const handleExportCSV = () => {
-    const headers = [
-      'Hạng', 'Tên Món Ăn', 'Danh Mục', 'Cơ Sở', 'Đơn Giá (VNĐ)', 'Giá Vốn (VNĐ)',
-      'Số Lượng Bán', 'Doanh Thu Gộp (VNĐ)', 'Lợi Nhuận Gộp (VNĐ)', 'Tỉ Lệ Lãi (%)',
-      'Phân Loại Ma Trận', 'Tồn Kho Hiện Tại', 'Dự Báo Bếp Chuẩn Bị'
-    ];
+    const exportData = items.map((i) => ({
+      'Hạng': i.rank,
+      'Tên Món': i.name,
+      'Danh Mục': i.categoryName,
+      'Ma Trận Thực Đơn': i.matrixLabel,
+      'Khuyến Nghị': i.matrixAdvice,
+      'Giá Bán (VNĐ)': i.price,
+      'Giá Vốn (VNĐ)': i.costPrice,
+      'Số Lượng Bán': i.soldQty,
+      'Doanh Thu Gộp (VNĐ)': i.revenue,
+      'Lợi Nhuận Gộp (VNĐ)': i.profit,
+      'Tỷ Lệ Lãi (%)': Math.round(i.profitMarginPct * 10) / 10,
+      'Tồn Kho Hiển Thị': i.currentStock,
+      'Dự Báo Bếp Chuẩn Bị': `Chuẩn bị ~${i.forecastQty} phần`,
+    }));
 
-    const rows = filteredProducts.map(p => [
-      p.rank,
-      `"${p.name}"`,
-      `"${p.category}"`,
-      `"${p.branch}"`,
-      p.unit_price,
-      p.cost_price,
-      p.sold_qty,
-      p.total_gmv,
-      p.total_profit,
-      `${p.margin_percent}%`,
-      `"${p.matrix_label}"`,
-      p.stock_qty,
-      `"${p.forecast_prep}"`
-    ]);
-
-    const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `bao_cao_hieu_suat_mon_food_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Menu Engineering');
+    XLSX.writeFile(workbook, `Menu_Engineering_Analytics_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
   return (
-    <div className="space-y-6">
-      {/* Top Banner */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        <div className="flex items-center space-x-3.5">
-          <div className="p-3.5 bg-indigo-50 text-indigo-600 rounded-2xl border border-indigo-100 shrink-0">
-            <BarChart3 className="w-7 h-7" />
-          </div>
+    <div className="space-y-6 max-w-7xl mx-auto pb-12">
+      {/* 1. KHỐI TIÊU ĐỀ & THANH ĐIỀU HƯỚNG BỘ LỌC (TOP CONTROLS) */}
+      <div className="bg-[#14171D] p-5 rounded-xs border border-neutral-800/80 shadow-xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-neutral-800 pb-4">
           <div>
-            <h1 className="text-xl font-extrabold text-slate-900 flex items-center gap-2">
-              Báo Cáo Thống Kê &amp; Dự Báo Thực Đơn
-              <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-indigo-100 text-indigo-800">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 bg-purple-500/10 border border-purple-500/30 rounded-xs text-purple-400">
+                <BarChart3 className="w-5 h-5 stroke-[2]" />
+              </div>
+              <h1 className="text-xl sm:text-2xl font-extrabold text-[#FAFAF9] tracking-tight">
+                Báo Cáo Thống Kê & Dự Báo Thực Đơn
+              </h1>
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30 flex items-center gap-1">
+                <Sparkles className="w-3 h-3 text-purple-400" />
                 Menu Engineering
               </span>
-            </h1>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Phân tích hiệu suất từng món ăn, phân loại ma trận thực đơn &amp; dự báo số lượng kho bếp chuẩn bị.
+            </div>
+            <p className="text-xs text-neutral-400 mt-1 font-light">
+              Phân tích hiệu suất từng món ăn, phân loại ma trận thực đơn & dự báo số lượng kho bếp chuẩn bị.
             </p>
           </div>
-        </div>
-      </div>
 
-      {/* ------------------------------------------------------------- */}
-      {/* 1. TOP FILTER BAR (BỘ LỌC ĐA CHIỀU) */}
-      {/* ------------------------------------------------------------- */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          {/* Time Range Tabs */}
-          <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl">
+          {/* Export Button */}
+          <button
+            onClick={handleExportExcel}
+            className="px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-bold text-xs rounded-xs shadow-md transition flex items-center gap-2 uppercase tracking-wide self-start sm:self-auto"
+          >
+            <Download className="w-4 h-4 stroke-[2.5]" />
+            <span>Xuất Báo Cáo Excel</span>
+          </button>
+        </div>
+
+        {/* Hàng 1: Tabs Khoảng thời gian */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+          <div className="flex items-center gap-1 bg-[#0B0D11] p-1 rounded-xs border border-neutral-800">
             <button
-              onClick={() => setTimeFilter('today')}
-              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition ${
-                timeFilter === 'today' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              onClick={() => setTimeRange('today')}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-xs transition ${
+                timeRange === 'today'
+                  ? 'bg-amber-500 text-neutral-950 font-bold shadow-xs'
+                  : 'text-neutral-400 hover:text-neutral-200'
               }`}
             >
               Hôm nay
             </button>
             <button
-              onClick={() => setTimeFilter('7days')}
-              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition ${
-                timeFilter === '7days' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              onClick={() => setTimeRange('7days')}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-xs transition ${
+                timeRange === '7days'
+                  ? 'bg-amber-500 text-neutral-950 font-bold shadow-xs'
+                  : 'text-neutral-400 hover:text-neutral-200'
               }`}
             >
               7 ngày qua
             </button>
             <button
-              onClick={() => setTimeFilter('month')}
-              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition ${
-                timeFilter === 'month' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              onClick={() => setTimeRange('month')}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-xs transition ${
+                timeRange === 'month'
+                  ? 'bg-amber-500 text-neutral-950 font-bold shadow-xs'
+                  : 'text-neutral-400 hover:text-neutral-200'
               }`}
             >
               Tháng này
             </button>
             <button
-              onClick={() => setTimeFilter('custom')}
-              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition flex items-center gap-1 ${
-                timeFilter === 'custom' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              onClick={() => setTimeRange('custom')}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-xs transition flex items-center gap-1 ${
+                timeRange === 'custom'
+                  ? 'bg-amber-500 text-neutral-950 font-bold shadow-xs'
+                  : 'text-neutral-400 hover:text-neutral-200'
               }`}
             >
-              <Calendar className="w-3.5 h-3.5 text-indigo-600" /> Tùy chọn ngày
+              <Calendar className="w-3.5 h-3.5" />
+              Tùy chọn ngày
             </button>
           </div>
 
-          {/* Date Range Selector if Custom */}
-          {timeFilter === 'custom' && (
-            <div className="flex items-center gap-2 text-xs">
+          {/* Custom Date Inputs if custom range selected */}
+          {timeRange === 'custom' && (
+            <div className="flex items-center gap-2 bg-[#0B0D11] p-1.5 rounded-xs border border-neutral-800">
               <input
                 type="date"
-                value={fromDate}
-                onChange={(e) => setFromDate(e.target.value)}
-                className="px-2.5 py-1.5 border border-slate-200 rounded-xl outline-none font-semibold text-slate-800"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="bg-transparent text-xs text-neutral-200 focus:outline-none"
               />
-              <span className="text-slate-400 font-bold">-</span>
+              <span className="text-neutral-500">-</span>
               <input
                 type="date"
-                value={toDate}
-                onChange={(e) => setToDate(e.target.value)}
-                className="px-2.5 py-1.5 border border-slate-200 rounded-xl outline-none font-semibold text-slate-800"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="bg-transparent text-xs text-neutral-200 focus:outline-none"
               />
             </div>
           )}
 
-          {/* Export Excel Button */}
-          <button
-            onClick={handleExportCSV}
-            className="bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-bold text-xs px-4 py-2 rounded-xl transition flex items-center gap-2 shadow-xs cursor-pointer"
-          >
-            <Download className="w-4 h-4" />
-            <span>Xuất Báo Cáo Excel</span>
-          </button>
-        </div>
-
-        {/* Second Filter Row: Branch & Category Dropdowns */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2 border-t border-slate-100 text-xs">
-          <div className="space-y-1">
-            <label className="font-bold text-slate-700 flex items-center gap-1">
-              <Filter className="w-3.5 h-3.5 text-slate-400" /> Chi nhánh áp dụng:
-            </label>
+          {/* Hàng 2: Dropdowns Lọc Chi Nhánh & Danh Mục */}
+          <div className="flex flex-wrap items-center gap-3">
             <select
-              value={branchFilter}
-              onChange={(e) => setBranchFilter(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500"
+              value={branchId}
+              onChange={(e) => setBranchId(e.target.value)}
+              className="px-3 py-1.5 bg-[#0B0D11] border border-neutral-800 rounded-xs text-xs text-neutral-200 focus:border-amber-500 focus:outline-none"
             >
-              <option value="ALL">🏢 Tất cả chi nhánh</option>
-              <option value="CƠ SỞ VIN SMART CITY">🏢 CƠ SỞ VIN SMART CITY</option>
-              <option value="Chi Nhánh Cầu Giấy">🏢 Chi Nhánh Cầu Giấy</option>
-              <option value="Chi Nhánh Thanh Trì">🏢 Chi Nhánh Thanh Trì</option>
-              <option value="Chi Nhánh Quận 1 (TP.HCM)">🏢 Chi Nhánh Quận 1 (TP.HCM)</option>
+              <option value="ALL">🏢 Tất cả chi nhánh ({branches.length} CS)</option>
+              {branches.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
             </select>
-          </div>
 
-          <div className="space-y-1">
-            <label className="font-bold text-slate-700 flex items-center gap-1">
-              <UtensilsCrossed className="w-3.5 h-3.5 text-slate-400" /> Danh mục nhóm món:
-            </label>
             <select
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500"
+              value={categoryId}
+              onChange={(e) => setCategoryId(e.target.value)}
+              className="px-3 py-1.5 bg-[#0B0D11] border border-neutral-800 rounded-xs text-xs text-neutral-200 focus:border-amber-500 focus:outline-none"
             >
               <option value="ALL">🍽️ Tất cả danh mục món</option>
-              <option value="Gà ủ muối">🍗 Gà Ủ Muối</option>
-              <option value="Món ăn kèm">🥗 Món Ăn Kèm</option>
-              <option value="Đồ uống">🥤 Đồ Uống &amp; Giải Khát</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name} {c._count?.products !== undefined ? `(${c._count.products})` : ''}
+                </option>
+              ))}
             </select>
-          </div>
 
-          {/* Reset Filters */}
-          <div className="sm:col-span-2 flex items-end justify-end gap-2">
             <button
-              onClick={() => {
-                setBranchFilter('ALL');
-                setCategoryFilter('ALL');
-                setTimeFilter('7days');
-              }}
-              className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition flex items-center gap-1.5 cursor-pointer"
+              onClick={handleResetFilters}
+              className="p-2 bg-[#0B0D11] hover:bg-neutral-800 text-neutral-400 hover:text-amber-400 border border-neutral-800 rounded-xs transition"
+              title="Reset Bộ Lọc"
             >
-              <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
-              <span>Reset Bộ Lọc</span>
+              <RefreshCw className="w-4 h-4 stroke-[1.5]" />
             </button>
           </div>
         </div>
       </div>
 
-      {/* ------------------------------------------------------------- */}
-      {/* 2. TOP 3 BEST SELLERS WITH MATRIX BADGES */}
-      {/* ------------------------------------------------------------- */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-        {filteredProducts.slice(0, 3).map((item) => (
-          <div
-            key={item.id}
-            className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-3 relative overflow-hidden flex flex-col justify-between hover:border-slate-300 transition"
-          >
-            <div className="space-y-2">
-              <div className="flex justify-between items-center gap-2">
-                <span
-                  className={`px-2.5 py-0.5 rounded-full text-xs font-extrabold border ${
-                    item.rank === 1
-                      ? 'bg-amber-50 text-amber-800 border-amber-200'
-                      : item.rank === 2
-                      ? 'bg-slate-100 text-slate-800 border-slate-200'
-                      : 'bg-orange-50 text-orange-800 border-orange-200'
-                  }`}
-                >
-                  🏆 TOP {item.rank}
-                </span>
-
-                {/* Matrix Badge */}
-                <span
-                  className={`px-2.5 py-0.5 rounded-full text-[11px] font-extrabold border ${
-                    item.matrix_type === 'STAR'
-                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                      : item.matrix_type === 'CASH_COW'
-                      ? 'bg-sky-50 text-sky-700 border-sky-200'
-                      : item.matrix_type === 'PUZZLE'
-                      ? 'bg-amber-50 text-amber-800 border-amber-200'
-                      : 'bg-slate-100 text-slate-600 border-slate-200'
-                  }`}
-                >
-                  {item.matrix_label}
-                </span>
-              </div>
-
-              <div>
-                <h3 className="font-extrabold text-sm text-slate-900 leading-snug">{item.name}</h3>
-                <p className="text-xs text-slate-500 font-medium mt-1">
-                  Đã bán: <strong className="text-slate-900 font-extrabold">{item.sold_qty} phần</strong>
-                </p>
-              </div>
+      {/* MATRIX STATS KPI STRIP */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        {/* Thẻ 1: 🔥 MÓN CHỦ LỰC */}
+        <div className="bg-[#14171D] p-4 rounded-xs border border-amber-500/40 flex items-start justify-between shadow-xs relative group">
+          <div className="space-y-1">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-black text-amber-400 uppercase tracking-wider">🔥 MÓN CHỦ LỰC</span>
             </div>
-
-            <div className="pt-2 border-t border-slate-100 space-y-1 text-xs">
-              <div className="flex justify-between font-semibold text-slate-600">
-                <span>Doanh Thu Gộp:</span>
-                <span className="text-slate-900 font-extrabold">{item.total_gmv.toLocaleString('vi-VN')} VNĐ</span>
-              </div>
-              <div className="flex justify-between font-semibold text-emerald-700">
-                <span>Lợi Nhuận Gộp:</span>
-                <span className="font-extrabold">+{item.total_profit.toLocaleString('vi-VN')} VNĐ</span>
-              </div>
-            </div>
+            <h4 className="text-2xl font-black text-amber-400">{counts.stars} món</h4>
+            <p className="text-[11px] text-neutral-300 font-medium">Bán chạy nhất • Lợi nhuận cao</p>
+            <p className="text-[10px] text-neutral-400 mt-1 leading-snug">
+              Các món cốt lõi mang lại dòng tiền và thương hiệu chính cho chuỗi.
+            </p>
           </div>
-        ))}
+          <div className="w-10 h-10 rounded-xs bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+            <Flame className="w-5 h-5 stroke-[2]" />
+          </div>
+        </div>
+
+        {/* Thẻ 2: ⚡ MÓN KÉO KHÁCH */}
+        <div className="bg-[#14171D] p-4 rounded-xs border border-blue-500/40 flex items-start justify-between shadow-xs relative group">
+          <div className="space-y-1">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-black text-blue-400 uppercase tracking-wider">⚡ MÓN KÉO KHÁCH</span>
+            </div>
+            <h4 className="text-2xl font-black text-blue-400">{counts.plowhorses} món</h4>
+            <p className="text-[11px] text-neutral-300 font-medium">Sản lượng bán lớn • Lãi mỏng</p>
+            <p className="text-[10px] text-neutral-400 mt-1 leading-snug">
+              Món thu hút lượng lớn khách hàng, nên bán kèm combo đồ uống hoặc sốt chấm.
+            </p>
+          </div>
+          <div className="w-10 h-10 rounded-xs bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0">
+            <Zap className="w-5 h-5 stroke-[2]" />
+          </div>
+        </div>
+
+        {/* Thẻ 3: 💎 MÓN TIỀM NĂNG */}
+        <div className="bg-[#14171D] p-4 rounded-xs border border-purple-500/40 flex items-start justify-between shadow-xs relative group">
+          <div className="space-y-1">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-black text-purple-400 uppercase tracking-wider">💎 MÓN TIỀM NĂNG</span>
+            </div>
+            <h4 className="text-2xl font-black text-purple-400">{counts.puzzles} món</h4>
+            <p className="text-[11px] text-neutral-300 font-medium">Lợi nhuận rất tốt • Sức mua chưa cao</p>
+            <p className="text-[10px] text-neutral-400 mt-1 leading-snug">
+              Món có biên lãi cao nhưng ít người đặt, cần đẩy mạnh hình ảnh và gợi ý khi chốt đơn.
+            </p>
+          </div>
+          <div className="w-10 h-10 rounded-xs bg-purple-500/10 border border-purple-500/30 flex items-center justify-center text-purple-400 shrink-0">
+            <Gem className="w-5 h-5 stroke-[2]" />
+          </div>
+        </div>
+
+        {/* Thẻ 4: ⚠️ MÓN KÉM HIỆU QUẢ */}
+        <div className="bg-[#14171D] p-4 rounded-xs border border-rose-500/40 flex items-start justify-between shadow-xs relative group">
+          <div className="space-y-1">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-black text-rose-400 uppercase tracking-wider">⚠️ MÓN KÉM HIỆU QUẢ</span>
+            </div>
+            <h4 className="text-2xl font-black text-rose-400">{counts.dogs} món</h4>
+            <p className="text-[11px] text-neutral-300 font-medium">Bán chậm • Lợi nhuận thấp</p>
+            <p className="text-[10px] text-neutral-400 mt-1 leading-snug">
+              Món tồn kho lâu và không hiệu quả, cân nhắc làm mới công thức hoặc bỏ khỏi thực đơn.
+            </p>
+          </div>
+          <div className="w-10 h-10 rounded-xs bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400 shrink-0">
+            <AlertCircle className="w-5 h-5 stroke-[2]" />
+          </div>
+        </div>
       </div>
 
-      {/* ------------------------------------------------------------- */}
-      {/* 3. RECHARTS VISUAL CHARTS (DONUT + HORIZONTAL BAR) */}
-      {/* ------------------------------------------------------------- */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-        {/* Donut Chart: 40% (lg:col-span-5) */}
-        <div className="lg:col-span-5 bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-            <h2 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
-              <PieChartIcon className="w-4 h-4 text-emerald-600" /> Cơ Cấu Doanh Thu Theo Nhóm Món
-            </h2>
+      {/* 2. HAI BIỂU ĐỒ TRỰC QUAN PHÂN TÍCH (RECHARTS CHARTS) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Biểu đồ tròn: Cơ cấu doanh thu theo nhóm món */}
+        <div className="bg-[#14171D] p-5 rounded-xs border border-neutral-800 flex flex-col justify-between shadow-xs">
+          <div className="flex items-center justify-between border-b border-neutral-800 pb-3 mb-4">
+            <h3 className="font-bold text-sm text-[#FAFAF9] flex items-center gap-2">
+              <PieIcon className="w-4 h-4 text-amber-400" />
+              Cơ Cấu Doanh Thu Theo Nhóm Món
+            </h3>
+            <span className="text-[11px] text-neutral-400 font-mono">% Đóng góp</span>
           </div>
 
-          {mounted ? (
-            <div className="h-64 w-full">
+          <div className="h-64 w-full">
+            {categoryChartData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={categoryRevenueData}
+                    data={categoryChartData}
                     cx="50%"
                     cy="50%"
                     innerRadius={55}
@@ -350,160 +392,220 @@ export default function ProductAnalyticsPage() {
                     paddingAngle={4}
                     dataKey="value"
                   >
-                    {categoryRevenueData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={DONUT_COLORS[index % DONUT_COLORS.length]} />
+                    {categoryChartData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
                     ))}
                   </Pie>
-                  <RechartsTooltip
-                    formatter={(val: any) => `${Number(val || 0).toLocaleString('vi-VN')} VNĐ`}
-                    contentStyle={{ borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}
+                  <Tooltip
+                    formatter={(value: any) => [`${Number(value).toLocaleString('vi-VN')} đ`, 'Doanh Thu']}
+                    contentStyle={{ backgroundColor: '#0B0D11', borderColor: '#334155', borderRadius: '4px', fontSize: '12px' }}
                   />
                   <Legend
+                    layout="horizontal"
                     verticalAlign="bottom"
-                    height={36}
-                    formatter={(val) => <span className="text-xs font-semibold text-slate-700">{val}</span>}
+                    align="center"
+                    formatter={(value) => <span className="text-xs text-neutral-300">{value}</span>}
                   />
                 </PieChart>
               </ResponsiveContainer>
-            </div>
-          ) : (
-            <div className="h-64 bg-slate-50 animate-pulse rounded-xl" />
-          )}
+            ) : (
+              <div className="h-full flex items-center justify-center text-xs text-neutral-500 italic">
+                Chưa có dữ liệu biểu đồ tròn
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Horizontal Bar Chart: 60% (lg:col-span-7) */}
-        <div className="lg:col-span-7 bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-            <h2 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-sky-600" /> Top 5 Món Mang Lại Lợi Nhuận Cao Nhất
-            </h2>
+        {/* Biểu đồ cột: Top 5 Món Mang Lại Lợi Nhuận Cao Nhất */}
+        <div className="bg-[#14171D] p-5 rounded-xs border border-neutral-800 flex flex-col justify-between shadow-xs">
+          <div className="flex items-center justify-between border-b border-neutral-800 pb-3 mb-4">
+            <h3 className="font-bold text-sm text-[#FAFAF9] flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-emerald-400" />
+              Top 5 Món Mang Lại Lợi Nhuận Cao Nhất
+            </h3>
+            <span className="text-[11px] text-emerald-400 font-bold uppercase">Lợi Nhuận Gộp</span>
           </div>
 
-          {mounted ? (
-            <div className="h-64 w-full text-xs">
+          <div className="h-64 w-full">
+            {top5Profit.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={topProfitData} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#E2E8F0" />
+                <BarChart data={top5Profit} margin={{ top: 10, right: 10, left: 10, bottom: 25 }}>
                   <XAxis
-                    type="number"
-                    tickFormatter={(val) => `${(val / 1000000).toFixed(1)}M`}
-                    stroke="#64748B"
+                    dataKey="name"
+                    stroke="#94A3B8"
+                    fontSize={11}
+                    tickLine={false}
+                    interval={0}
+                    angle={-15}
+                    textAnchor="end"
                   />
-                  <YAxis type="category" dataKey="name" width={110} stroke="#475569" tick={{ fontSize: 11, fontWeight: 600 }} />
-                  <RechartsTooltip
-                    formatter={(val: any) => [`${Number(val || 0).toLocaleString('vi-VN')} VNĐ`, 'Lợi Nhuận Gộp']}
+                  <YAxis stroke="#94A3B8" fontSize={10} tickFormatter={(v) => `${v / 1000}k`} />
+                  <Tooltip
+                    formatter={(value: any, name: any) => [
+                      `${Number(value).toLocaleString('vi-VN')} đ`,
+                      name === 'profit' ? 'Lợi Nhuận Gộp' : 'Doanh Thu',
+                    ]}
                     labelFormatter={(label) => `Món: ${label}`}
-                    contentStyle={{ borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}
+                    contentStyle={{ backgroundColor: '#0B0D11', borderColor: '#334155', borderRadius: '4px', fontSize: '12px' }}
                   />
-                  <Bar dataKey="profit" fill="#0284C7" radius={[0, 6, 6, 0]} barSize={20} />
+                  <Bar dataKey="profit" name="Lợi Nhuận Gộp" radius={[4, 4, 0, 0]}>
+                    {top5Profit.map((entry, index) => (
+                      <Cell key={`bar-${index}`} fill={index === 0 ? '#10B981' : index === 1 ? '#3B82F6' : '#F59E0B'} />
+                    ))}
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
-            </div>
-          ) : (
-            <div className="h-64 bg-slate-50 animate-pulse rounded-xl" />
-          )}
+            ) : (
+              <div className="h-full flex items-center justify-center text-xs text-neutral-500 italic">
+                Chưa có dữ liệu biểu đồ lợi nhuận
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* ------------------------------------------------------------- */}
-      {/* 4. FULL DETAILED TABLE WITH KITCHEN PREP & MATRIX BADGES */}
-      {/* ------------------------------------------------------------- */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
-          <h2 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
-            <ChefHat className="w-4 h-4 text-amber-600" /> Bảng Phân Tích Chi Tiết Hiệu Suất &amp; Chuẩn Bị Kho Bếp
-          </h2>
-          <span className="text-xs text-slate-500 font-medium">
-            Hiển thị {filteredProducts.length} món trong danh mục chọn
+      {/* 3. BẢNG PHÂN TÍCH CHI TIẾT HIỆU SUẤT & CHUẨN BỊ KHO BẾP (TABLE) */}
+      <div className="bg-[#14171D] rounded-xs border border-neutral-800 overflow-hidden shadow-xs space-y-3 p-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-neutral-800 pb-3">
+          <div className="flex items-center gap-2">
+            <ChefHat className="w-5 h-5 text-amber-400 stroke-[2]" />
+            <h3 className="font-extrabold text-base text-[#FAFAF9]">
+              Bảng Phân Tích Chi Tiết Hiệu Suất & Chuẩn Bị Kho Bếp
+            </h3>
+          </div>
+          <span className="text-xs text-neutral-400 bg-neutral-900 px-3 py-1 rounded-full border border-neutral-800">
+            Hiển thị <b className="text-amber-400">{items.length}</b> món trong danh mục chọn
           </span>
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs text-slate-700">
-            <thead className="bg-slate-50 text-slate-600 uppercase text-[10px] tracking-wider border-b border-slate-200 font-bold">
-              <tr>
-                <th className="px-3 py-3 text-center">Hạng</th>
-                <th className="px-4 py-3">Tên Món Ăn</th>
-                <th className="px-3 py-3 text-center">Ma Trận thực đơn</th>
-                <th className="px-3 py-3 text-right">Đơn Giá Bán</th>
-                <th className="px-3 py-3 text-right">Giá Vốn</th>
-                <th className="px-3 py-3 text-center">Đã Bán</th>
-                <th className="px-4 py-3 text-right">Doanh Thu Gộp</th>
-                <th className="px-4 py-3 text-right">Lợi Nhuận Gộp</th>
-                <th className="px-3 py-3 text-center">Tỷ Lệ Lãi</th>
-                <th className="px-3 py-3 text-center bg-amber-50/50">Tồn Kho Hiện Tại</th>
-                <th className="px-4 py-3 bg-sky-50/50">Dự Báo Bếp Chuẩn Bị</th>
+          <table className="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr className="bg-[#0B0D11] text-neutral-400 uppercase text-[11px] font-bold border-b border-neutral-800 tracking-wider">
+                <th className="py-3.5 px-3 text-center min-w-[50px]">HẠNG</th>
+                <th className="py-3.5 px-4 min-w-[200px] text-amber-400">TÊN MÓN ĂN</th>
+                <th className="py-3.5 px-4 min-w-[170px]">MA TRẬN THỰC ĐƠN</th>
+                <th className="py-3.5 px-3 text-right min-w-[90px]">ĐƠN GIÁ BÁN</th>
+                <th className="py-3.5 px-3 text-right min-w-[90px]">GIÁ VỐN (COGS)</th>
+                <th className="py-3.5 px-3 text-center min-w-[70px]">ĐÃ BÁN</th>
+                <th className="py-3.5 px-4 text-right min-w-[110px]">DOANH THU GỘP</th>
+                <th className="py-3.5 px-4 text-right min-w-[110px] text-emerald-400">LỢI NHUẬN GỘP</th>
+                <th className="py-3.5 px-3 text-center min-w-[80px]">TỶ LỆ LÃI</th>
+                <th className="py-3.5 px-4 text-center min-w-[110px] bg-amber-500/10 text-amber-400">TỒN KHO HIỆN TẠI</th>
+                <th className="py-3.5 px-4 min-w-[180px] bg-emerald-500/10 text-emerald-400">DỰ BÁO BẾP CHUẨN BỊ</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filteredProducts.length === 0 ? (
+            <tbody className="divide-y divide-neutral-800/80">
+              {loading ? (
                 <tr>
-                  <td colSpan={11} className="px-4 py-8 text-center text-slate-500 text-xs font-semibold">
-                    Chưa có dữ liệu bán hàng để phân tích
+                  <td colSpan={11} className="py-12 text-center text-neutral-500">
+                    <div className="flex items-center justify-center gap-2">
+                      <RefreshCw className="w-4 h-4 animate-spin text-purple-400" />
+                      <span>Đang tính toán phân tích ma trận thực đơn Menu Engineering...</span>
+                    </div>
+                  </td>
+                </tr>
+              ) : items.length === 0 ? (
+                /* EMPTY STATE */
+                <tr>
+                  <td colSpan={11} className="py-12 text-center text-neutral-500">
+                    <p className="text-sm font-semibold text-neutral-400">Chưa có dữ liệu bán hàng để phân tích.</p>
+                    <p className="text-xs text-neutral-600 mt-1">Thử chọn khoảng thời gian khác hoặc tạo đơn hàng mới trên POS.</p>
                   </td>
                 </tr>
               ) : (
-                filteredProducts.map((p) => {
-                const isLowStock = p.stock_qty < 10;
+                items.map((i) => (
+                  <tr key={i.id} className="hover:bg-[#1A1D24] transition">
+                    {/* HẠNG */}
+                    <td className="py-3.5 px-3 text-center">
+                      <span
+                        className={`inline-flex items-center justify-center w-6 h-6 rounded-xs text-[11px] font-black ${
+                          i.rank === 1
+                            ? 'bg-amber-400 text-neutral-950'
+                            : i.rank === 2
+                            ? 'bg-neutral-300 text-neutral-950'
+                            : i.rank === 3
+                            ? 'bg-amber-700 text-white'
+                            : 'bg-neutral-800 text-neutral-400'
+                        }`}
+                      >
+                        #{i.rank}
+                      </span>
+                    </td>
 
-                return (
-                  <tr key={p.id} className="hover:bg-slate-50 transition">
-                    <td className="px-3 py-3.5 text-center font-extrabold text-amber-600">#{p.rank}</td>
-                    <td className="px-4 py-3.5 font-bold text-slate-900">
-                      <div>
-                        <span className="block leading-snug">{p.name}</span>
-                        <span className="text-[10px] text-slate-400 font-normal">{p.branch}</span>
+                    {/* TÊN MÓN ĂN */}
+                    <td className="py-3.5 px-4 font-bold text-[#FAFAF9]">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-xs bg-neutral-800 overflow-hidden shrink-0 border border-neutral-700">
+                          {i.image ? (
+                            <img src={i.image} alt={i.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-[10px] text-neutral-500">
+                              F&B
+                            </div>
+                          )}
+                        </div>
+                        <div>
+                          <p className="line-clamp-1 leading-snug">{i.name}</p>
+                          <span className="text-[10px] font-normal text-neutral-400">{i.categoryName}</span>
+                        </div>
                       </div>
                     </td>
-                    <td className="px-3 py-3.5 text-center">
-                      <span
-                        className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border ${
-                          p.matrix_type === 'STAR'
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                            : p.matrix_type === 'CASH_COW'
-                            ? 'bg-sky-50 text-sky-700 border-sky-200'
-                            : p.matrix_type === 'PUZZLE'
-                            ? 'bg-amber-50 text-amber-800 border-amber-200'
-                            : 'bg-slate-100 text-slate-600 border-slate-200'
-                        }`}
-                      >
-                        {p.matrix_label}
-                      </span>
-                    </td>
-                    <td className="px-3 py-3.5 text-right font-medium text-slate-600">{p.unit_price.toLocaleString('vi-VN')}đ</td>
-                    <td className="px-3 py-3.5 text-right font-medium text-slate-500">{p.cost_price.toLocaleString('vi-VN')}đ</td>
-                    <td className="px-3 py-3.5 text-center font-extrabold text-slate-900">{p.sold_qty}</td>
-                    <td className="px-4 py-3.5 text-right font-bold text-slate-900">{p.total_gmv.toLocaleString('vi-VN')}đ</td>
-                    <td className="px-4 py-3.5 text-right font-extrabold text-emerald-700">+{p.total_profit.toLocaleString('vi-VN')}đ</td>
-                    <td className="px-3 py-3.5 text-center">
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                        {p.margin_percent}%
-                      </span>
-                    </td>
-                    
-                    {/* Operational Columns: Current Stock & Kitchen Prep Forecast */}
-                    <td className="px-3 py-3.5 text-center bg-amber-50/20">
-                      <span
-                        className={`px-2.5 py-1 rounded-lg text-xs font-bold ${
-                          isLowStock
-                            ? 'bg-rose-50 text-rose-700 border border-rose-200 animate-pulse flex items-center justify-center gap-1'
-                            : 'bg-slate-100 text-slate-800'
-                        }`}
-                      >
-                        {isLowStock && <AlertTriangle className="w-3 h-3 text-rose-600 shrink-0" />}
-                        {p.stock_qty} {p.category === 'Đồ uống' ? 'ly' : 'phần'}
-                      </span>
+
+                    {/* MA TRẬN THỰC ĐƠN */}
+                    <td className="py-3.5 px-4">
+                      <div>
+                        <span className={`inline-block px-2.5 py-1 rounded-xs text-[11px] border font-bold ${i.matrixBadgeBg}`}>
+                          {i.matrixLabel}
+                        </span>
+                        <p className="text-[10px] text-neutral-400 mt-1 italic">{i.matrixAdvice}</p>
+                      </div>
                     </td>
 
-                    <td className="px-4 py-3.5 bg-sky-50/20">
-                      <span className="text-xs font-semibold text-sky-900 flex items-center gap-1.5">
-                        <ChefHat className="w-3.5 h-3.5 text-sky-600 shrink-0" />
-                        {p.forecast_prep}
-                      </span>
+                    {/* ĐƠN GIÁ BÁN */}
+                    <td className="py-3.5 px-3 text-right font-medium text-neutral-300">
+                      {i.price.toLocaleString('vi-VN')} đ
+                    </td>
+
+                    {/* GIÁ VỐN (COGS) */}
+                    <td className="py-3.5 px-3 text-right font-medium text-neutral-400">
+                      {i.costPrice.toLocaleString('vi-VN')} đ
+                    </td>
+
+                    {/* ĐÃ BÁN */}
+                    <td className="py-3.5 px-3 text-center font-bold text-blue-400">
+                      {i.soldQty}
+                    </td>
+
+                    {/* DOANH THU GỘP */}
+                    <td className="py-3.5 px-4 text-right font-bold text-amber-400">
+                      {i.revenue.toLocaleString('vi-VN')} đ
+                    </td>
+
+                    {/* LỢI NHUẬN GỘP */}
+                    <td className="py-3.5 px-4 text-right font-bold text-emerald-400">
+                      {i.profit.toLocaleString('vi-VN')} đ
+                    </td>
+
+                    {/* TỶ LỆ LÃI */}
+                    <td className="py-3.5 px-3 text-center font-bold text-neutral-200">
+                      {Math.round(i.profitMarginPct)}%
+                    </td>
+
+                    {/* TỒN KHO HIỆN TẠI */}
+                    <td className="py-3.5 px-4 text-center bg-amber-500/10 font-bold text-amber-400">
+                      {i.currentStock} phần
+                    </td>
+
+                    {/* DỰ BÁO BẾP CHUẨN BỊ */}
+                    <td className="py-3.5 px-4 bg-emerald-500/10 font-semibold text-emerald-400">
+                      <div className="flex items-center gap-1.5">
+                        <ChefHat className="w-4 h-4 shrink-0 text-emerald-400" />
+                        <span>Cần chuẩn bị ~<b className="font-black text-white text-xs">{i.forecastQty}</b> phần</span>
+                      </div>
                     </td>
                   </tr>
-                );
-              })
+                ))
               )}
             </tbody>
           </table>

@@ -1,0 +1,13 @@
+PassengerEnabled on
+DirectoryIndex disabled
+
+RewriteEngine On
+RewriteBase /
+
+# Bỏ chặn các file tĩnh
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# Chuyển tiếp request vào Node.js (cổng 3000 hoặc theo PORT môi trường)
+RewriteRule ^(.*)$ http://127.0.0.1:3000/$1 [P,L]
