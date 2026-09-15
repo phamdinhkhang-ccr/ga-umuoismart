@@ -1,92 +1,61 @@
 import { PrismaClient } from '@prisma/client';
-import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
-async function main() {
-  console.log('🧹 Bắt đầu dọn dẹp dữ liệu demo, chuẩn bị vận hành sản xuất (Production Ready)...');
+async function cleanupDemoData() {
+  console.log("==========================================");
+  console.log("-> Starting Operational Demo Data Cleanup");
+  console.log("==========================================");
 
-  // 1. Delete transactional records in foreign key dependency order
-  console.log('  1. Xóa toàn bộ lịch sử đơn hàng...');
-  await prisma.orderItem.deleteMany({});
-  await prisma.order.deleteMany({});
+  try {
+    // 1. Delete Order Items & Orders
+    const deletedOrderItems = await prisma.orderItem.deleteMany({});
+    console.log(`-> Deleted ${deletedOrderItems.count} OrderItems.`);
 
-  console.log('  2. Xóa toàn bộ phiếu chi sổ quỹ...');
-  await prisma.expense.deleteMany({});
+    const deletedOrders = await prisma.order.deleteMany({});
+    console.log(`-> Deleted ${deletedOrders.count} Orders.`);
 
-  console.log('  3. Xóa toàn bộ lịch sử đóng/mở ca...');
-  await prisma.shift.deleteMany({});
+    // 2. Delete Expenses
+    const deletedExpenses = await prisma.expense.deleteMany({});
+    console.log(`-> Deleted ${deletedExpenses.count} Expenses.`);
 
-  console.log('  4. Xóa toàn bộ dữ liệu chấm công...');
-  await prisma.attendance.deleteMany({});
+    // 3. Delete Shifts
+    const deletedShifts = await prisma.shift.deleteMany({});
+    console.log(`-> Deleted ${deletedShifts.count} Shifts.`);
 
-  console.log('  5. Xóa toàn bộ danh bạ khách hàng thử nghiệm...');
-  await prisma.customer.deleteMany({});
+    // 4. Delete Attendance records
+    const deletedAttendance = await prisma.attendance.deleteMany({});
+    console.log(`-> Deleted ${deletedAttendance.count} Attendance records.`);
 
-  console.log('  6. Xóa toàn bộ phiếu nhập/xuất kho & nhật ký giao dịch...');
-  await prisma.inventoryReceiptItem.deleteMany({});
-  await prisma.inventoryReceipt.deleteMany({});
-  await prisma.inventoryExportItem.deleteMany({});
-  await prisma.inventoryExport.deleteMany({});
-  await prisma.inventoryTransaction.deleteMany({});
+    // 5. Delete Inventory Transactions, Receipts, Exports
+    const deletedInvTx = await prisma.inventoryTransaction.deleteMany({});
+    console.log(`-> Deleted ${deletedInvTx.count} InventoryTransactions.`);
 
-  // 2. Ensure Super Admin user exists & clean test staff accounts
-  console.log('  7. Dọn dẹp tài khoản nhân viên test, giữ lại 01 Super Admin...');
-  await prisma.user.deleteMany({
-    where: {
-      username: {
-        notIn: ['admin.pos', 'admin'],
-      },
-    },
-  });
+    const deletedReceiptItems = await prisma.inventoryReceiptItem.deleteMany({});
+    console.log(`-> Deleted ${deletedReceiptItems.count} InventoryReceiptItems.`);
 
-  const existingAdmin = await prisma.user.findFirst({
-    where: {
-      OR: [{ username: 'admin.pos' }, { username: 'admin' }],
-    },
-  });
+    const deletedReceipts = await prisma.inventoryReceipt.deleteMany({});
+    console.log(`-> Deleted ${deletedReceipts.count} InventoryReceipts.`);
 
-  if (!existingAdmin) {
-    const hashedPassword = await bcrypt.hash('admin123', 10);
-    await prisma.user.create({
-      data: {
-        staffCode: 'NV-ADMIN',
-        name: 'Super Admin Quản Trị',
-        username: 'admin.pos',
-        password: hashedPassword,
-        phone: '0988.888.888',
-        role: 'ADMIN',
-        branchId: 'cs1',
-        isActive: true,
-      },
-    });
-    console.log('    -> Đã tạo tài khoản Super Admin (admin.pos / admin123)');
+    const deletedExportItems = await prisma.inventoryExportItem.deleteMany({});
+    console.log(`-> Deleted ${deletedExportItems.count} InventoryExportItems.`);
+
+    const deletedExports = await prisma.inventoryExport.deleteMany({});
+    console.log(`-> Deleted ${deletedExports.count} InventoryExports.`);
+
+    // 6. Delete Demo Customers
+    const deletedCustomers = await prisma.customer.deleteMany({});
+    console.log(`-> Deleted ${deletedCustomers.count} Demo Customers.`);
+
+    console.log("==========================================");
+    console.log("-> 🎉 DEMO DATA CLEANUP COMPLETED SUCCESSFULLY!");
+    console.log("-> Preserved: Category, Product, Branch, User, Setting.");
+    console.log("==========================================");
+  } catch (err: any) {
+    console.error("Cleanup error:", err);
+  } finally {
+    await prisma.$disconnect();
   }
-
-  // 3. Reset product stock quantities to 0 (awaiting real inbound inventory receipts)
-  console.log('  8. Đưa toàn bộ tồn kho sản phẩm & vật tư về 0 (chờ nhập mẻ đầu)...');
-  await prisma.product.updateMany({
-    data: {
-      stockQuantity: 0,
-      isAvailable: false,
-    },
-  });
-
-  await prisma.inventoryItem.updateMany({
-    data: {
-      currentQuantity: 0,
-    },
-  });
-
-  console.log('\n✨ Đã dọn sạch 100% dữ liệu demo!');
-  console.log('🚀 Hệ thống Gà Ủ Muối Smart đã sẵn sàng cho ngày mở bán đầu tiên (Production Ready)!');
 }
 
-main()
-  .catch((e) => {
-    console.error('❌ Lỗi dọn dẹp CSDL:', e);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+cleanupDemoData();
