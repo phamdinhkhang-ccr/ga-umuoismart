@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Plus_Jakarta_Sans, Montserrat } from 'next/font/google';
 import './globals.css';
 import { ThemeProvider } from '@/components/ThemeProvider';
@@ -23,14 +23,21 @@ export const metadata: Metadata = {
     'Thương hiệu Gà Ủ Muối Smart cao cấp. Da giòn thịt ngọt, chuẩn vị thảo mộc tự nhiên, giao chuẩn nhiệt hỏa tốc.',
 };
 
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+};
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html
       lang="vi"
       suppressHydrationWarning
-      className={`${jakarta.variable} ${montserrat.variable} h-full antialiased`}
+      className={`${jakarta.variable} ${montserrat.variable} h-full antialiased w-full max-w-full overflow-x-hidden`}
     >
-      <body className="min-h-full flex flex-col bg-[#FBF9F5] text-stone-900 dark:bg-[#0F1115] dark:text-[#FAFAF9] font-sans transition-colors duration-300">
+      <body className="min-h-full flex flex-col bg-[#FBF9F5] text-stone-900 dark:bg-[#0F1115] dark:text-[#FAFAF9] font-sans transition-colors duration-300 w-full max-w-full overflow-x-hidden">
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
           {children}
         </ThemeProvider>
