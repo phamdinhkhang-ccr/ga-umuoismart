@@ -67,6 +67,12 @@ export async function ensureDbInitialized() {
   isInitializing = true;
 
   try {
+    // 0. Enable WAL Mode and busy_timeout for high SQLite concurrency
+    try {
+      await prisma.$executeRawUnsafe(`PRAGMA journal_mode = WAL;`);
+      await prisma.$executeRawUnsafe(`PRAGMA busy_timeout = 10000;`);
+    } catch (e) {}
+
     // 1. Create User table if missing
     await prisma.$executeRawUnsafe(`
       CREATE TABLE IF NOT EXISTS User (
