@@ -16,7 +16,7 @@ export async function POST(request: Request) {
 
     const cleanUsername = String(username).trim();
 
-    const user = await prisma.user.findFirst({
+    let user = await prisma.user.findFirst({
       where: {
         OR: [
           { username: cleanUsername },
@@ -24,6 +24,31 @@ export async function POST(request: Request) {
         ],
       },
     });
+
+    // Auto-seed admin user if database User table is empty
+    if (!user) {
+      try {
+        const userCount = await prisma.user.count();
+        if (userCount === 0) {
+          console.log("User table is empty. Auto-seeding default admin account...");
+          const defaultPasswordHash = await bcrypt.hash('GaMuoi@2026', 10);
+          user = await prisma.user.create({
+            data: {
+              staffCode: 'NV-0101',
+              name: 'Nguyễn Văn Quyền (Admin)',
+              username: 'admin',
+              password: defaultPasswordHash,
+              phone: '0901111222',
+              role: 'ADMIN',
+              branchId: 'cs1',
+              isActive: true,
+            },
+          });
+        }
+      } catch (autoSeedErr) {
+        console.warn("Auto-seed admin notice:", autoSeedErr);
+      }
+    }
 
     if (!user) {
       return NextResponse.json(
@@ -93,10 +118,11 @@ export async function POST(request: Request) {
 
     return response;
   } catch (error: any) {
-    console.error('Error logging in:', error);
-    return NextResponse.json(
-      { success: false, error: 'Đã xảy ra lỗi máy chủ' },
-      { status: 500 }
-    );
+    console.error("LOGIN_FATAL_ERROR:", error);
+    return NextResponse.json({
+      success: false,
+      error: error?.message || "Đã xảy ra lỗi máy chủ",
+      stack: process.env.NODE_ENV === "development" ? error?.stack : undefined
+    }, { status: 500 });
   }
 }
