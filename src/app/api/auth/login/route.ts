@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
+import prisma, { ensureDbInitialized } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 import { signJWT } from '@/lib/auth';
 
@@ -16,6 +16,9 @@ export async function POST(request: Request) {
 
     const cleanUsername = String(username).trim();
 
+    // Ensure database tables and default admin account exist
+    await ensureDbInitialized();
+
     let user = await prisma.user.findFirst({
       where: {
         OR: [
@@ -24,31 +27,6 @@ export async function POST(request: Request) {
         ],
       },
     });
-
-    // Auto-seed admin user if database User table is empty
-    if (!user) {
-      try {
-        const userCount = await prisma.user.count();
-        if (userCount === 0) {
-          console.log("User table is empty. Auto-seeding default admin account...");
-          const defaultPasswordHash = await bcrypt.hash('GaMuoi@2026', 10);
-          user = await prisma.user.create({
-            data: {
-              staffCode: 'NV-0101',
-              name: 'Nguyễn Văn Quyền (Admin)',
-              username: 'admin',
-              password: defaultPasswordHash,
-              phone: '0901111222',
-              role: 'ADMIN',
-              branchId: 'cs1',
-              isActive: true,
-            },
-          });
-        }
-      } catch (autoSeedErr) {
-        console.warn("Auto-seed admin notice:", autoSeedErr);
-      }
-    }
 
     if (!user) {
       return NextResponse.json(
