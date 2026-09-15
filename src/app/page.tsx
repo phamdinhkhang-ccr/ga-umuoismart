@@ -5,17 +5,35 @@ import ClientStorefront from '@/components/ClientStorefront';
 export const revalidate = 0; // Fresh dynamic rendering
 
 export default async function HomePage() {
-  // Fetch data from database
-  const categories = await prisma.category.findMany({
-    orderBy: { name: 'asc' },
-  });
+  let categories: Array<{ id: string; name: string; slug: string; description: string | null }> = [];
+  let rawProducts: Array<{
+    id: string;
+    name: string;
+    description: string | null;
+    price: number;
+    image: string | null;
+    isAvailable: boolean;
+    isBestSeller: boolean;
+    categoryId: string | null;
+    category: { id: string; name: string; slug: string } | null;
+  }> = [];
+  let rawSettings: Array<{ key: string; value: string }> = [];
 
-  const rawProducts = await prisma.product.findMany({
-    include: { category: true },
-    orderBy: { createdAt: 'desc' },
-  });
+  try {
+    categories = await prisma.category.findMany({
+      orderBy: { name: 'asc' },
+    });
 
-  const rawSettings = await prisma.setting.findMany();
+    rawProducts = await prisma.product.findMany({
+      include: { category: true },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    rawSettings = await prisma.setting.findMany();
+  } catch (error) {
+    console.error('Error loading storefront data from database:', error);
+  }
+
   const settingsMap: Record<string, string> = {};
   rawSettings.forEach((s) => {
     settingsMap[s.key] = s.value;
