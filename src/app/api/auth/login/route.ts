@@ -16,6 +16,50 @@ export async function POST(request: Request) {
 
     const cleanUsername = String(username).trim();
 
+    // Auto-create User table and seed default admin account if not exists
+    try {
+      await prisma.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS User (
+          id TEXT PRIMARY KEY,
+          staffCode TEXT UNIQUE DEFAULT 'NV-0101',
+          name TEXT DEFAULT 'Administrator',
+          username TEXT UNIQUE NOT NULL,
+          password TEXT NOT NULL,
+          phone TEXT,
+          role TEXT DEFAULT 'ADMIN',
+          branchId TEXT DEFAULT 'cs1',
+          branchIds TEXT DEFAULT '[]',
+          avatar TEXT,
+          isActive BOOLEAN DEFAULT 1,
+          createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+
+      const existingAdmin = await prisma.user.findFirst({
+        where: { OR: [{ username: 'admin' }, { username: 'ADMIN' }] }
+      });
+
+      if (!existingAdmin) {
+        const hashedPassword = await bcrypt.hash('admin123', 10);
+        await prisma.user.create({
+          data: {
+            id: 'admin-default-id',
+            staffCode: 'NV-0101',
+            name: 'Quản trị viên (Admin)',
+            username: 'admin',
+            password: hashedPassword,
+            role: 'ADMIN',
+            branchId: 'cs1',
+            isActive: true,
+          }
+        });
+        console.log("Auto-created default admin user with password admin123");
+      }
+    } catch (initErr) {
+      console.error("Auto init user table error:", initErr);
+    }
+
     // Ensure database tables and default admin account exist
     await ensureDbInitialized();
 
