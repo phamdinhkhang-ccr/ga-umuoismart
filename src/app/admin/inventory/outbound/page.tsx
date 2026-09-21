@@ -131,21 +131,22 @@ export default function InventoryOutboundPage() {
   }, []);
 
   // 2. Fetch products for dropdown selection (Filter out COMBO products)
-  const fetchProducts = async () => {
+  const fetchProducts = async (selectedBranchId: string = branchId) => {
     setLoadingProducts(true);
     try {
-      const res = await fetch('/api/products');
+      const res = await fetch(`/api/products?branchId=${selectedBranchId}`);
       const data = await res.json();
       if (data.products && Array.isArray(data.products)) {
         const singleProds = data.products.filter((p: any) => p.type !== 'COMBO');
         const formatted: ProductItem[] = singleProds.map((p: any) => {
           const cost = Number(p.costPrice) > 0 ? Number(p.costPrice) : (p.price ? Math.round(p.price * 0.6) : 60000);
+          const bStock = p.branchStock !== undefined ? p.branchStock : (p.stockQuantity ?? 50);
           return {
             id: p.id,
             name: p.name,
             type: p.type,
             unit: p.unit || 'Con',
-            stockQuantity: p.stockQuantity ?? 50,
+            stockQuantity: bStock,
             costPrice: cost,
           };
         });
@@ -199,8 +200,8 @@ export default function InventoryOutboundPage() {
   };
 
   useEffect(() => {
-    fetchProducts();
-  }, []);
+    fetchProducts(branchId);
+  }, [branchId]);
 
   useEffect(() => {
     fetchExportHistory();
@@ -622,7 +623,7 @@ export default function InventoryOutboundPage() {
                         >
                           {products.map((p) => (
                             <option key={p.id} value={p.id}>
-                              {p.name} (Tồn: {p.stockQuantity} {p.unit})
+                              {p.name} (Tồn tại cơ sở xuất: {p.stockQuantity} {p.unit})
                             </option>
                           ))}
                         </select>

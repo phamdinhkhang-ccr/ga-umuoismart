@@ -148,24 +148,15 @@ export default function InboundReceiptsPage() {
   };
 
   // 1. Fetch User & Products
-  useEffect(() => {
-    fetch('/api/auth/me')
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success && data.user) {
-          setCurrentUser(data.user);
-          setCreatorName(data.user.name || 'Quản lý kho');
-        }
-      })
-      .catch(console.error);
-
-    fetch('/api/products')
+  const fetchProductsForBranch = (bId: string) => {
+    setLoadingProducts(true);
+    fetch(`/api/products?branchId=${bId}`)
       .then((res) => res.json())
       .then((data) => {
         if (data.success && Array.isArray(data.products)) {
           setDbProducts(data.products);
           const singleProds = data.products.filter((p: any) => p.type !== 'COMBO');
-          if (singleProds.length > 0) {
+          if (singleProds.length > 0 && rows.length === 0) {
             const firstP = singleProds[0];
             const firstCost = Number(firstP.costPrice) > 0 ? Number(firstP.costPrice) : (firstP.price ? Math.round(firstP.price * 0.6) : 60000);
 
@@ -185,7 +176,21 @@ export default function InboundReceiptsPage() {
       })
       .catch(console.error)
       .finally(() => setLoadingProducts(false));
-  }, []);
+  };
+
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.user) {
+          setCurrentUser(data.user);
+          setCreatorName(data.user.name || 'Quản lý kho');
+        }
+      })
+      .catch(console.error);
+
+    fetchProductsForBranch(branchId);
+  }, [branchId]);
 
   // 2. Fetch History Receipts
   const fetchReceipts = async () => {
@@ -536,11 +541,14 @@ export default function InboundReceiptsPage() {
                           onChange={(e) => handleProductSelectChange(row.id, e.target.value)}
                           className="w-full px-2.5 py-1.5 bg-slate-50 dark:bg-[#0B0D11] border border-slate-300 dark:border-neutral-800 rounded-lg font-bold text-xs text-slate-900 dark:text-white"
                         >
-                          {singleProds.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.name} (Tồn: {p.stockQuantity} {p.unit || 'Con'})
-                            </option>
-                          ))}
+                          {singleProds.map((p: any) => {
+                            const stock = p.branchStock !== undefined ? p.branchStock : (p.stockQuantity ?? 0);
+                            return (
+                              <option key={p.id} value={p.id}>
+                                {p.name} (Tồn tại cơ sở chọn: {stock} {p.unit || 'Con'})
+                              </option>
+                            );
+                          })}
                         </select>
                       </td>
 

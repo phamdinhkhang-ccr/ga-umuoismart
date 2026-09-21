@@ -54,6 +54,25 @@ export async function GET(request: NextRequest) {
       orderBy: { name: 'asc' },
     });
 
+    // If a specific branch is selected, map per-branch stock from BranchInventory
+    if (branchId !== 'all') {
+      const branchInventories = await prisma.branchInventory.findMany({
+        where: { branchId },
+        include: { product: true },
+      });
+
+      items = items.map((item) => {
+        const prodMatch = branchInventories.find(
+          (bi) => bi.product.name.toLowerCase().trim() === item.name.toLowerCase().trim()
+        );
+        const branchStock = prodMatch ? prodMatch.stock : (item.branchId === branchId ? item.currentQuantity : 0);
+        return {
+          ...item,
+          currentQuantity: branchStock,
+        };
+      });
+    }
+
     // Filter by Stock Status if requested
     if (status === 'alert' || lowStockOnly) {
       items = items.filter((item) => item.currentQuantity < item.minQuantity);
@@ -61,15 +80,14 @@ export async function GET(request: NextRequest) {
       items = items.filter((item) => item.currentQuantity >= item.minQuantity);
     }
 
-    // All Items (unfiltered for KPI calculations)
-    const allItems = await prisma.inventoryItem.findMany();
-    const totalInventoryValue = allItems.reduce(
+    // Calculate KPI metrics based on filtered branch items
+    const totalInventoryValue = items.reduce(
       (sum, i) => sum + i.currentQuantity * i.costPerUnit,
       0
     );
-    const lowStockCount = allItems.filter((i) => i.currentQuantity < i.minQuantity).length;
-    const safeCount = allItems.filter((i) => i.currentQuantity >= i.minQuantity).length;
-    const totalItemsCount = allItems.length;
+    const lowStockCount = items.filter((i) => i.currentQuantity < i.minQuantity).length;
+    const safeCount = items.filter((i) => i.currentQuantity >= i.minQuantity).length;
+    const totalItemsCount = items.length;
 
     return NextResponse.json({
       success: true,

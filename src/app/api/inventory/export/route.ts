@@ -118,21 +118,31 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate Stock for each item
+    // Validate Branch Stock for each item
     for (const item of items) {
       if (item.productId) {
         const prod = await prisma.product.findUnique({ where: { id: item.productId } });
-        if (prod) {
-          const exportQty = Number(item.quantity) || 0;
-          if (exportQty > prod.stockQuantity) {
-            return NextResponse.json(
-              {
-                success: false,
-                error: `Không thể xuất kho! Số lượng xuất (${exportQty} ${item.unit || 'món'}) vượt quá tồn kho hiện tại (${prod.stockQuantity} ${item.unit || 'món'}) của sản phẩm ${prod.name}.`,
-              },
-              { status: 400 }
-            );
-          }
+        const branchInv = await prisma.branchInventory.findUnique({
+          where: {
+            productId_branchId: {
+              productId: item.productId,
+              branchId: branchId || 'cs1',
+            },
+          },
+        });
+        const availableBranchStock = branchInv ? branchInv.stock : 0;
+        const exportQty = Number(item.quantity) || 0;
+
+        if (exportQty > availableBranchStock) {
+          const branchObj = await prisma.branch.findUnique({ where: { id: branchId } });
+          const branchName = branchObj ? branchObj.name : branchId;
+          return NextResponse.json(
+            {
+              success: false,
+              error: `Không thể xuất kho! Số lượng xuất (${exportQty} ${item.unit || 'món'}) vượt quá tồn kho thực tế tại cơ sở ${branchName} (${availableBranchStock} ${item.unit || 'món'}) của sản phẩm ${prod?.name || item.productName}.`,
+            },
+            { status: 400 }
+          );
         }
       }
     }
@@ -191,18 +201,56 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      // 2. Loop items to update stock 2-way
+      // 2. Loop items to update per-branch stock
       for (const item of formattedItems) {
         if (item.productId) {
-          // Trừ tồn kho tại Kho Xuất (Nguồn)
-          await tx.product.update({
-            where: { id: item.productId },
-            data: {
-              stockQuantity: {
-                decrement: item.quantity,
+          // Trừ tồn kho BranchInventory tại Kho Xuất (Nguồn)
+          await tx.branchInventory.upsert({
+            where: {
+              productId_branchId: {
+                productId: item.productId,
+                branchId: branchId,
               },
             },
+            update: {
+              stock: { decrement: item.quantity },
+            },
+            create: {
+              productId: item.productId,
+              branchId: branchId,
+              stock: -item.quantity,
+            },
           });
+
+          // Nếu không phải ĐIỀU CHUYỂN, mới trừ tồn kho tổng Product.stockQuantity
+          if (reasonCategory !== 'TRANSFER') {
+            await tx.product.update({
+              where: { id: item.productId },
+              data: {
+                stockQuantity: {
+                  decrement: item.quantity,
+                },
+              },
+            });
+          } else if (targetBranchId) {
+            // NẾU LÀ ĐIỀU CHUYỂN: Cộng tồn kho BranchInventory tại Kho Nhận (Đích)
+            await tx.branchInventory.upsert({
+              where: {
+                productId_branchId: {
+                  productId: item.productId,
+                  branchId: targetBranchId,
+                },
+              },
+              update: {
+                stock: { increment: item.quantity },
+              },
+              create: {
+                productId: item.productId,
+                branchId: targetBranchId,
+                stock: item.quantity,
+              },
+            });
+          }
         }
 
         // Deduct matching InventoryItem for source branch if exists
@@ -245,7 +293,7 @@ export async function POST(request: NextRequest) {
           });
         }
 
-        // If TRANSFER: Cộng tồn kho tại Kho Nhận (Đích) 2 chiều
+        // If TRANSFER: Cộng tồn kho InventoryItem tại Kho Nhận (Đích)
         if (reasonCategory === 'TRANSFER' && targetBranchId) {
           let targetInvItem = await tx.inventoryItem.findFirst({
             where: {

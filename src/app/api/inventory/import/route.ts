@@ -145,12 +145,33 @@ export async function POST(request: NextRequest) {
           : await prisma.product.findFirst({ where: { name: item.productName } });
 
         if (targetProduct) {
+          // Update total stockQuantity and costPrice in Product table
           await prisma.product.update({
             where: { id: targetProduct.id },
             data: {
-              stockQuantity: Math.max(0, targetProduct.stockQuantity + item.quantity),
+              stockQuantity: { increment: item.quantity },
               costPrice: item.unitPrice > 0 ? item.unitPrice : targetProduct.costPrice,
               isAvailable: true,
+              ...(item.unit && { unit: item.unit }),
+            },
+          });
+
+          // Sync Per-Branch Stock in BranchInventory Table
+          const targetBranch = branchId || 'cs1';
+          await prisma.branchInventory.upsert({
+            where: {
+              productId_branchId: {
+                productId: targetProduct.id,
+                branchId: targetBranch,
+              },
+            },
+            update: {
+              stock: { increment: item.quantity },
+            },
+            create: {
+              productId: targetProduct.id,
+              branchId: targetBranch,
+              stock: item.quantity,
             },
           });
         }

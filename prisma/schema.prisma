@@ -38,6 +38,7 @@ model Product {
   // Combo relations
   comboItems  ComboItem[] @relation("ParentCombo")
   inCombos    ComboItem[] @relation("ChildProduct")
+  branchInventories BranchInventory[]
 
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
@@ -308,6 +309,7 @@ model Branch {
   isActive      Boolean  @default(true)
   sortOrder     Int      @default(0)
   users         User[]
+  branchInventories BranchInventory[]
   paymentConfig PaymentConfig?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -346,3 +348,18 @@ model PaymentConfig {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
+
+model BranchInventory {
+  id        String   @id @default(cuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  branchId  String
+  branch    Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  stock     Float    @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([productId, branchId])
+}
+

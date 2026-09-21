@@ -27,6 +27,8 @@ export async function GET(request: Request) {
       ];
     }
 
+    const branchId = searchParams.get('branchId');
+
     const products = await prisma.product.findMany({
       where,
       include: {
@@ -36,6 +38,7 @@ export async function GET(request: Request) {
             product: true,
           },
         },
+        branchInventories: true,
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -43,6 +46,13 @@ export async function GET(request: Request) {
     const now = new Date();
 
     const processedProducts = products.map((p) => {
+      // Find branch specific stock if branchId is requested
+      let branchStock = p.stockQuantity;
+      if (branchId && branchId !== 'ALL' && branchId !== 'all') {
+        const bi = p.branchInventories?.find((b) => b.branchId === branchId);
+        branchStock = bi ? bi.stock : 0;
+      }
+
       // Fallback calculation if expiryDate is not explicitly set: createdAt + 14 days
       const createdTime = p.createdAt ? new Date(p.createdAt).getTime() : now.getTime();
       const baseDate = p.expiryDate
@@ -79,6 +89,7 @@ export async function GET(request: Request) {
 
       return {
         ...p,
+        branchStock,
         costPrice: effectiveCostPrice,
         batchCode: effectiveBatchCode,
         effectiveExpiryDate: baseDate.toISOString(),
