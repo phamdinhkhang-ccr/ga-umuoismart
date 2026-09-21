@@ -521,11 +521,10 @@ export default function InboundReceiptsPage() {
             <table className="w-full text-left text-xs">
               <thead>
                 <tr className="bg-slate-50 dark:bg-[#0B0D11] border-b border-slate-200 dark:border-neutral-800 text-slate-500 dark:text-neutral-400 font-bold uppercase text-[10px] tracking-wider whitespace-nowrap">
-                  <th className="py-3 px-3 min-w-[220px]">SẢN PHẨM / NGUYÊN LIỆU (*)</th>
-                  <th className="py-3 px-3 text-center">ĐVT</th>
+                  <th className="py-3 px-3 min-w-[240px]">SẢN PHẨM / NGUYÊN LIỆU (*)</th>
                   <th className="py-3 px-3 w-28">SL NHẬP (*)</th>
                   <th className="py-3 px-3 w-36">ĐƠN GIÁ NHẬP (VNĐ)</th>
-                  <th className="py-3 px-3 text-right">THÀNH TIỀN</th>
+                  <th className="py-3 px-3 text-right w-32">THÀNH TIỀN</th>
                   <th className="py-3 px-3 text-center w-12">XÓA</th>
                 </tr>
               </thead>
@@ -545,18 +544,11 @@ export default function InboundReceiptsPage() {
                             const stock = p.branchStock !== undefined ? p.branchStock : (p.stockQuantity ?? 0);
                             return (
                               <option key={p.id} value={p.id}>
-                                {p.name} (Tồn tại cơ sở chọn: {stock} {p.unit || 'Con'})
+                                {p.name} (Tồn tại cơ sở chọn: {stock}{p.unit ? ` ${p.unit}` : ''})
                               </option>
                             );
                           })}
                         </select>
-                      </td>
-
-                      {/* 2. Unit badge */}
-                      <td className="py-2.5 px-3 text-center">
-                        <span className="px-2 py-1 rounded bg-slate-100 dark:bg-neutral-800 text-slate-700 dark:text-neutral-300 font-bold text-[11px] border border-slate-200 dark:border-neutral-700">
-                          {row.unit}
-                        </span>
                       </td>
 
                       {/* 3. Quantity input */}

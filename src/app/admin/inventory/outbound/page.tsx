@@ -596,8 +596,7 @@ export default function InventoryOutboundPage() {
               <thead>
                 <tr className="bg-[#0B0D11] text-neutral-400 font-bold uppercase text-[10px] tracking-wider border-b border-neutral-800">
                   <th className="py-3 px-3 w-8 text-center">#</th>
-                  <th className="py-3 px-3 min-w-[240px]">Mặt Hàng Cần Xuất (*)</th>
-                  <th className="py-3 px-3 w-20 text-center">Đơn Vị</th>
+                  <th className="py-3 px-3 min-w-[260px]">Mặt Hàng Cần Xuất (*)</th>
                   <th className="py-3 px-3 w-32">Số Lượng Xuất (*)</th>
                   <th className="py-3 px-3 w-36 text-right">Giá Vốn (đ)</th>
                   <th className="py-3 px-3 w-36 text-right">Thành Tiền</th>
@@ -623,22 +622,15 @@ export default function InventoryOutboundPage() {
                         >
                           {products.map((p) => (
                             <option key={p.id} value={p.id}>
-                              {p.name} (Tồn tại cơ sở xuất: {p.stockQuantity} {p.unit})
+                              {p.name} (Tồn tại cơ sở xuất: {p.stockQuantity}{p.unit ? ` ${p.unit}` : ''})
                             </option>
                           ))}
                         </select>
                         <div className="flex items-center gap-2 mt-1">
                           <span className="text-[10px] text-neutral-400">
-                            Tồn thực tế tại kho xuất: <strong className="text-amber-400 font-mono">{row.stockQuantity} {row.unit}</strong>
+                            Tồn thực tế tại kho xuất: <strong className="text-amber-400 font-mono">{row.stockQuantity}{row.unit ? ` ${row.unit}` : ''}</strong>
                           </span>
                         </div>
-                      </td>
-
-                      {/* Unit Badge */}
-                      <td className="py-2.5 px-3 text-center font-mono text-neutral-400">
-                        <span className="px-2 py-1 bg-[#0B0D11] border border-neutral-800 rounded-lg text-[11px] font-bold text-neutral-300">
-                          {row.unit}
-                        </span>
                       </td>
 
                       {/* Quantity Input with Stock Validation */}
