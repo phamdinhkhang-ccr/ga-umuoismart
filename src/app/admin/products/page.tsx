@@ -18,7 +18,8 @@ import {
   Tag,
   DollarSign,
   TrendingUp,
-  Box
+  Box,
+  Zap
 } from 'lucide-react';
 
 interface Category {
@@ -633,27 +634,46 @@ export default function AdminProductsPage() {
 
                       {/* TRẠNG THÁI KHO TOGGLE & SỐ LƯỢNG TỒN */}
                       <td className="py-3.5 px-4 text-center">
-                        <div className="space-y-1">
-                          <button
-                            onClick={() => handleToggleStock(p)}
-                            disabled={togglingId === p.id}
-                            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full font-bold text-xs border transition shadow-xs ${
-                              p.isAvailable
-                                ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/30'
-                                : 'bg-neutral-800 text-neutral-400 border-neutral-700 hover:bg-neutral-700'
-                            }`}
-                          >
-                            <span
-                              className={`w-2 h-2 rounded-full ${
-                                p.isAvailable ? 'bg-emerald-400 animate-pulse' : 'bg-neutral-500'
+                        {p.type === 'COMBO' ? (
+                          <div className="space-y-1">
+                            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full font-bold text-xs border shadow-xs ${
+                              (p.stockQuantity || 0) > 0
+                                ? 'bg-purple-500/20 text-purple-300 border-purple-500/40'
+                                : 'bg-rose-500/20 text-rose-400 border-rose-500/40'
+                            }`}>
+                              <span className={`w-2 h-2 rounded-full ${ (p.stockQuantity || 0) > 0 ? 'bg-purple-400 animate-pulse' : 'bg-rose-400' }`}></span>
+                              <span>{(p.stockQuantity || 0) > 0 ? '🍱 Còn Combo' : '⚪ Hết (Thành phần)'}</span>
+                            </span>
+                            <p className="text-[11px] font-mono text-purple-300 font-semibold">
+                              Tồn: <span className="text-amber-400 font-extrabold">{p.stockQuantity ?? 0}</span> Combo
+                            </p>
+                            <p className="text-[10px] text-neutral-400 italic">
+                              (Tự động theo thành phần)
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="space-y-1">
+                            <button
+                              onClick={() => handleToggleStock(p)}
+                              disabled={togglingId === p.id}
+                              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full font-bold text-xs border transition shadow-xs ${
+                                p.isAvailable
+                                  ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/30'
+                                  : 'bg-neutral-800 text-neutral-400 border-neutral-700 hover:bg-neutral-700'
                               }`}
-                            ></span>
-                            <span>{p.isAvailable ? '🟢 Còn' : '⚪ Hết'}</span>
-                          </button>
-                          <p className="text-[11px] font-mono text-neutral-400 font-semibold">
-                            Tồn: <span className="text-amber-400 font-extrabold">{p.stockQuantity ?? 50}</span> {p.unit || 'Con'}
-                          </p>
-                        </div>
+                            >
+                              <span
+                                className={`w-2 h-2 rounded-full ${
+                                  p.isAvailable ? 'bg-emerald-400 animate-pulse' : 'bg-neutral-500'
+                                }`}
+                              ></span>
+                              <span>{p.isAvailable ? '🟢 Còn' : '⚪ Hết'}</span>
+                            </button>
+                            <p className="text-[11px] font-mono text-neutral-400 font-semibold">
+                              Tồn: <span className="text-amber-400 font-extrabold">{p.stockQuantity ?? 50}</span> {p.unit || 'Con'}
+                            </p>
+                          </div>
+                        )}
                       </td>
 
                       {/* HÀNH ĐỘNG */}
@@ -910,32 +930,44 @@ export default function AdminProductsPage() {
                 )}
               </div>
 
-              {/* 4. Khung Tồn Kho Gọn Gàng (Stock Quantity Only) */}
-              <div className="bg-[#0B0D11] p-3.5 rounded-xs border border-neutral-800 space-y-2.5">
-                <div>
-                  <label className="block font-semibold text-amber-400 mb-1">
-                    Số Lượng Tồn Kho (*):
-                  </label>
-                  <input
-                    type="number"
-                    required
-                    min="0"
-                    value={formData.stockQuantity}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        stockQuantity: e.target.value === '' ? '' : Number(e.target.value),
-                      })
-                    }
-                    placeholder="50"
-                    className="w-full px-3 py-2 bg-[#14171D] border border-neutral-700 rounded-xs font-mono font-bold text-amber-400 focus:border-amber-500 focus:outline-none"
-                  />
-                </div>
+              {/* 4. Khung Tồn Kho Gọn Gàng (Stock Quantity Only vs Virtual Combo Stock) */}
+              {formData.type === 'SINGLE' ? (
+                <div className="bg-[#0B0D11] p-3.5 rounded-xs border border-neutral-800 space-y-2.5">
+                  <div>
+                    <label className="block font-semibold text-amber-400 mb-1">
+                      Số Lượng Tồn Kho (*):
+                    </label>
+                    <input
+                      type="number"
+                      required
+                      min="0"
+                      value={formData.stockQuantity}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          stockQuantity: e.target.value === '' ? '' : Number(e.target.value),
+                        })
+                      }
+                      placeholder="50"
+                      className="w-full px-3 py-2 bg-[#14171D] border border-neutral-700 rounded-xs font-mono font-bold text-amber-400 focus:border-amber-500 focus:outline-none"
+                    />
+                  </div>
 
-                <div className="p-2.5 bg-purple-950/30 border border-purple-500/30 rounded-xs text-[11px] text-purple-300 font-medium leading-relaxed flex items-center gap-1.5">
-                  <span>💡 Thay đổi số lượng tại đây sẽ tự động cập nhật số dư kho của sản phẩm.</span>
+                  <div className="p-2.5 bg-purple-950/30 border border-purple-500/30 rounded-xs text-[11px] text-purple-300 font-medium leading-relaxed flex items-center gap-1.5">
+                    <span>💡 Thay đổi số lượng tại đây sẽ tự động cập nhật số dư kho của sản phẩm.</span>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="bg-[#0B0D11] p-3.5 rounded-xs border border-purple-900/40 space-y-2">
+                  <div className="flex items-center gap-2 text-purple-400 font-bold text-xs">
+                    <Zap className="w-4 h-4 text-amber-400" />
+                    <span>TỒN KHO COMBO TỰ ĐỘNG</span>
+                  </div>
+                  <p className="text-[11.5px] text-neutral-300 leading-relaxed bg-purple-950/20 p-2.5 rounded-xs border border-purple-800/30">
+                    ⚡ Tồn kho của Combo được tính toán tự động dựa theo số lượng món thành phần (nguyên liệu) nhỏ nhất hiện có trong kho tại từng cơ sở. Không nhập tồn kho trực tiếp cho Combo.
+                  </p>
+                </div>
+              )}
 
               {/* AI Keywords */}
               <div>

@@ -207,23 +207,82 @@ export async function POST(request: NextRequest) {
         if (prod.type === 'COMBO' && prod.comboItems && prod.comboItems.length > 0) {
           for (const ci of prod.comboItems) {
             const childQtyToDeduct = (ci.quantity || 1) * (item.quantity || 1);
+            
+            // 1. Deduct from BranchInventory for component product
+            const existingBranchInv = await prisma.branchInventory.findUnique({
+              where: {
+                productId_branchId: {
+                  productId: ci.productId,
+                  branchId: effectiveBranchId,
+                },
+              },
+            });
+            const defaultStock = ci.product ? ci.product.stockQuantity : 0;
+            const currentStock = existingBranchInv ? existingBranchInv.stock : defaultStock;
+            const newStock = Math.max(0, currentStock - childQtyToDeduct);
+
+            await prisma.branchInventory.upsert({
+              where: {
+                productId_branchId: {
+                  productId: ci.productId,
+                  branchId: effectiveBranchId,
+                },
+              },
+              update: {
+                stock: { decrement: childQtyToDeduct },
+              },
+              create: {
+                productId: ci.productId,
+                branchId: effectiveBranchId,
+                stock: newStock,
+              },
+            });
+
+            // 2. Deduct from Product.stockQuantity for component product
             await prisma.product.update({
               where: { id: ci.productId },
               data: {
-                stockQuantity: {
-                  decrement: childQtyToDeduct,
-                },
+                stockQuantity: { decrement: childQtyToDeduct },
               },
             });
           }
         } else {
           const qtyToDeduct = item.quantity || 1;
+
+          // 1. Deduct from BranchInventory for single product
+          const existingBranchInv = await prisma.branchInventory.findUnique({
+            where: {
+              productId_branchId: {
+                productId: prod.id,
+                branchId: effectiveBranchId,
+              },
+            },
+          });
+          const currentStock = existingBranchInv ? existingBranchInv.stock : prod.stockQuantity;
+          const newStock = Math.max(0, currentStock - qtyToDeduct);
+
+          await prisma.branchInventory.upsert({
+            where: {
+              productId_branchId: {
+                productId: prod.id,
+                branchId: effectiveBranchId,
+              },
+            },
+            update: {
+              stock: { decrement: qtyToDeduct },
+            },
+            create: {
+              productId: prod.id,
+              branchId: effectiveBranchId,
+              stock: newStock,
+            },
+          });
+
+          // 2. Deduct from Product.stockQuantity
           await prisma.product.update({
             where: { id: prod.id },
             data: {
-              stockQuantity: {
-                decrement: qtyToDeduct,
-              },
+              stockQuantity: { decrement: qtyToDeduct },
             },
           });
         }

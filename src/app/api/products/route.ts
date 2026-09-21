@@ -35,7 +35,11 @@ export async function GET(request: Request) {
         category: true,
         comboItems: {
           include: {
-            product: true,
+            product: {
+              include: {
+                branchInventories: true,
+              },
+            },
           },
         },
         branchInventories: true,
@@ -46,11 +50,64 @@ export async function GET(request: Request) {
     const now = new Date();
 
     const processedProducts = products.map((p) => {
-      // Find branch specific stock if branchId is requested
       let branchStock = p.stockQuantity;
-      if (branchId && branchId !== 'ALL' && branchId !== 'all') {
-        const bi = p.branchInventories?.find((b) => b.branchId === branchId);
-        branchStock = bi ? bi.stock : 0;
+      let virtualComboStock = p.stockQuantity;
+
+      if (p.type === 'COMBO') {
+        if (p.comboItems && p.comboItems.length > 0) {
+          if (branchId && branchId !== 'ALL' && branchId !== 'all') {
+            const possibleCombos = p.comboItems.map((ci) => {
+              const childProd = ci.product;
+              if (!childProd) return 0;
+              const bi = childProd.branchInventories?.find((b) => b.branchId === branchId);
+              const childStock = bi ? bi.stock : (branchId === 'cs1' ? childProd.stockQuantity : 0);
+              const reqQty = ci.quantity || 1;
+              return Math.floor(Math.max(0, childStock) / reqQty);
+            });
+            virtualComboStock = Math.min(...possibleCombos);
+            branchStock = virtualComboStock;
+          } else {
+            // Calculate total virtual combo stock across all branches
+            const allBranchIds = Array.from(
+              new Set(
+                p.comboItems.flatMap((ci) => ci.product?.branchInventories?.map((bi) => bi.branchId) || [])
+              )
+            );
+            if (allBranchIds.length === 0) allBranchIds.push('cs1');
+
+            let sumVirtualComboStock = 0;
+            for (const bId of allBranchIds) {
+              const possibleCombosForBranch = p.comboItems.map((ci) => {
+                const childProd = ci.product;
+                if (!childProd) return 0;
+                const bi = childProd.branchInventories?.find((b) => b.branchId === bId);
+                const childStock = bi ? bi.stock : (bId === 'cs1' ? childProd.stockQuantity : 0);
+                const reqQty = ci.quantity || 1;
+                return Math.floor(Math.max(0, childStock) / reqQty);
+              });
+              sumVirtualComboStock += Math.min(...possibleCombosForBranch);
+            }
+
+            const systemCombos = p.comboItems.map((ci) => {
+              const childProd = ci.product;
+              if (!childProd) return 0;
+              const reqQty = ci.quantity || 1;
+              return Math.floor(Math.max(0, childProd.stockQuantity) / reqQty);
+            });
+            const fallbackTotalCombos = Math.min(...systemCombos);
+
+            virtualComboStock = Math.max(sumVirtualComboStock, fallbackTotalCombos);
+            branchStock = virtualComboStock;
+          }
+        } else {
+          virtualComboStock = 0;
+          branchStock = 0;
+        }
+      } else {
+        if (branchId && branchId !== 'ALL' && branchId !== 'all') {
+          const bi = p.branchInventories?.find((b) => b.branchId === branchId);
+          branchStock = bi ? bi.stock : 0;
+        }
       }
 
       // Fallback calculation if expiryDate is not explicitly set: createdAt + 14 days
@@ -87,8 +144,11 @@ export async function GET(request: Request) {
           ? Math.round(p.price * 0.6)
           : 60000;
 
+      const effectiveStockQuantity = p.type === 'COMBO' ? virtualComboStock : p.stockQuantity;
+
       return {
         ...p,
+        stockQuantity: effectiveStockQuantity,
         branchStock,
         costPrice: effectiveCostPrice,
         batchCode: effectiveBatchCode,
@@ -155,8 +215,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'Tên món và giá bán là bắt buộc' }, { status: 400 });
     }
 
-    const stockQtyNum = Number(stockQuantity) >= 0 ? Number(stockQuantity) : 0;
-    const availableState = stockQtyNum === 0 ? false : Boolean(isAvailable);
+    const stockQtyNum = type === 'COMBO' ? 0 : (Number(stockQuantity) >= 0 ? Number(stockQuantity) : 0);
+    const availableState = type === 'COMBO' ? true : (stockQtyNum === 0 ? false : Boolean(isAvailable));
 
     let calculatedCostPrice = Number(costPrice) || 0;
     const validComboItems: { productId: string; quantity: number }[] = [];
@@ -269,6 +329,8 @@ export async function PUT(request: Request) {
       return NextResponse.json({ success: false, error: 'Thiếu ID món cần cập nhật' }, { status: 400 });
     }
 
+    const existingProd = await prisma.product.findUnique({ where: { id } });
+
     const updateData: any = {};
     if (name) updateData.name = name;
     if (type) updateData.type = type === 'COMBO' ? 'COMBO' : 'SINGLE';
@@ -313,7 +375,9 @@ export async function PUT(request: Request) {
       await prisma.comboItem.deleteMany({ where: { comboId: id } });
     }
 
-    if (stockQuantity !== undefined) {
+    if (type === 'COMBO' || (existingProd && existingProd.type === 'COMBO')) {
+      updateData.stockQuantity = 0;
+    } else if (stockQuantity !== undefined) {
       const qtyNum = Math.max(0, Number(stockQuantity));
       updateData.stockQuantity = qtyNum;
       updateData.isAvailable = qtyNum === 0 ? false : (isAvailable !== undefined ? Boolean(isAvailable) : true);
