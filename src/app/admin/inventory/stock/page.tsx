@@ -280,6 +280,9 @@ export default function StockCheckPage() {
       productName: item.name,
       suggestedQty: neededQty.toString(),
     });
+    if (selectedBranch && selectedBranch !== 'all') {
+      queryParams.append('branchId', selectedBranch);
+    }
     router.push(`/admin/inventory/inbound?${queryParams.toString()}`);
   };
 
@@ -462,44 +465,69 @@ export default function StockCheckPage() {
         </div>
 
         {/* Search & Dropdown Filters */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-          <div className="relative">
-            <Search className="w-4 h-4 text-neutral-500 absolute left-3 top-3" />
-            <input
-              type="text"
-              placeholder="Tìm tên nguyên liệu, mã vật tư, nhà cung cấp..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-2.5 bg-[#0B0D11] border border-neutral-800 rounded-xs text-[#FAFAF9] focus:border-amber-500"
-            />
-          </div>
+        <div className="space-y-3">
+          {/* Active Branch Context Banner */}
+          {selectedBranch !== 'all' && (
+            <div className="flex items-center gap-2 px-3 py-2 bg-amber-500/10 border border-amber-500/30 rounded-xs text-xs">
+              <Building2 className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <span className="text-amber-300 font-semibold">
+                Đang xem tồn kho tại: <strong className="text-amber-400">{BRANCHES.find(b => b.id === selectedBranch)?.name || selectedBranch}</strong>
+              </span>
+              <button
+                onClick={() => setSelectedBranch('all')}
+                className="ml-auto text-amber-400/70 hover:text-amber-300 text-[10px] underline cursor-pointer"
+              >
+                Xem toàn hệ thống
+              </button>
+            </div>
+          )}
 
-          <div>
-            <select
-              value={selectedBranch}
-              onChange={(e) => setSelectedBranch(e.target.value)}
-              className="w-full px-3 py-2.5 bg-[#0B0D11] border border-neutral-800 rounded-xs text-neutral-300 focus:border-amber-500"
-            >
-              {BRANCHES.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+            <div className="relative">
+              <Search className="w-4 h-4 text-neutral-500 absolute left-3 top-3" />
+              <input
+                type="text"
+                placeholder="Tìm tên nguyên liệu, mã vật tư, nhà cung cấp..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-3 py-2.5 bg-[#0B0D11] border border-neutral-800 rounded-xs text-[#FAFAF9] focus:border-amber-500"
+              />
+            </div>
 
-          <div>
-            <select
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-              className="w-full px-3 py-2.5 bg-[#0B0D11] border border-neutral-800 rounded-xs text-amber-400 font-semibold focus:border-amber-500"
-            >
-              {CATEGORIES.map((c, i) => (
-                <option key={i} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
+            <div className="space-y-1">
+              <label className="block text-[10px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1">
+                <Building2 className="w-3 h-3" /> Lọc theo Cơ Sở / Chi Nhánh:
+              </label>
+              <select
+                value={selectedBranch}
+                onChange={(e) => setSelectedBranch(e.target.value)}
+                className={`w-full px-3 py-2.5 bg-[#0B0D11] rounded-xs focus:outline-none font-semibold ${
+                  selectedBranch !== 'all'
+                    ? 'border border-amber-500/60 text-amber-400 focus:border-amber-500'
+                    : 'border border-neutral-800 text-neutral-300 focus:border-amber-500'
+                }`}
+              >
+                {BRANCHES.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <select
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value)}
+                className="w-full px-3 py-2.5 bg-[#0B0D11] border border-neutral-800 rounded-xs text-amber-400 font-semibold focus:border-amber-500"
+              >
+                {CATEGORIES.map((c, i) => (
+                  <option key={i} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
 
@@ -618,15 +646,17 @@ export default function StockCheckPage() {
                       {/* Actions */}
                       <td className="py-3 px-4 text-center">
                         <div className="flex items-center justify-center gap-2">
-                          {isAlert && (
-                            <button
-                              onClick={() => handleQuickImport(item)}
-                              title="Tạo phiếu nhập hàng nhanh"
-                              className="px-2.5 py-1 bg-amber-500 text-neutral-950 hover:bg-amber-400 rounded-xs font-bold text-[11px] transition-colors flex items-center gap-1 cursor-pointer shadow-xs"
-                            >
-                              <Zap className="w-3.5 h-3.5" /> Nhập Nhanh
-                            </button>
-                          )}
+                          <button
+                            onClick={() => handleQuickImport(item)}
+                            title="Tạo phiếu nhập hàng nhanh"
+                            className={`px-2.5 py-1 rounded-xs font-bold text-[11px] transition-colors flex items-center gap-1 cursor-pointer shadow-xs ${
+                              isAlert
+                                ? 'bg-amber-500 text-neutral-950 hover:bg-amber-400'
+                                : 'bg-neutral-700 text-neutral-200 hover:bg-amber-500 hover:text-neutral-950'
+                            }`}
+                          >
+                            <Zap className="w-3.5 h-3.5" /> Nhập Nhanh
+                          </button>
 
                           <button
                             onClick={() => openAuditModal(item)}

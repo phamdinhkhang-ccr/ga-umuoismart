@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import prisma from '@/lib/prisma';
 
 export async function GET(request: NextRequest) {
@@ -250,6 +251,12 @@ export async function POST(request: NextRequest) {
         console.error('Error creating auto expense voucher:', expErr);
       }
     }
+
+    // 4. Revalidate stock check pages for instant sync
+    try {
+      revalidatePath('/admin/inventory/stock');
+      revalidatePath('/admin/inventory-check');
+    } catch (_) {}
 
     return NextResponse.json({
       success: true,

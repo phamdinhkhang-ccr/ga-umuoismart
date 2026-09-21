@@ -27,6 +27,7 @@ import {
   Flame,
 } from 'lucide-react';
 import { useBranches } from '@/hooks/useBranches';
+import { useSearchParams } from 'next/navigation';
 import * as XLSX from 'xlsx';
 
 interface ProductItem {
@@ -81,9 +82,18 @@ const SUPPLIERS = [
   'Gia Vị & Thảo Mộc Việt',
   'Nhà Máy Bao Bì Phú Mỹ',
   'Nhập Khẩu Đông Lạnh Hà Nội',
+  'Khác (Nhập tùy chỉnh)',
 ];
 
 export default function InboundReceiptsPage() {
+  return (
+    <React.Suspense fallback={<div className="p-8 text-center text-neutral-400 text-sm">Đang tải...</div>}>
+      <InboundReceiptsInner />
+    </React.Suspense>
+  );
+}
+
+function InboundReceiptsInner() {
   const { branches } = useBranches();
   const BRANCHES = branches.length > 0
     ? [
@@ -100,6 +110,7 @@ export default function InboundReceiptsPage() {
         { id: 'center', name: '🏭 Bếp Tổng / Kho Trung Tâm' },
       ];
   const todayStr = new Date().toISOString().split('T')[0];
+  const searchParams = useSearchParams();
 
   // Auth User State
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -117,6 +128,8 @@ export default function InboundReceiptsPage() {
   const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'BANK_TRANSFER' | 'CREDIT'>('CASH');
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  // Flag to know if URL params have already been applied (one-time pre-fill)
+  const [urlParamsApplied, setUrlParamsApplied] = useState(false);
 
   // Dynamic Item Rows State
   const [rows, setRows] = useState<ImportRow[]>([]);
@@ -147,6 +160,29 @@ export default function InboundReceiptsPage() {
     setTimeout(() => setToastMessage(''), 4000);
   };
 
+  // Pre-fill form from URL query params (from "Nhập Nhanh" on stock check page)
+  useEffect(() => {
+    if (urlParamsApplied) return;
+    const paramBranchId = searchParams.get('branchId');
+    const paramProductName = searchParams.get('productName');
+    const paramSuggestedQty = searchParams.get('suggestedQty');
+    const paramSupplier = searchParams.get('supplier');
+
+    if (paramBranchId) setBranchId(paramBranchId);
+    if (paramSupplier) {
+      const matchedSupplier = SUPPLIERS.find((s) => s.toLowerCase().includes(paramSupplier.toLowerCase()));
+      if (matchedSupplier) {
+        setSupplierName(matchedSupplier);
+      } else {
+        setSupplierName('Khác (Nhập tùy chỉnh)');
+        setCustomSupplier(paramSupplier);
+      }
+    }
+    if (paramProductName && paramSuggestedQty) {
+      setUrlParamsApplied(true);
+    }
+  }, [searchParams, urlParamsApplied]);
+
   // 1. Fetch User & Products
   const fetchProductsForBranch = (bId: string) => {
     setLoadingProducts(true);
@@ -157,18 +193,29 @@ export default function InboundReceiptsPage() {
           setDbProducts(data.products);
           const singleProds = data.products.filter((p: any) => p.type !== 'COMBO');
           if (singleProds.length > 0 && rows.length === 0) {
-            const firstP = singleProds[0];
-            const firstCost = Number(firstP.costPrice) > 0 ? Number(firstP.costPrice) : (firstP.price ? Math.round(firstP.price * 0.6) : 60000);
+            // Try to pre-fill with the product from URL param (Nhập Nhanh pre-fill)
+            const paramProductName = searchParams.get('productName');
+            const paramSuggestedQty = searchParams.get('suggestedQty');
+            const matchedProd = paramProductName
+              ? singleProds.find((p: any) =>
+                  p.name.toLowerCase().includes(paramProductName.toLowerCase()) ||
+                  paramProductName.toLowerCase().includes(p.name.toLowerCase())
+                )
+              : null;
+
+            const targetP = matchedProd || singleProds[0];
+            const targetCost = Number(targetP.costPrice) > 0 ? Number(targetP.costPrice) : (targetP.price ? Math.round(targetP.price * 0.6) : 60000);
+            const targetQty = (matchedProd && paramSuggestedQty) ? Math.max(1, Number(paramSuggestedQty)) : 20;
 
             setRows([
               {
                 id: 'row-1',
-                productId: firstP.id,
-                productName: firstP.name,
-                unit: firstP.unit || 'Con',
-                quantity: 20,
-                unitPrice: firstCost,
-                subtotal: 20 * firstCost,
+                productId: targetP.id,
+                productName: targetP.name,
+                unit: targetP.unit || '',
+                quantity: targetQty,
+                unitPrice: targetCost,
+                subtotal: targetQty * targetCost,
               },
             ]);
           }
