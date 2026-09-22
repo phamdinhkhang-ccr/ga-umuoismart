@@ -159,11 +159,19 @@ export default function StockCheckPage() {
     setAuditNote('');
   };
 
+  // Toast Notification State
+  const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+
+  const showToast = (text: string, type: 'success' | 'error' = 'success') => {
+    setToastMessage({ text, type });
+    setTimeout(() => setToastMessage(null), 3500);
+  };
+
   // Submit Add New Item
   const handleCreateItem = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!addName || !addUnit) {
-      alert('Vui lòng nhập tên vật tư và đơn vị tính!');
+      showToast('Vui lòng nhập tên vật tư và đơn vị tính!', 'error');
       return;
     }
 
@@ -189,7 +197,7 @@ export default function StockCheckPage() {
 
       const data = await res.json();
       if (data.success) {
-        alert('🎉 Thêm vật tư mới thành công!');
+        showToast('🎉 Thêm vật tư mới thành công!', 'success');
         setIsAddModalOpen(false);
         // Reset form
         setAddName('');
@@ -198,11 +206,11 @@ export default function StockCheckPage() {
         setAddHotline('');
         fetchStockData();
       } else {
-        alert(`❌ Lỗi: ${data.error || 'Thêm vật tư thất bại'}`);
+        showToast(`❌ Lỗi: ${data.error || 'Thêm vật tư thất bại'}`, 'error');
       }
     } catch (err) {
       console.error(err);
-      alert('❌ Lỗi máy chủ!');
+      showToast('❌ Lỗi kết nối máy chủ!', 'error');
     } finally {
       setSubmittingAdd(false);
     }
@@ -221,6 +229,7 @@ export default function StockCheckPage() {
         body: JSON.stringify({
           action: 'STOCKTAKE',
           itemId: selectedItemForAudit.id,
+          name: selectedItemForAudit.name,
           branchId: selectedBranch,
           currentQuantity: Number(auditActualQty) || 0,
           minQuantity: Number(auditMinQty) || 0,
@@ -233,28 +242,31 @@ export default function StockCheckPage() {
 
       const data = await res.json();
       if (data.success) {
-        alert('🎉 Điều chỉnh cân kho thực tế thành công!');
+        showToast('🎉 Điều chỉnh cân kho thực tế thành công!', 'success');
         setSelectedItemForAudit(null);
         fetchStockData();
       } else {
-        alert(`❌ Lỗi: ${data.error || 'Cân kho thất bại'}`);
+        showToast(`❌ Lỗi: ${data.error || 'Cân kho thất bại'}`, 'error');
       }
     } catch (err) {
       console.error(err);
-      alert('❌ Lỗi máy chủ!');
+      showToast('❌ Lỗi kết nối máy chủ!', 'error');
     } finally {
       setSubmittingAudit(false);
     }
   };
 
-  // Delete Item
+  // Delete Item with Optimistic UI Mutation and Toast Notification
   const handleDeleteItem = async (item: InventoryItem) => {
     const isBranchSpecific = selectedBranch !== 'all';
     const confirmMsg = isBranchSpecific
-      ? `Bạn có chắc chắn muốn xóa vật tư "${item.name}" khỏi cơ sở đang chọn?`
-      : `Bạn có chắc chắn muốn xóa vật tư "${item.name}" khỏi danh sách kho toàn hệ thống?`;
+      ? `Bạn có chắc chắn muốn xóa/đặt tồn kho mặt hàng "${item.name}" tại cơ sở này về 0?`
+      : `Bạn có chắc chắn muốn xóa hoàn toàn vật tư "${item.name}" khỏi danh sách kho toàn hệ thống?`;
 
     if (!confirm(confirmMsg)) return;
+
+    // 1. Optimistic UI mutation: filter out immediately
+    setItems((prev) => prev.filter((i) => i.id !== item.id));
 
     try {
       const res = await fetch('/api/inventory', {
@@ -263,19 +275,22 @@ export default function StockCheckPage() {
         body: JSON.stringify({
           action: 'DELETE_ITEM',
           itemId: item.id,
+          name: item.name,
           branchId: selectedBranch,
         }),
       });
 
       const data = await res.json();
       if (data.success) {
-        alert(data.message || 'Đã xóa vật tư khỏi kho thành công!');
+        showToast(data.message || 'Đã xóa vật tư khỏi kho thành công!', 'success');
         fetchStockData();
       } else {
-        alert(`❌ Lỗi: ${data.error || 'Không thể xóa vật tư'}`);
+        showToast(data.error || 'Không thể xóa vật tư', 'error');
+        fetchStockData();
       }
     } catch (err) {
-      alert('❌ Lỗi kết nối máy chủ!');
+      showToast('❌ Lỗi kết nối máy chủ khi xóa vật tư', 'error');
+      fetchStockData();
     }
   };
 
@@ -293,14 +308,19 @@ export default function StockCheckPage() {
     router.push(`/admin/inventory/inbound?${queryParams.toString()}`);
   };
 
+  // Filter out any combo items from display
+  const displayItems = items.filter(
+    (item) => !item.name.toLowerCase().includes('combo') && !item.category?.toLowerCase().includes('combo')
+  );
+
   // Export Excel File
   const handleExportExcel = () => {
-    if (items.length === 0) {
-      alert('Không có dữ liệu tồn kho để xuất Excel!');
+    if (displayItems.length === 0) {
+      showToast('Không có dữ liệu tồn kho để xuất Excel!', 'error');
       return;
     }
 
-    const exportData = items.map((item) => {
+    const exportData = displayItems.map((item) => {
       const isAlert = item.currentQuantity < item.minQuantity;
       const totalVal = item.currentQuantity * item.costPerUnit;
 
@@ -328,6 +348,22 @@ export default function StockCheckPage() {
 
   return (
     <div className="space-y-6 pb-12">
+      {/* Toast Notification Banner */}
+      {toastMessage && (
+        <div className={`fixed top-6 right-6 z-50 px-5 py-3.5 rounded-xs shadow-2xl flex items-center gap-3 border transition-all animate-bounce ${
+          toastMessage.type === 'success'
+            ? 'bg-emerald-950 text-emerald-300 border-emerald-500/50'
+            : 'bg-rose-950 text-rose-300 border-rose-500/50'
+        }`}>
+          {toastMessage.type === 'success' ? (
+            <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+          ) : (
+            <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0" />
+          )}
+          <span className="font-bold text-xs">{toastMessage.text}</span>
+        </div>
+      )}
+
       {/* HEADER SECTION */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-[#14171D] p-6 rounded-xs border border-neutral-800/80 shadow-xl">
         <div className="flex items-center gap-3.5">
@@ -561,14 +597,14 @@ export default function StockCheckPage() {
                     Đang kiểm tra tồn kho & đối chiếu định mức...
                   </td>
                 </tr>
-              ) : items.length === 0 ? (
+              ) : displayItems.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="py-8 text-center text-neutral-500">
                     Chưa có vật tư nào phù hợp với bộ lọc.
                   </td>
                 </tr>
               ) : (
-                items.map((item) => {
+                displayItems.map((item) => {
                   const isAlert = item.currentQuantity < item.minQuantity;
                   const totalVal = item.currentQuantity * item.costPerUnit;
 

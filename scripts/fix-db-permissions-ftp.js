@@ -40,10 +40,22 @@ async function fixDbPermissionsAndUpload() {
     }
 
     console.log("-> 1. Uploading dev.db to public_html root...");
+    try {
+      await client.remove(".in.dev.db.");
+    } catch (_) {}
+    try {
+      await client.remove("dev.db");
+    } catch (_) {}
     await client.uploadFrom(localDbPath, "dev.db");
 
     console.log("-> 2. Uploading dev.db & schema.prisma to public_html/prisma...");
     await client.ensureDir("prisma");
+    try {
+      await client.remove(".in.dev.db.");
+    } catch (_) {}
+    try {
+      await client.remove(".in.schema.prisma.");
+    } catch (_) {}
     await client.uploadFrom(localDbPath, "dev.db");
     await client.uploadFrom(localSchemaPath, "schema.prisma");
 

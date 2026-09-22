@@ -83,7 +83,12 @@ export async function GET(request: NextRequest) {
     }
 
     // 1. Build master item filter (DO NOT filter branchId on master table!)
-    const whereClause: any = {};
+    const whereClause: any = {
+      NOT: [
+        { name: { contains: 'Combo' } },
+        { category: { contains: 'Combo' } },
+      ],
+    };
 
     if (category && category !== 'all' && category !== 'Tất cả danh mục') {
       whereClause.category = category;
@@ -110,32 +115,10 @@ export async function GET(request: NextRequest) {
       orderBy: { name: 'asc' },
     });
 
-    // Also include any Product from menu that might not be in InventoryItem yet
-    const allProducts = await prisma.product.findMany();
-    const existingNames = new Set(items.map((i) => i.name.toLowerCase().trim()));
-    const missingProducts = allProducts.filter(
-      (p) => !existingNames.has(p.name.toLowerCase().trim()) && p.type !== 'COMBO'
+    // Filter out any combo items explicitly
+    items = items.filter(
+      (item) => !item.name.toLowerCase().includes('combo') && !item.category.toLowerCase().includes('combo')
     );
-
-    if (missingProducts.length > 0 && (!category || category === 'all' || category === 'Tất cả danh mục')) {
-      const extraItems: any[] = missingProducts
-        .filter((p) => !search || p.name.toLowerCase().includes(search))
-        .map((p) => ({
-          id: p.id,
-          code: `#SP-${p.id.slice(-4).toUpperCase()}`,
-          name: p.name,
-          unit: p.unit || 'Phần',
-          category: 'Sản phẩm chế biến & Món ăn',
-          branchId: 'all',
-          currentQuantity: p.stockQuantity || 0,
-          minQuantity: 10,
-          costPerUnit: p.costPrice || (p.price ? Math.round(p.price * 0.6) : 50000),
-          supplier: 'Bếp trung tâm / Kho',
-          hotline: '0988.888.999',
-          transactions: [],
-        }));
-      items = [...items, ...extraItems];
-    }
 
     // 2. Map branch-specific stock (LEFT JOIN logic)
     if (targetBranchId !== 'all') {
@@ -443,41 +426,33 @@ export async function POST(request: NextRequest) {
 
     // Action 4: Safe Delete Item / Branch Stock Reset
     if (action === 'DELETE_ITEM' || action === 'DELETE') {
-      if (!targetId) {
+      if (!targetId && !name) {
         return NextResponse.json(
-          { success: false, error: 'Thiếu ID mặt hàng cần xóa!' },
+          { success: false, error: 'Thiếu ID hoặc tên mặt hàng cần xóa!' },
           { status: 400 }
         );
       }
 
       try {
+        const invItem = targetId ? await prisma.inventoryItem.findUnique({ where: { id: targetId } }) : null;
+        const prodItem = targetId ? await prisma.product.findUnique({ where: { id: targetId } }) : null;
+        const targetName = name || invItem?.name || prodItem?.name || '';
+
         // 1. Branch-specific deletion (Reset stock or delete BranchInventory for that branch)
         if (branchId && branchId !== 'all') {
-          const invItem = await prisma.inventoryItem.findUnique({ where: { id: targetId } });
-          const prodItem = await prisma.product.findUnique({ where: { id: targetId } });
-          const itemName = invItem?.name || prodItem?.name;
-
           if (prodItem) {
             await prisma.branchInventory.deleteMany({
-              where: {
-                productId: prodItem.id,
-                branchId: branchId,
-              },
+              where: { productId: prodItem.id, branchId },
             });
           }
 
-          if (itemName) {
+          if (targetName) {
             const matchingProds = await prisma.product.findMany({
-              where: {
-                OR: [{ name: itemName }, { name: { contains: itemName } }],
-              },
+              where: { OR: [{ name: targetName }, { name: { contains: targetName } }] },
             });
             for (const mp of matchingProds) {
               await prisma.branchInventory.deleteMany({
-                where: {
-                  productId: mp.id,
-                  branchId: branchId,
-                },
+                where: { productId: mp.id, branchId },
               });
             }
           }
@@ -490,38 +465,59 @@ export async function POST(request: NextRequest) {
           try {
             revalidatePath('/admin/inventory/stock');
             revalidatePath('/admin/inventory-check');
+            revalidatePath('/admin/inventory/inbound');
           } catch (_) {}
 
           return NextResponse.json({
             success: true,
-            message: 'Đã xóa mặt hàng / đặt tồn kho tại cơ sở về 0 thành công!',
+            message: 'Đã xóa tồn kho mặt hàng tại cơ sở thành công!',
           });
         }
 
         // 2. Global deletion (Toàn hệ thống)
-        const existingInvItem = await prisma.inventoryItem.findUnique({ where: { id: targetId } });
-        if (existingInvItem) {
+        if (targetId) {
           await prisma.inventoryTransaction.deleteMany({ where: { itemId: targetId } });
           await prisma.inventoryItem.deleteMany({ where: { id: targetId } });
         }
 
-        const existingProd = await prisma.product.findUnique({ where: { id: targetId } });
-        if (existingProd) {
-          await prisma.branchInventory.deleteMany({ where: { productId: targetId } });
-          await prisma.comboItem.deleteMany({
-            where: { OR: [{ comboId: targetId }, { productId: targetId }] },
+        if (targetName) {
+          const matchingInvItems = await prisma.inventoryItem.findMany({
+            where: { OR: [{ name: targetName }, { name: { contains: targetName } }] },
           });
-          await prisma.product.deleteMany({ where: { id: targetId } });
+          for (const mInv of matchingInvItems) {
+            await prisma.inventoryTransaction.deleteMany({ where: { itemId: mInv.id } });
+            await prisma.inventoryItem.deleteMany({ where: { id: mInv.id } });
+          }
+
+          const matchingProds = await prisma.product.findMany({
+            where: { OR: [{ id: targetId || '' }, { name: targetName }, { name: { contains: targetName } }] },
+          });
+
+          for (const p of matchingProds) {
+            await prisma.branchInventory.deleteMany({ where: { productId: p.id } });
+            await prisma.comboItem.deleteMany({
+              where: { OR: [{ comboId: p.id }, { productId: p.id }] },
+            });
+            try {
+              await prisma.product.deleteMany({ where: { id: p.id } });
+            } catch (_) {
+              await prisma.product.update({
+                where: { id: p.id },
+                data: { stockQuantity: 0, isAvailable: false },
+              });
+            }
+          }
         }
 
         try {
           revalidatePath('/admin/inventory/stock');
           revalidatePath('/admin/inventory-check');
+          revalidatePath('/admin/inventory/inbound');
         } catch (_) {}
 
         return NextResponse.json({
           success: true,
-          message: 'Đã xóa mặt hàng khỏi kho thành công!',
+          message: 'Đã xóa hoàn toàn vật tư khỏi hệ thống!',
         });
       } catch (delError: any) {
         console.error('Delete inventory item error:', delError);
@@ -543,26 +539,27 @@ export async function DELETE(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id') || searchParams.get('itemId');
+    const name = searchParams.get('name') || '';
     const branchId = searchParams.get('branchId') || 'all';
 
-    if (!id) {
-      return NextResponse.json({ success: false, error: 'Thiếu ID mặt hàng cần xóa' }, { status: 400 });
+    if (!id && !name) {
+      return NextResponse.json({ success: false, error: 'Thiếu ID hoặc tên mặt hàng cần xóa' }, { status: 400 });
     }
 
-    if (branchId && branchId !== 'all') {
-      const invItem = await prisma.inventoryItem.findUnique({ where: { id } });
-      const prodItem = await prisma.product.findUnique({ where: { id } });
-      const itemName = invItem?.name || prodItem?.name;
+    const invItem = id ? await prisma.inventoryItem.findUnique({ where: { id } }) : null;
+    const prodItem = id ? await prisma.product.findUnique({ where: { id } }) : null;
+    const targetName = name || invItem?.name || prodItem?.name || '';
 
+    if (branchId && branchId !== 'all') {
       if (prodItem) {
         await prisma.branchInventory.deleteMany({
           where: { productId: prodItem.id, branchId },
         });
       }
 
-      if (itemName) {
+      if (targetName) {
         const matchingProds = await prisma.product.findMany({
-          where: { OR: [{ name: itemName }, { name: { contains: itemName } }] },
+          where: { OR: [{ name: targetName }, { name: { contains: targetName } }] },
         });
         for (const mp of matchingProds) {
           await prisma.branchInventory.deleteMany({
@@ -579,32 +576,53 @@ export async function DELETE(request: NextRequest) {
       try {
         revalidatePath('/admin/inventory/stock');
         revalidatePath('/admin/inventory-check');
+        revalidatePath('/admin/inventory/inbound');
       } catch (_) {}
 
       return NextResponse.json({ success: true, message: 'Đã xóa tồn kho mặt hàng tại chi nhánh' });
     }
 
-    const existingInvItem = await prisma.inventoryItem.findUnique({ where: { id } });
-    if (existingInvItem) {
+    if (id) {
       await prisma.inventoryTransaction.deleteMany({ where: { itemId: id } });
       await prisma.inventoryItem.deleteMany({ where: { id } });
     }
 
-    const existingProd = await prisma.product.findUnique({ where: { id } });
-    if (existingProd) {
-      await prisma.branchInventory.deleteMany({ where: { productId: id } });
-      await prisma.comboItem.deleteMany({
-        where: { OR: [{ comboId: id }, { productId: id }] },
+    if (targetName) {
+      const matchingInvItems = await prisma.inventoryItem.findMany({
+        where: { OR: [{ name: targetName }, { name: { contains: targetName } }] },
       });
-      await prisma.product.deleteMany({ where: { id } });
+      for (const mInv of matchingInvItems) {
+        await prisma.inventoryTransaction.deleteMany({ where: { itemId: mInv.id } });
+        await prisma.inventoryItem.deleteMany({ where: { id: mInv.id } });
+      }
+
+      const matchingProds = await prisma.product.findMany({
+        where: { OR: [{ id: id || '' }, { name: targetName }, { name: { contains: targetName } }] },
+      });
+
+      for (const p of matchingProds) {
+        await prisma.branchInventory.deleteMany({ where: { productId: p.id } });
+        await prisma.comboItem.deleteMany({
+          where: { OR: [{ comboId: p.id }, { productId: p.id }] },
+        });
+        try {
+          await prisma.product.deleteMany({ where: { id: p.id } });
+        } catch (_) {
+          await prisma.product.update({
+            where: { id: p.id },
+            data: { stockQuantity: 0, isAvailable: false },
+          });
+        }
+      }
     }
 
     try {
       revalidatePath('/admin/inventory/stock');
       revalidatePath('/admin/inventory-check');
+      revalidatePath('/admin/inventory/inbound');
     } catch (_) {}
 
-    return NextResponse.json({ success: true, message: 'Đã xóa mặt hàng thành công' });
+    return NextResponse.json({ success: true, message: 'Đã xóa hoàn toàn vật tư khỏi hệ thống!' });
   } catch (error: any) {
     console.error('DELETE /api/inventory error:', error);
     return NextResponse.json({ success: true, message: 'Mục không tồn tại hoặc đã được xóa' });
