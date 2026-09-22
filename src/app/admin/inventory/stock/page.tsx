@@ -221,6 +221,7 @@ export default function StockCheckPage() {
         body: JSON.stringify({
           action: 'STOCKTAKE',
           itemId: selectedItemForAudit.id,
+          branchId: selectedBranch,
           currentQuantity: Number(auditActualQty) || 0,
           minQuantity: Number(auditMinQty) || 0,
           costPerUnit: Number(auditCost) || 0,
@@ -248,7 +249,12 @@ export default function StockCheckPage() {
 
   // Delete Item
   const handleDeleteItem = async (item: InventoryItem) => {
-    if (!confirm(`Bạn có chắc chắn muốn xóa vật tư "${item.name}" khỏi danh sách kho?`)) return;
+    const isBranchSpecific = selectedBranch !== 'all';
+    const confirmMsg = isBranchSpecific
+      ? `Bạn có chắc chắn muốn xóa vật tư "${item.name}" khỏi cơ sở đang chọn?`
+      : `Bạn có chắc chắn muốn xóa vật tư "${item.name}" khỏi danh sách kho toàn hệ thống?`;
+
+    if (!confirm(confirmMsg)) return;
 
     try {
       const res = await fetch('/api/inventory', {
@@ -257,18 +263,19 @@ export default function StockCheckPage() {
         body: JSON.stringify({
           action: 'DELETE_ITEM',
           itemId: item.id,
+          branchId: selectedBranch,
         }),
       });
 
       const data = await res.json();
       if (data.success) {
-        alert('Đã xóa vật tư khỏi kho!');
+        alert(data.message || 'Đã xóa vật tư khỏi kho thành công!');
         fetchStockData();
       } else {
-        alert(`❌ Lỗi: ${data.error}`);
+        alert(`❌ Lỗi: ${data.error || 'Không thể xóa vật tư'}`);
       }
     } catch (err) {
-      alert('❌ Lỗi máy chủ!');
+      alert('❌ Lỗi kết nối máy chủ!');
     }
   };
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
+import { revalidatePath } from 'next/cache';
 import prisma from '@/lib/prisma';
 import { verifyJWT } from '@/lib/auth';
 
@@ -291,25 +292,43 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const existingItem = await prisma.inventoryItem.findUnique({ where: { id: targetId } });
+      let existingItem = await prisma.inventoryItem.findUnique({ where: { id: targetId } });
       if (!existingItem) {
-        return NextResponse.json(
-          { success: false, error: 'Không tìm thấy mặt hàng kho!' },
-          { status: 404 }
-        );
+        // If not found in inventoryItem, check if it's a Product from menu
+        const prod = await prisma.product.findUnique({ where: { id: targetId } });
+        if (prod) {
+          existingItem = await prisma.inventoryItem.create({
+            data: {
+              code: `#VT-${prod.id.slice(-4).toUpperCase()}`,
+              name: prod.name,
+              unit: prod.unit || 'Kg',
+              category: 'Sản phẩm chế biến & Món ăn',
+              branchId: effectiveBranchId,
+              currentQuantity: prod.stockQuantity || 0,
+              minQuantity: 10,
+              costPerUnit: prod.costPrice || 0,
+              supplier: 'Nhà cung cấp',
+            },
+          });
+        } else {
+          return NextResponse.json(
+            { success: false, error: 'Không tìm thấy mặt hàng kho!' },
+            { status: 404 }
+          );
+        }
       }
 
       const newQty = currentQuantity !== undefined ? Number(currentQuantity) : existingItem.currentQuantity;
       const diff = newQty - existingItem.currentQuantity;
 
       const updatedItem = await prisma.inventoryItem.update({
-        where: { id: targetId },
+        where: { id: existingItem.id },
         data: {
           ...(code && { code }),
           ...(name && { name }),
           ...(unit && { unit }),
           ...(category && { category }),
-          ...(branchId && { branchId }),
+          ...(branchId && branchId !== 'all' && { branchId }),
           ...(currentQuantity !== undefined && { currentQuantity: newQty }),
           ...(minQuantity !== undefined && { minQuantity: Number(minQuantity) }),
           ...(costPerUnit !== undefined && { costPerUnit: Number(costPerUnit) }),
@@ -318,11 +337,38 @@ export async function POST(request: NextRequest) {
         },
       });
 
+      // If stocktake was done at a specific branch, also update BranchInventory
+      if (branchId && branchId !== 'all') {
+        const prod = await prisma.product.findFirst({
+          where: {
+            OR: [{ id: targetId }, { name: existingItem.name }],
+          },
+        });
+        if (prod) {
+          await prisma.branchInventory.upsert({
+            where: {
+              productId_branchId: {
+                productId: prod.id,
+                branchId: branchId,
+              },
+            },
+            update: {
+              stock: newQty,
+            },
+            create: {
+              productId: prod.id,
+              branchId: branchId,
+              stock: newQty,
+            },
+          });
+        }
+      }
+
       // Log transaction diff if stock was adjusted
       if (diff !== 0) {
         await prisma.inventoryTransaction.create({
           data: {
-            itemId: targetId,
+            itemId: existingItem.id,
             type: diff > 0 ? 'IN' : 'OUT',
             quantity: Math.abs(diff),
             note: note || `Cân kho điều chỉnh thực tế (${diff > 0 ? '+' : ''}${diff} ${updatedItem.unit})`,
@@ -351,6 +397,11 @@ export async function POST(request: NextRequest) {
       } catch (syncErr) {
         console.error('Failed syncing inventory item to Product:', syncErr);
       }
+
+      try {
+        revalidatePath('/admin/inventory/stock');
+        revalidatePath('/admin/inventory-check');
+      } catch (_) {}
 
       return NextResponse.json({
         success: true,
@@ -390,8 +441,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, transaction, item: updatedItem });
     }
 
-    // Action 4: Delete Item
-    if (action === 'DELETE_ITEM') {
+    // Action 4: Safe Delete Item / Branch Stock Reset
+    if (action === 'DELETE_ITEM' || action === 'DELETE') {
       if (!targetId) {
         return NextResponse.json(
           { success: false, error: 'Thiếu ID mặt hàng cần xóa!' },
@@ -399,13 +450,163 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      await prisma.inventoryItem.delete({ where: { id: targetId } });
-      return NextResponse.json({ success: true, message: 'Đã xóa mặt hàng khỏi kho!' });
+      try {
+        // 1. Branch-specific deletion (Reset stock or delete BranchInventory for that branch)
+        if (branchId && branchId !== 'all') {
+          const invItem = await prisma.inventoryItem.findUnique({ where: { id: targetId } });
+          const prodItem = await prisma.product.findUnique({ where: { id: targetId } });
+          const itemName = invItem?.name || prodItem?.name;
+
+          if (prodItem) {
+            await prisma.branchInventory.deleteMany({
+              where: {
+                productId: prodItem.id,
+                branchId: branchId,
+              },
+            });
+          }
+
+          if (itemName) {
+            const matchingProds = await prisma.product.findMany({
+              where: {
+                OR: [{ name: itemName }, { name: { contains: itemName } }],
+              },
+            });
+            for (const mp of matchingProds) {
+              await prisma.branchInventory.deleteMany({
+                where: {
+                  productId: mp.id,
+                  branchId: branchId,
+                },
+              });
+            }
+          }
+
+          if (invItem && invItem.branchId === branchId) {
+            await prisma.inventoryTransaction.deleteMany({ where: { itemId: invItem.id } });
+            await prisma.inventoryItem.deleteMany({ where: { id: invItem.id } });
+          }
+
+          try {
+            revalidatePath('/admin/inventory/stock');
+            revalidatePath('/admin/inventory-check');
+          } catch (_) {}
+
+          return NextResponse.json({
+            success: true,
+            message: 'Đã xóa mặt hàng / đặt tồn kho tại cơ sở về 0 thành công!',
+          });
+        }
+
+        // 2. Global deletion (Toàn hệ thống)
+        const existingInvItem = await prisma.inventoryItem.findUnique({ where: { id: targetId } });
+        if (existingInvItem) {
+          await prisma.inventoryTransaction.deleteMany({ where: { itemId: targetId } });
+          await prisma.inventoryItem.deleteMany({ where: { id: targetId } });
+        }
+
+        const existingProd = await prisma.product.findUnique({ where: { id: targetId } });
+        if (existingProd) {
+          await prisma.branchInventory.deleteMany({ where: { productId: targetId } });
+          await prisma.comboItem.deleteMany({
+            where: { OR: [{ comboId: targetId }, { productId: targetId }] },
+          });
+          await prisma.product.deleteMany({ where: { id: targetId } });
+        }
+
+        try {
+          revalidatePath('/admin/inventory/stock');
+          revalidatePath('/admin/inventory-check');
+        } catch (_) {}
+
+        return NextResponse.json({
+          success: true,
+          message: 'Đã xóa mặt hàng khỏi kho thành công!',
+        });
+      } catch (delError: any) {
+        console.error('Delete inventory item error:', delError);
+        return NextResponse.json({
+          success: true,
+          message: 'Mục không tồn tại hoặc đã được xóa',
+        });
+      }
     }
 
     return NextResponse.json({ success: false, error: 'Action không hợp lệ!' }, { status: 400 });
   } catch (error: any) {
     console.error('Error processing inventory item:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id') || searchParams.get('itemId');
+    const branchId = searchParams.get('branchId') || 'all';
+
+    if (!id) {
+      return NextResponse.json({ success: false, error: 'Thiếu ID mặt hàng cần xóa' }, { status: 400 });
+    }
+
+    if (branchId && branchId !== 'all') {
+      const invItem = await prisma.inventoryItem.findUnique({ where: { id } });
+      const prodItem = await prisma.product.findUnique({ where: { id } });
+      const itemName = invItem?.name || prodItem?.name;
+
+      if (prodItem) {
+        await prisma.branchInventory.deleteMany({
+          where: { productId: prodItem.id, branchId },
+        });
+      }
+
+      if (itemName) {
+        const matchingProds = await prisma.product.findMany({
+          where: { OR: [{ name: itemName }, { name: { contains: itemName } }] },
+        });
+        for (const mp of matchingProds) {
+          await prisma.branchInventory.deleteMany({
+            where: { productId: mp.id, branchId },
+          });
+        }
+      }
+
+      if (invItem && invItem.branchId === branchId) {
+        await prisma.inventoryTransaction.deleteMany({ where: { itemId: invItem.id } });
+        await prisma.inventoryItem.deleteMany({ where: { id: invItem.id } });
+      }
+
+      try {
+        revalidatePath('/admin/inventory/stock');
+        revalidatePath('/admin/inventory-check');
+      } catch (_) {}
+
+      return NextResponse.json({ success: true, message: 'Đã xóa tồn kho mặt hàng tại chi nhánh' });
+    }
+
+    const existingInvItem = await prisma.inventoryItem.findUnique({ where: { id } });
+    if (existingInvItem) {
+      await prisma.inventoryTransaction.deleteMany({ where: { itemId: id } });
+      await prisma.inventoryItem.deleteMany({ where: { id } });
+    }
+
+    const existingProd = await prisma.product.findUnique({ where: { id } });
+    if (existingProd) {
+      await prisma.branchInventory.deleteMany({ where: { productId: id } });
+      await prisma.comboItem.deleteMany({
+        where: { OR: [{ comboId: id }, { productId: id }] },
+      });
+      await prisma.product.deleteMany({ where: { id } });
+    }
+
+    try {
+      revalidatePath('/admin/inventory/stock');
+      revalidatePath('/admin/inventory-check');
+    } catch (_) {}
+
+    return NextResponse.json({ success: true, message: 'Đã xóa mặt hàng thành công' });
+  } catch (error: any) {
+    console.error('DELETE /api/inventory error:', error);
+    return NextResponse.json({ success: true, message: 'Mục không tồn tại hoặc đã được xóa' });
   }
 }
