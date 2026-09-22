@@ -135,8 +135,14 @@ export async function POST(request: NextRequest) {
     const effectiveSource = paymentSource || (paymentMethod === 'BANK_TRANSFER' ? 'BANK_TRANSFER' : 'CASH');
 
     // Find active shift at branch
+    const branchMatches = [
+      effectiveBranchId,
+      effectiveBranchId ? effectiveBranchId.toLowerCase() : '',
+      effectiveBranchId ? effectiveBranchId.toUpperCase() : '',
+    ].filter(Boolean) as string[];
+
     const activeShift = await prisma.shift.findFirst({
-      where: { status: 'OPEN', branchId: effectiveBranchId },
+      where: { status: 'OPEN', branchId: { in: branchMatches } },
       orderBy: { createdAt: 'desc' },
     });
 

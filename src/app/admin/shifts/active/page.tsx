@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   Clock,
   Play,
@@ -19,6 +19,7 @@ import {
   ShieldAlert,
   UserPlus,
   X,
+  RotateCcw,
 } from 'lucide-react';
 
 import { useBranches } from '@/hooks/useBranches';
@@ -38,7 +39,7 @@ export default function ActiveShiftPage() {
     if (branches.length > 0 && (!selectedBranchId || !branches.some((b) => b.id === selectedBranchId))) {
       setSelectedBranchId(branches[0].id);
     }
-  }, [branches]);
+  }, [branches, selectedBranchId]);
 
   // Open Shift Form States
   const [selectedMainCashier, setSelectedMainCashier] = useState('');
@@ -62,16 +63,16 @@ export default function ActiveShiftPage() {
 
   const branchesList = branches.map((b) => ({
     id: b.id,
+    code: b.code,
     name: b.name,
     badge: b.code || `CƠ SỞ ${b.id.toUpperCase()}`,
   }));
 
-  const fetchShiftData = async () => {
-    setLoading(true);
+  const fetchShiftData = useCallback(async () => {
     try {
       const [resShifts, resStaff, resUser] = await Promise.all([
-        fetch(`/api/shifts?branchId=all`),
-        fetch('/api/staff'),
+        fetch(`/api/shifts?branchId=all&date=all&_t=${Date.now()}`, { cache: 'no-store' }),
+        fetch(`/api/staff?_t=${Date.now()}`, { cache: 'no-store' }),
         fetch('/api/auth/me').catch(() => null),
       ]);
 
@@ -82,7 +83,7 @@ export default function ActiveShiftPage() {
         if (dataUser.success) setCurrentUser(dataUser.user);
       }
 
-      if (dataStaff.success && dataStaff.staff.length > 0) {
+      if (dataStaff.success && Array.isArray(dataStaff.staff) && dataStaff.staff.length > 0) {
         setStaffList(dataStaff.staff);
         if (!selectedMainCashier) setSelectedMainCashier(dataStaff.staff[0].name);
       }
@@ -91,29 +92,67 @@ export default function ActiveShiftPage() {
         const openMap: Record<string, any> = {};
         dataShifts.shifts.forEach((s: any) => {
           if (s.status === 'OPEN') {
-            openMap[s.branchId || 'cs1'] = s;
+            openMap[s.branchId] = s;
+            if (s.branchId) {
+              openMap[s.branchId.toLowerCase()] = s;
+              openMap[s.branchId.toUpperCase()] = s;
+            }
+            const bObj = branches.find(
+              (b) => b.id === s.branchId || (b.code && b.code.toLowerCase() === s.branchId?.toLowerCase())
+            );
+            if (bObj) {
+              openMap[bObj.id] = s;
+              openMap[bObj.id.toLowerCase()] = s;
+              if (bObj.code) {
+                openMap[bObj.code] = s;
+                openMap[bObj.code.toLowerCase()] = s;
+                openMap[bObj.code.toUpperCase()] = s;
+              }
+            }
           }
         });
         setOpenShiftsByBranch(openMap);
 
-        const currentActive = openMap[selectedBranchId] || null;
+        const currentActive =
+          openMap[selectedBranchId] ||
+          (selectedBranchId ? openMap[selectedBranchId.toLowerCase()] : null) ||
+          null;
         setActiveShift(currentActive);
 
         if (currentActive) {
-          const expected = (currentActive.initialCash || 0) + (currentActive.cashSales || 0) - (currentActive.cashExpenses || 0);
-          setFinalCashActual(expected);
+          const expected =
+            (currentActive.initialCash || 0) +
+            (currentActive.cashSales || 0) -
+            (currentActive.cashExpenses || 0);
+          setFinalCashActual(currentActive.finalCashActual ?? expected);
         }
       }
     } catch (err) {
-      console.error(err);
+      console.error('Error fetching shift data:', err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [branches, selectedBranchId, selectedMainCashier]);
 
   useEffect(() => {
     fetchShiftData();
-  }, [selectedBranchId]);
+  }, [selectedBranchId, fetchShiftData]);
+
+  // Keep active shift state in sync when selectedBranchId changes
+  useEffect(() => {
+    const currentActive =
+      openShiftsByBranch[selectedBranchId] ||
+      (selectedBranchId ? openShiftsByBranch[selectedBranchId.toLowerCase()] : null) ||
+      null;
+    setActiveShift(currentActive);
+    if (currentActive) {
+      const expected =
+        (currentActive.initialCash || 0) +
+        (currentActive.cashSales || 0) -
+        (currentActive.cashExpenses || 0);
+      setFinalCashActual(currentActive.finalCashActual ?? expected);
+    }
+  }, [selectedBranchId, openShiftsByBranch]);
 
   // Format currency helper
   const formatCurrency = (val: number) => {
@@ -154,8 +193,11 @@ export default function ActiveShiftPage() {
 
   const handleStartShift = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (openShiftsByBranch[selectedBranchId]) {
-      alert(`Cơ sở này đang có ca chưa chốt của ${openShiftsByBranch[selectedBranchId].staffName}!`);
+    const currentActive =
+      openShiftsByBranch[selectedBranchId] ||
+      (selectedBranchId ? openShiftsByBranch[selectedBranchId.toLowerCase()] : null);
+    if (currentActive) {
+      alert(`Cơ sở này đang có ca chưa chốt của ${currentActive.staffName}!`);
       return;
     }
 
@@ -176,8 +218,34 @@ export default function ActiveShiftPage() {
       });
 
       const data = await res.json();
-      if (data.success) {
-        alert(`Mở ${shiftName} tại ${branchesList.find((b) => b.id === selectedBranchId)?.name} thành công!`);
+      if (data.success && data.shift) {
+        const branchName =
+          branchesList.find((b) => b.id === selectedBranchId)?.name || 'Cơ sở';
+        alert(`Mở ${shiftName} tại ${branchName} thành công!`);
+
+        const newShiftObj = {
+          ...data.shift,
+          branchName,
+          cashSales: 0,
+          bankSales: 0,
+          cashExpenses: 0,
+          finalCashExpected: Number(initialCash) || 0,
+          finalCashActual: Number(initialCash) || 0,
+          discrepancy: 0,
+        };
+
+        setOpenShiftsByBranch((prev) => ({
+          ...prev,
+          [selectedBranchId]: newShiftObj,
+          [selectedBranchId.toLowerCase()]: newShiftObj,
+        }));
+        setActiveShift(newShiftObj);
+        setFinalCashActual(Number(initialCash) || 0);
+
+        // Clear notes
+        setOpenNote('');
+        setInventoryNote('');
+
         fetchShiftData();
       } else {
         alert(data.error || 'Lỗi mở ca');
@@ -193,14 +261,16 @@ export default function ActiveShiftPage() {
 
     // Permission check: only main cashier or ADMIN role can close
     const isAdmin = currentUser?.role === 'ADMIN';
-    const isMainCashier = currentUser?.fullName?.includes(activeShift.staffName) || currentUser?.username === 'admin';
+    const isMainCashier =
+      currentUser?.fullName?.includes(activeShift.staffName) || currentUser?.username === 'admin';
 
     if (!isAdmin && !isMainCashier) {
       alert(`⛔ Chỉ Thu ngân chính [${activeShift.staffName}] hoặc Quản Trị Viên (Admin) mới có quyền chốt ca!`);
       return;
     }
 
-    const expectedCash = (activeShift.initialCash || 0) + (activeShift.cashSales || 0) - (activeShift.cashExpenses || 0);
+    const expectedCash =
+      (activeShift.initialCash || 0) + (activeShift.cashSales || 0) - (activeShift.cashExpenses || 0);
     const disc = finalCashActual - expectedCash;
 
     if (disc < 0 && !closeNote.trim()) {
@@ -233,8 +303,20 @@ export default function ActiveShiftPage() {
           inventoryNote: inventoryNote || activeShift.inventoryNote,
           endTime: new Date().toISOString(),
         };
+
         setLastClosedShiftData(closedShiftRecord);
         setShowPrintModal(true);
+
+        // Immediately remove active shift from local state
+        setOpenShiftsByBranch((prev) => {
+          const next = { ...prev };
+          delete next[selectedBranchId];
+          delete next[selectedBranchId.toLowerCase()];
+          return next;
+        });
+        setActiveShift(null);
+        setCloseNote('');
+
         fetchShiftData();
       } else {
         alert(data.error || 'Lỗi đóng ca');
@@ -250,7 +332,7 @@ export default function ActiveShiftPage() {
     window.print();
   };
 
-  if (loading) {
+  if (loading && branches.length === 0) {
     return (
       <div className="py-20 text-center text-slate-400 dark:text-neutral-400 font-semibold text-xs">
         Đang tải giao diện Quản Lý Ca POS...
@@ -258,12 +340,19 @@ export default function ActiveShiftPage() {
     );
   }
 
-  const isCurrentBranchOpen = !!openShiftsByBranch[selectedBranchId];
-  const activeBranchShift = openShiftsByBranch[selectedBranchId];
+  const activeBranchShift =
+    activeShift ||
+    openShiftsByBranch[selectedBranchId] ||
+    (selectedBranchId ? openShiftsByBranch[selectedBranchId.toLowerCase()] : null) ||
+    null;
+  const isCurrentBranchOpen = !!activeBranchShift;
 
   // Permission check for closing shift
   const canCloseShift =
-    !currentUser || currentUser?.role === 'ADMIN' || (activeBranchShift && (currentUser?.fullName?.includes(activeBranchShift.staffName) || currentUser?.username === 'admin'));
+    !currentUser ||
+    currentUser?.role === 'ADMIN' ||
+    (activeBranchShift &&
+      (currentUser?.fullName?.includes(activeBranchShift.staffName) || currentUser?.username === 'admin'));
 
   // Calculated numbers for open shift
   const initialC = activeBranchShift?.initialCash || 0;
@@ -311,9 +400,9 @@ export default function ActiveShiftPage() {
       </div>
 
       {/* ACTIVE SHIFT VIEW VS OPEN SHIFT FORM */}
-      {isCurrentBranchOpen ? (
+      {isCurrentBranchOpen && activeBranchShift ? (
         /* ================= 2. QUY TRÌNH CHỐT CA & HIỂN THỊ ĐỘI NGŨ CA ================= */
-        <div className="bg-white dark:bg-[#14171D] rounded-2xl border border-emerald-500/40 p-6 sm:p-8 shadow-xl space-y-8">
+        <div className="bg-white dark:bg-[#14171D] rounded-2xl border border-emerald-500/40 p-6 sm:p-8 shadow-xl space-y-8 animate-fadeIn">
           <div className="space-y-4 pb-5 border-b border-slate-200 dark:border-neutral-800">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="flex items-center gap-3">
@@ -325,13 +414,20 @@ export default function ActiveShiftPage() {
                     ĐANG MỞ CA - CHỜ BÀN GIAO
                   </span>
                   <h2 className="font-extrabold text-lg text-slate-900 dark:text-[#FAFAF9] mt-1">
-                    {activeBranchShift.shiftName} • Thu ngân chính: <span className="text-amber-500">{activeBranchShift.staffName}</span>
+                    {activeBranchShift.shiftName} • Thu ngân chính:{' '}
+                    <span className="text-amber-500">{activeBranchShift.staffName}</span>
                   </h2>
                 </div>
               </div>
 
               <div className="text-xs text-slate-500 dark:text-neutral-400 font-medium bg-slate-50 dark:bg-[#0B0D11] p-3 rounded-xl border border-slate-200 dark:border-neutral-800">
-                <div>Mở ca: {new Date(activeBranchShift.startTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</div>
+                <div>
+                  Mở ca:{' '}
+                  {new Date(activeBranchShift.startTime).toLocaleTimeString('vi-VN', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </div>
                 <div className="text-emerald-600 dark:text-emerald-400 font-bold mt-0.5">
                   Thời gian đã trực: {getShiftDuration(activeBranchShift.startTime)}
                 </div>
@@ -366,32 +462,42 @@ export default function ActiveShiftPage() {
           {/* Realtime Shift Financial Summary Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-slate-50 dark:bg-[#0B0D11] p-4 rounded-xl border border-slate-200 dark:border-neutral-800 space-y-1">
-              <span className="text-[11px] font-bold text-slate-500 dark:text-neutral-400 uppercase">TIỀN MẶT ĐẦU CA</span>
+              <span className="text-[11px] font-bold text-slate-500 dark:text-neutral-400 uppercase">
+                TIỀN MẶT ĐẦU CA
+              </span>
               <span className="text-xl font-extrabold text-amber-500 dark:text-amber-400 block">
                 {formatCurrency(initialC)}
               </span>
             </div>
 
             <div className="bg-slate-50 dark:bg-[#0B0D11] p-4 rounded-xl border border-slate-200 dark:border-neutral-800 space-y-1">
-              <span className="text-[11px] font-bold text-slate-500 dark:text-neutral-400 uppercase">DOANH THU TIỀN MẶT (A)</span>
+              <span className="text-[11px] font-bold text-slate-500 dark:text-neutral-400 uppercase">
+                DOANH THU TIỀN MẶT (A)
+              </span>
               <span className="text-xl font-extrabold text-emerald-600 dark:text-emerald-400 block">
                 +{formatCurrency(cashSales)}
               </span>
             </div>
 
             <div className="bg-slate-50 dark:bg-[#0B0D11] p-4 rounded-xl border border-slate-200 dark:border-neutral-800 space-y-1">
-              <span className="text-[11px] font-bold text-slate-500 dark:text-neutral-400 uppercase">TỔNG CHI TIỀN MẶT (C)</span>
+              <span className="text-[11px] font-bold text-slate-500 dark:text-neutral-400 uppercase">
+                TỔNG CHI TIỀN MẶT (C)
+              </span>
               <span className="text-xl font-extrabold text-rose-500 dark:text-rose-400 block">
                 -{formatCurrency(cashExpenses)}
               </span>
             </div>
 
             <div className="bg-amber-500/10 dark:bg-amber-500/15 p-4 rounded-xl border border-amber-500/30 space-y-1">
-              <span className="text-[11px] font-extrabold text-amber-700 dark:text-amber-300 uppercase">LÝ THUYẾT TRONG KÉT</span>
+              <span className="text-[11px] font-extrabold text-amber-700 dark:text-amber-300 uppercase">
+                LÝ THUYẾT TRONG KÉT
+              </span>
               <span className="text-xl font-black text-amber-600 dark:text-amber-400 block">
                 {formatCurrency(expectedCashInDrawer)}
               </span>
-              <span className="text-[10px] text-amber-700/80 dark:text-amber-400/80 block">(Đầu ca + A - C)</span>
+              <span className="text-[10px] text-amber-700/80 dark:text-amber-400/80 block">
+                (Đầu ca + A - C)
+              </span>
             </div>
           </div>
 
@@ -400,13 +506,18 @@ export default function ActiveShiftPage() {
             <div className="bg-amber-500/15 border border-amber-500/40 p-4 rounded-xl text-xs font-semibold text-amber-700 dark:text-amber-300 flex items-center gap-2">
               <ShieldAlert className="w-5 h-5 text-amber-500 shrink-0" />
               <span>
-                ℹ️ Bạn đang xem ca làm việc của Thu ngân chính <strong className="underline">{activeBranchShift.staffName}</strong>. Chỉ Thu ngân chính giữ két hoặc Admin mới có quyền chốt ca.
+                ℹ️ Bạn đang xem ca làm việc của Thu ngân chính{' '}
+                <strong className="underline">{activeBranchShift.staffName}</strong>. Chỉ Thu ngân chính
+                giữ két hoặc Admin mới có quyền chốt ca.
               </span>
             </div>
           )}
 
           {/* Form Chốt Ca & Đếm Tiền Thực Tế */}
-          <form onSubmit={handleCloseShift} className="bg-slate-50 dark:bg-[#0B0D11] p-6 rounded-2xl border border-slate-200 dark:border-neutral-800 space-y-6">
+          <form
+            onSubmit={handleCloseShift}
+            className="bg-slate-50 dark:bg-[#0B0D11] p-6 rounded-2xl border border-slate-200 dark:border-neutral-800 space-y-6"
+          >
             <div className="flex items-center gap-2 border-b border-slate-200 dark:border-neutral-800 pb-3">
               <DollarSign className="w-5 h-5 text-amber-500 dark:text-amber-400 stroke-[2]" />
               <h3 className="font-bold text-sm text-slate-900 dark:text-[#FAFAF9] uppercase tracking-wider">
@@ -477,13 +588,13 @@ export default function ActiveShiftPage() {
               className="w-full py-4 bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 disabled:opacity-50 text-white font-extrabold text-sm uppercase tracking-wider rounded-xl shadow-lg shadow-rose-600/20 transition-all cursor-pointer flex items-center justify-center gap-2"
             >
               <FileText className="w-5 h-5 stroke-[2]" />
-              <span>{closing ? 'Đang chốt ca...' : '🔴 CHỐT CA & IN PHIẾU BÀN GIAO'}</span>
+              <span>{closing ? 'Đang chốt ca...' : '🔴 KẾT THÚC & ĐÓNG CA (CHỐT KÉT)'}</span>
             </button>
           </form>
         </div>
       ) : (
         /* ================= 1. FORM MỞ CA VỚI NHÂN SỰ CÙNG CA ================= */
-        <div className="bg-white dark:bg-[#14171D] rounded-2xl border border-slate-200 dark:border-neutral-800/80 p-6 sm:p-8 shadow-xs space-y-6">
+        <div className="bg-white dark:bg-[#14171D] rounded-2xl border border-slate-200 dark:border-neutral-800/80 p-6 sm:p-8 shadow-xs space-y-6 animate-fadeIn">
           <div className="flex items-center gap-3 border-b border-slate-200 dark:border-neutral-800 pb-4">
             <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-500 dark:text-amber-400 flex items-center justify-center font-bold shrink-0">
               <Play className="w-5 h-5 stroke-[2]" />
@@ -491,7 +602,8 @@ export default function ActiveShiftPage() {
             <div>
               <h2 className="font-extrabold text-lg text-slate-900 dark:text-[#FAFAF9]">Mở Ca Làm Việc Mới</h2>
               <p className="text-xs text-slate-500 dark:text-neutral-400">
-                Phân định Thu Ngân Trưởng chịu trách nhiệm két & Đội ngũ nhân sự cùng trực tại cơ sở {branchesList.find((b) => b.id === selectedBranchId)?.name}
+                Phân định Thu Ngân Trưởng chịu trách nhiệm két & Đội ngũ nhân sự cùng trực tại cơ sở{' '}
+                {branchesList.find((b) => b.id === selectedBranchId)?.name}
               </p>
             </div>
           </div>
@@ -506,7 +618,7 @@ export default function ActiveShiftPage() {
               <select
                 value={selectedMainCashier}
                 onChange={(e) => setSelectedMainCashier(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-50 dark:bg-[#0B0D11] border border-slate-300 dark:border-neutral-800 rounded-xl font-bold text-xs text-slate-800 dark:text-neutral-200 focus:border-amber-500 focus:outline-none"
+                className="w-full px-4 py-3 bg-slate-50 dark:bg-[#0B0D11] border border-slate-300 dark:border-neutral-800 rounded-xl font-bold text-xs text-slate-800 dark:text-neutral-200 focus:border-amber-500 focus:outline-none cursor-pointer"
               >
                 {staffList.map((s) => (
                   <option key={s.id} value={s.name}>
@@ -542,7 +654,9 @@ export default function ActiveShiftPage() {
                           onChange={() => toggleTeamMember(`${staff.name} (${staff.role})`)}
                           className="rounded text-amber-500 focus:ring-amber-500"
                         />
-                        <span className="line-clamp-1">{staff.name} ({staff.role})</span>
+                        <span className="line-clamp-1">
+                          {staff.name} ({staff.role})
+                        </span>
                       </label>
                     );
                   })}
@@ -602,7 +716,7 @@ export default function ActiveShiftPage() {
                     key={presetVal}
                     type="button"
                     onClick={() => setInitialCash(presetVal)}
-                    className="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-[#0B0D11] hover:bg-amber-500/20 text-slate-700 dark:text-neutral-300 border border-slate-300 dark:border-neutral-800 font-bold text-[11px] transition"
+                    className="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-[#0B0D11] hover:bg-amber-500/20 text-slate-700 dark:text-neutral-300 border border-slate-300 dark:border-neutral-800 font-bold text-[11px] transition cursor-pointer"
                   >
                     {formatCurrency(presetVal)}
                   </button>
@@ -610,7 +724,7 @@ export default function ActiveShiftPage() {
                 <button
                   type="button"
                   onClick={() => setInitialCash(1500000)}
-                  className="px-3 py-1.5 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30 font-bold text-[11px] hover:bg-amber-500/20 transition"
+                  className="px-3 py-1.5 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30 font-bold text-[11px] hover:bg-amber-500/20 transition cursor-pointer"
                 >
                   Lấy tiền dư ca trước
                 </button>
@@ -622,7 +736,7 @@ export default function ActiveShiftPage() {
               <button
                 type="button"
                 onClick={() => setShowInventory(!showInventory)}
-                className="w-full p-3.5 bg-slate-50 dark:bg-[#0B0D11] hover:bg-slate-100 dark:hover:bg-neutral-800/60 flex items-center justify-between font-bold text-xs text-slate-800 dark:text-neutral-200 transition"
+                className="w-full p-3.5 bg-slate-50 dark:bg-[#0B0D11] hover:bg-slate-100 dark:hover:bg-neutral-800/60 flex items-center justify-between font-bold text-xs text-slate-800 dark:text-neutral-200 transition cursor-pointer"
               >
                 <div className="flex items-center gap-2">
                   <PackageCheck className="w-4 h-4 text-amber-500" />
@@ -649,7 +763,9 @@ export default function ActiveShiftPage() {
 
             {/* Ghi chú mở ca */}
             <div className="space-y-1.5">
-              <label className="block font-semibold text-slate-700 dark:text-neutral-300">Ghi Chú Mở Ca:</label>
+              <label className="block font-semibold text-slate-700 dark:text-neutral-300">
+                Ghi Chú Mở Ca:
+              </label>
               <input
                 type="text"
                 placeholder="Ví dụ: Đã kiểm tra két tiền và phân công xong..."
@@ -675,7 +791,7 @@ export default function ActiveShiftPage() {
           <div className="bg-white dark:bg-[#14171D] border border-slate-300 dark:border-neutral-800 rounded-2xl max-w-md w-full p-6 space-y-6 shadow-2xl relative">
             <button
               onClick={() => setShowPrintModal(false)}
-              className="absolute right-4 top-4 text-slate-400 hover:text-slate-600 dark:hover:text-white"
+              className="absolute right-4 top-4 text-slate-400 hover:text-slate-600 dark:hover:text-white cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
@@ -684,8 +800,12 @@ export default function ActiveShiftPage() {
             <div id="handover-ticket" className="space-y-4 text-xs font-sans text-slate-900 dark:text-neutral-100">
               <div className="text-center pb-3 border-b border-dashed border-slate-300 dark:border-neutral-700 space-y-1">
                 <h3 className="text-base font-black uppercase tracking-tight">GÀ Ủ MUỐI SMART</h3>
-                <p className="text-[10px] font-bold text-slate-500 dark:text-neutral-400">PHIẾU BÀN GIAO CA LÀM VIỆC (POS K80)</p>
-                <p className="text-[10px] text-slate-400">Thời gian in: {new Date().toLocaleString('vi-VN')}</p>
+                <p className="text-[10px] font-bold text-slate-500 dark:text-neutral-400">
+                  PHIẾU BÀN GIAO CA LÀM VIỆC (POS K80)
+                </p>
+                <p className="text-[10px] text-slate-400">
+                  Thời gian in: {new Date().toLocaleString('vi-VN')}
+                </p>
               </div>
 
               <div className="space-y-1 text-[11px]">
@@ -695,7 +815,9 @@ export default function ActiveShiftPage() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-500 dark:text-neutral-400">Người giữ két (Thu ngân chính):</span>
-                  <span className="font-bold text-amber-600 dark:text-amber-400">{lastClosedShiftData.staffName}</span>
+                  <span className="font-bold text-amber-600 dark:text-amber-400">
+                    {lastClosedShiftData.staffName}
+                  </span>
                 </div>
                 {parseTeamMembers(lastClosedShiftData.teamMembers).length > 0 && (
                   <div className="flex justify-between">
@@ -708,7 +830,8 @@ export default function ActiveShiftPage() {
                 <div className="flex justify-between">
                   <span className="text-slate-500 dark:text-neutral-400">Cơ sở:</span>
                   <span className="font-bold">
-                    {branchesList.find((b) => b.id === lastClosedShiftData.branchId)?.name}
+                    {branchesList.find((b) => b.id === lastClosedShiftData.branchId)?.name ||
+                      lastClosedShiftData.branchName}
                   </span>
                 </div>
                 <div className="flex justify-between">
@@ -755,7 +878,9 @@ export default function ActiveShiftPage() {
                   >
                     {lastClosedShiftData.discrepancy === 0
                       ? 'Khớp chuẩn (0đ)'
-                      : `${lastClosedShiftData.discrepancy > 0 ? 'Dư +' : 'Thiếu '}${formatCurrency(lastClosedShiftData.discrepancy)}`}
+                      : `${lastClosedShiftData.discrepancy > 0 ? 'Dư +' : 'Thiếu '}${formatCurrency(
+                          lastClosedShiftData.discrepancy
+                        )}`}
                   </span>
                 </div>
                 {lastClosedShiftData.inventoryNote && (
