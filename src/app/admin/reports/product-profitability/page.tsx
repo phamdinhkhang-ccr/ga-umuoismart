@@ -402,13 +402,19 @@ export default function ProductProfitabilityPage() {
               <span>CƠ CHẾ PHÂN BỔ DOANH THU & LỢI NHUẬN RÒNG SẢN PHẨM:</span>
             </div>
             <p>
-              • <b>Lợi Nhuận Ròng Sản Phẩm (A)</b> = (B) Doanh Thu Thuần - (C) Tổng Giá Vốn - (D) Chi Phí Sổ Quỹ.
+              • <b>(A) Lợi Nhuận Ròng Sản Phẩm</b> = (B) Doanh Thu Thuần - (C) Tổng Giá Vốn - (D) Chi Phí Sổ Quỹ.
+            </p>
+            <p>
+              • <b>(B) Doanh Thu Thuần</b> = Doanh thu bán lẻ thực nhận từ đơn hàng (đã trừ voucher/chiết khấu, bóc tách tỷ trọng từ combo).
             </p>
             <p>
               • <b>(C) Tổng Giá Vốn</b> = Đơn Giá Vốn × SL Xuất Bán (Bóc tách lẻ + combo). <b>% Tỷ Trọng Giá Vốn</b> = (C / ∑C) × 100%.
             </p>
             <p>
-              • <b>(B) Doanh Thu Thuần</b> = Tổng Doanh Thu Đơn Hàng Thực Nhận × % Tỷ Trọng Giá Vốn (Phân bổ chính xác theo giá trị đóng góp món).
+              • <b>(D) Chi Phí Sổ Quỹ</b> = <b>Chi Phí Đích Danh</b> (khoản chi Sổ Quỹ trực tiếp cho Nem/Gà) + <b>Chi Phí Vận Hành Chung (Khác)</b> được phân bổ theo tỷ trọng doanh thu thuần của món.
+            </p>
+            <p>
+              • <b>(∑ D) Chi Phí Trực Tiếp</b> = Tổng các phiếu chi phát sinh từ phân hệ Sổ Quỹ (hoàn toàn không tính tiền nhập kho hàng).
             </p>
           </div>
 
@@ -760,17 +766,17 @@ export default function ProductProfitabilityPage() {
               {/* TAB 2: KHOẢN CHI SỔ QUỸ */}
               {modalTab === 'expenses' && (
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between p-4 rounded-2xl bg-purple-500/10 border border-purple-500/30 text-xs">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl bg-purple-500/10 border border-purple-500/30 text-xs">
                     <div>
                       <span className="text-purple-300 font-bold block">
-                        Danh Mục Chi Tương Ứng: {selectedProductForDetail.categoryTag}
+                        Nhóm Chi Phí: {selectedProductForDetail.categoryTag === 'CHICKEN' ? '🍗 Gà' : selectedProductForDetail.categoryTag === 'SPRING_ROLL' ? '🥖 Nem' : '📦 Khác'}
                       </span>
                       <p className="text-[11px] text-purple-400 mt-0.5">
-                        Tất cả phiếu chi từ Sổ Quỹ phát sinh thuộc nhóm món {selectedProductForDetail.name} trong kỳ
+                        Bao gồm: Chi phí đích danh ({(selectedProductForDetail.dedicatedExpense || 0).toLocaleString('vi-VN')} đ) + Chi phí chung phân bổ ({(selectedProductForDetail.generalExpense || 0).toLocaleString('vi-VN')} đ)
                       </p>
                     </div>
-                    <div className="text-right">
-                      <span className="text-xs text-purple-300 font-medium block">Khấu trừ vào món này (D):</span>
+                    <div className="text-left sm:text-right">
+                      <span className="text-xs text-purple-300 font-medium block">Tổng khấu trừ vào món này (D):</span>
                       <b className="text-lg text-purple-400 font-black">
                         {selectedProductForDetail.expense.toLocaleString('vi-VN')} đ
                       </b>

@@ -293,23 +293,33 @@ export async function GET(request: NextRequest) {
       });
     });
 
-    // Compute total COGS Sum
+    // Compute total COGS Sum and total Gross Revenue Sum
     let totalCOGS_Sum = 0;
+    let totalGrossRevenue_Sum = 0;
+
     Object.values(consumptionMap).forEach((item) => {
       item.totalQty = item.directQty + item.comboQty;
       const cogs = item.totalQty * item.costPrice;
       totalCOGS_Sum += cogs;
+
+      const itemGrossRevenue = (item.directQty * item.sellingPrice) + (item.comboQty * item.sellingPrice) || item.directRevenue;
+      totalGrossRevenue_Sum += itemGrossRevenue;
     });
 
     // Total Net Order Revenue received (after discount)
     const totalNetRevenue_Sum = orders.reduce((sum, o) => sum + o.totalAmount, 0);
 
-    // Query Expense Receipts in Period & Branch
+    // Query Expense Receipts in Period & Branch (STRICTLY OPEX ONLY, EXCLUDE STOCK IMPORT)
     const expenseWhere: any = {
       date: {
         gte: startDate,
         lte: endDate,
       },
+      AND: [
+        { title: { not: { contains: 'phiếu nhập' } } },
+        { title: { not: { contains: '#NK-' } } },
+        { note: { not: { contains: '#NK-' } } },
+      ],
     };
     if (!isAllBranches) {
       expenseWhere.branchId = branchId;
@@ -320,7 +330,7 @@ export async function GET(request: NextRequest) {
       orderBy: { date: 'desc' },
     });
 
-    // Group expenses by category
+    // Group expenses by category: Gà, Nem, Khác
     const chickenExpensesList: any[] = [];
     const springRollExpensesList: any[] = [];
     const otherExpensesList: any[] = [];
@@ -330,8 +340,9 @@ export async function GET(request: NextRequest) {
     let expenseOtherTotal = 0;
 
     expenses.forEach((e) => {
-      const catUpper = (e.category || '').toUpperCase();
+      const catLower = (e.category || '').toLowerCase();
       const titleLower = (e.title || '' + ' ' + (e.note || '')).toLowerCase();
+      const noteLower = (e.note || '').toLowerCase();
       const bName = branchNameMap[e.branchId || 'cs1'] || 'Cơ Sở Cầu Giấy';
 
       const expItem = {
@@ -346,12 +357,12 @@ export async function GET(request: NextRequest) {
         note: e.note || '-',
       };
 
-      if (catUpper === 'CHICKEN' || titleLower.includes('gà') || titleLower.includes('chicken')) {
-        expenseChickenTotal += e.amount;
-        chickenExpensesList.push(expItem);
-      } else if (catUpper === 'SPRING_ROLL' || titleLower.includes('nem') || titleLower.includes('nhắm')) {
+      if (catLower.includes('nem') || titleLower.includes('nem') || noteLower.includes('nem') || catLower === 'spring_roll') {
         expenseSpringRollTotal += e.amount;
         springRollExpensesList.push(expItem);
+      } else if (catLower.includes('gà') || catLower.includes('chicken') || titleLower.includes('gà') || titleLower.includes('chicken') || noteLower.includes('gà')) {
+        expenseChickenTotal += e.amount;
+        chickenExpensesList.push(expItem);
       } else {
         expenseOtherTotal += e.amount;
         otherExpensesList.push(expItem);
@@ -360,44 +371,93 @@ export async function GET(request: NextRequest) {
 
     const totalExpenses_Sum = expenseChickenTotal + expenseSpringRollTotal + expenseOtherTotal;
 
-    // Calculate Category COGS Subtotals for Expense Allocation
-    let cogsChicken = 0;
-    let cogsSpringRoll = 0;
-    let cogsOther = 0;
-
-    Object.values(consumptionMap).forEach((item) => {
-      const itemCOGS = item.totalQty * item.costPrice;
-      if (item.categoryTag === 'CHICKEN') cogsChicken += itemCOGS;
-      else if (item.categoryTag === 'SPRING_ROLL') cogsSpringRoll += itemCOGS;
-      else cogsOther += itemCOGS;
-    });
-
-    // Calculate B_i, D_i, A_i for each product
-    const productRows = Object.values(consumptionMap)
-      .filter((item) => item.totalQty > 0 || item.costPrice > 0)
+    // First pass: Calculate (C_i) COGS and (B_i) Net Revenue for each product
+    const preliminaryRows = Object.values(consumptionMap)
+      .filter((item) => item.totalQty > 0 || item.costPrice > 0 || item.sellingPrice > 0)
       .map((item) => {
         const C_i = Math.round(item.totalQty * item.costPrice);
         const costSharePercent = totalCOGS_Sum > 0 ? Number(((C_i / totalCOGS_Sum) * 100).toFixed(2)) : 0;
 
-        // B_i: Allocated Net Revenue
-        const B_i = Math.round(totalNetRevenue_Sum * (costSharePercent / 100));
+        const itemGrossRevenue = (item.directQty * item.sellingPrice) + (item.comboQty * item.sellingPrice) || item.directRevenue;
+        
+        let B_i = 0;
+        if (totalGrossRevenue_Sum > 0) {
+          B_i = Math.round(totalNetRevenue_Sum * (itemGrossRevenue / totalGrossRevenue_Sum));
+        } else if (totalCOGS_Sum > 0) {
+          B_i = Math.round(totalNetRevenue_Sum * (costSharePercent / 100));
+        } else {
+          B_i = 0;
+        }
 
-        // D_i: Allocated Direct Expense & matching Expense Receipts List
-        let D_i = 0;
+        return {
+          ...item,
+          C_i,
+          costSharePercent,
+          B_i,
+        };
+      });
+
+    // Subtotal Net Revenue and COGS by category for proportional dedicated expense allocation
+    let netRevenueChicken = 0;
+    let netRevenueSpringRoll = 0;
+    let cogsChicken = 0;
+    let cogsSpringRoll = 0;
+
+    preliminaryRows.forEach((r) => {
+      if (r.categoryTag === 'CHICKEN') {
+        netRevenueChicken += r.B_i;
+        cogsChicken += r.C_i;
+      } else if (r.categoryTag === 'SPRING_ROLL') {
+        netRevenueSpringRoll += r.B_i;
+        cogsSpringRoll += r.C_i;
+      }
+    });
+
+    // Second pass: Calculate (D_i) Dedicated + Prorated Expense and (A_i) Net Profit
+    const productRows = preliminaryRows
+      .map((item) => {
+        const { C_i, costSharePercent, B_i } = item;
+
+        // Dedicated Expense Allocation:
+        let D_dedicated = 0;
         let matchingExpensesList: any[] = [];
 
-        if (item.categoryTag === 'CHICKEN') {
-          if (cogsChicken > 0) D_i = Math.round(expenseChickenTotal * (C_i / cogsChicken));
-          matchingExpensesList = chickenExpensesList;
-        } else if (item.categoryTag === 'SPRING_ROLL') {
-          if (cogsSpringRoll > 0) D_i = Math.round(expenseSpringRollTotal * (C_i / cogsSpringRoll));
-          matchingExpensesList = springRollExpensesList;
+        if (item.categoryTag === 'SPRING_ROLL') {
+          if (netRevenueSpringRoll > 0) {
+            D_dedicated = Math.round(expenseSpringRollTotal * (B_i / netRevenueSpringRoll));
+          } else if (cogsSpringRoll > 0) {
+            D_dedicated = Math.round(expenseSpringRollTotal * (C_i / cogsSpringRoll));
+          } else {
+            D_dedicated = expenseSpringRollTotal;
+          }
+          matchingExpensesList = [...springRollExpensesList, ...otherExpensesList];
+        } else if (item.categoryTag === 'CHICKEN') {
+          if (netRevenueChicken > 0) {
+            D_dedicated = Math.round(expenseChickenTotal * (B_i / netRevenueChicken));
+          } else if (cogsChicken > 0) {
+            D_dedicated = Math.round(expenseChickenTotal * (C_i / cogsChicken));
+          } else {
+            D_dedicated = 0;
+          }
+          matchingExpensesList = [...chickenExpensesList, ...otherExpensesList];
         } else {
-          if (cogsOther > 0) D_i = Math.round(expenseOtherTotal * (C_i / cogsOther));
+          D_dedicated = 0;
           matchingExpensesList = otherExpensesList;
         }
 
-        // A_i: Final Net Profit
+        // General / Other Expense Allocation (by Net Revenue share or COGS share)
+        let D_general = 0;
+        if (totalNetRevenue_Sum > 0) {
+          D_general = Math.round(expenseOtherTotal * (B_i / totalNetRevenue_Sum));
+        } else if (totalCOGS_Sum > 0) {
+          D_general = Math.round(expenseOtherTotal * (C_i / totalCOGS_Sum));
+        } else {
+          D_general = 0;
+        }
+
+        const D_i = D_dedicated + D_general;
+
+        // (A_i) Final Net Profit
         const A_i = B_i - C_i - D_i;
         const marginPercent = B_i > 0 ? Number(((A_i / B_i) * 100).toFixed(1)) : 0;
 
@@ -418,6 +478,8 @@ export async function GET(request: NextRequest) {
           costSharePercent,
           netRevenue: B_i,
           expense: D_i,
+          dedicatedExpense: D_dedicated,
+          generalExpense: D_general,
           netProfit: A_i,
           marginPercent,
           comboBreakdown,
