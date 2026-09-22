@@ -82,26 +82,25 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // 1. Query Official Products (SINGLE only, exclude COMBO)
-    const officialProducts = await prisma.product.findMany({
-      where: {
-        type: 'SINGLE',
-        NOT: { name: { contains: 'Combo' } },
-      },
+    // 1. Fetch all Stock Receipts with items (Real imports by user)
+    const allReceipts = await prisma.inventoryReceipt.findMany({
       include: {
-        category: true,
-        branchInventories: true,
+        items: true,
       },
-      orderBy: { createdAt: 'asc' },
+      orderBy: { receivedAt: 'desc' },
     });
 
-    // 2. Query Master Inventory Items (Raw materials, packaging, spices, etc.)
-    const masterInvItems = await prisma.inventoryItem.findMany({
+    // 2. Fetch all BranchInventories
+    const allBranchInventories = await prisma.branchInventory.findMany({
+      include: { product: true },
+    });
+
+    // 3. Fetch custom non-demo InventoryItems with transactions
+    const customInvItems = await prisma.inventoryItem.findMany({
       where: {
-        NOT: [
-          { name: { contains: 'Combo' } },
-          { category: { contains: 'Combo' } },
-        ],
+        transactions: {
+          some: {},
+        },
       },
       include: {
         transactions: {
@@ -112,74 +111,121 @@ export async function GET(request: NextRequest) {
       orderBy: { name: 'asc' },
     });
 
-    // 3. Query all BranchInventories
-    const allBranchInventories = await prisma.branchInventory.findMany({
-      include: { product: true },
-    });
-
-    // 4. Map & Deduplicate by normalized name (1 single row per unique item)
+    // 4. Map & Deduplicate by normalized name (ONLY REAL IMPORTED GOODS)
     const itemMap = new Map<string, any>();
 
-    // Step A: Insert all official products first
-    for (const p of officialProducts) {
-      const normKey = p.name.trim().toLowerCase();
+    // Step A: Add items from actual Inbound Stock Receipts (#NK-xxxxx)
+    for (const rc of allReceipts) {
+      for (const it of rc.items) {
+        const normKey = it.productName.trim().toLowerCase();
+        if (normKey.includes('combo')) continue;
 
-      let currentQty = 0;
-      if (targetBranchId !== 'all') {
-        const bi = p.branchInventories.find((b) => b.branchId === targetBranchId);
-        currentQty = bi ? bi.stock : 0;
-      } else {
-        const totalBranchStock = p.branchInventories.reduce((sum, b) => sum + (b.stock || 0), 0);
-        currentQty = totalBranchStock > 0 ? totalBranchStock : (p.stockQuantity || 0);
+        if (!itemMap.has(normKey)) {
+          // Find matching Product if exists
+          const prod = it.productId
+            ? await prisma.product.findUnique({
+                where: { id: it.productId },
+                include: { category: true, branchInventories: true },
+              })
+            : await prisma.product.findFirst({
+                where: { name: it.productName },
+                include: { category: true, branchInventories: true },
+              });
+
+          let currentQty = 0;
+          if (prod && prod.branchInventories) {
+            if (targetBranchId !== 'all') {
+              const bi = prod.branchInventories.find((b) => b.branchId === targetBranchId);
+              currentQty = bi ? bi.stock : 0;
+            } else {
+              currentQty = prod.branchInventories.reduce((sum, b) => sum + (b.stock || 0), 0);
+            }
+          } else {
+            const matchingBis = allBranchInventories.filter(
+              (bi) => bi.product?.name.toLowerCase().trim() === normKey
+            );
+            if (targetBranchId !== 'all') {
+              const bi = matchingBis.find((b) => b.branchId === targetBranchId);
+              currentQty = bi ? bi.stock : 0;
+            } else {
+              currentQty = matchingBis.reduce((sum, b) => sum + (b.stock || 0), 0);
+            }
+          }
+
+          itemMap.set(normKey, {
+            id: prod?.id || it.id,
+            productId: prod?.id || it.productId || null,
+            code: prod?.batchCode || it.batchCode || '',
+            name: it.productName,
+            unit: it.unit || prod?.unit || 'Kg',
+            category: prod?.category?.name || 'Nguyên liệu nhập kho',
+            branchId: targetBranchId,
+            currentQuantity: currentQty,
+            minQuantity: 5,
+            costPerUnit: it.unitPrice > 0 ? it.unitPrice : (prod?.costPrice || 0),
+            supplier: rc.supplierName || 'Nhà cung cấp',
+            hotline: '',
+            updatedAt: rc.receivedAt ? rc.receivedAt.toISOString() : new Date().toISOString(),
+            transactions: [],
+          });
+        }
       }
-
-      itemMap.set(normKey, {
-        id: p.id,
-        productId: p.id,
-        code: p.batchCode || '',
-        name: p.name,
-        unit: p.unit || 'Con',
-        category: p.category?.name || 'Thịt gà & Phụ phẩm tươi',
-        branchId: targetBranchId,
-        currentQuantity: currentQty,
-        minQuantity: 10,
-        costPerUnit: p.costPrice && p.costPrice > 0 ? p.costPrice : (p.price ? Math.round(p.price * 0.6) : 50000),
-        supplier: 'Kho Tổng Gà Ủ Muối Smart',
-        hotline: '0988.888.999',
-        updatedAt: p.updatedAt ? p.updatedAt.toISOString() : new Date().toISOString(),
-        transactions: [],
-      });
     }
 
-    // Step B: Merge or insert master inventory items
-    for (const inv of masterInvItems) {
-      const normKey = inv.name.trim().toLowerCase();
-      const existing = itemMap.get(normKey);
+    // Step B: Add items with actual positive stock in BranchInventory not in receipts
+    for (const bi of allBranchInventories) {
+      if (!bi.product || bi.stock <= 0) continue;
+      const normKey = bi.product.name.trim().toLowerCase();
+      if (normKey.includes('combo') || bi.product.type === 'COMBO') continue;
 
-      if (existing) {
-        // Merge metadata (supplier, hotline, custom code) if available
-        if (inv.supplier && inv.supplier !== 'Kho Tổng Gà Ủ Muối Smart') existing.supplier = inv.supplier;
-        if (inv.hotline) existing.hotline = inv.hotline;
-        if (inv.code && inv.code !== 'VT-01') existing.code = inv.code;
-        if (inv.minQuantity) existing.minQuantity = inv.minQuantity;
-        if (inv.costPerUnit && inv.costPerUnit > 0) existing.costPerUnit = inv.costPerUnit;
-        if (inv.category && inv.category !== 'Thịt gà & Phụ phẩm tươi') existing.category = inv.category;
-        if (inv.transactions && inv.transactions.length > 0) existing.transactions = inv.transactions;
-      } else {
-        // Standalone raw material/packaging item
+      if (!itemMap.has(normKey)) {
+        const prod = bi.product;
+        const allBisForProd = allBranchInventories.filter((b) => b.productId === prod.id);
+
         let currentQty = 0;
-        const matchingBranchInvs = allBranchInventories.filter(
+        if (targetBranchId !== 'all') {
+          const specificBi = allBisForProd.find((b) => b.branchId === targetBranchId);
+          currentQty = specificBi ? specificBi.stock : 0;
+        } else {
+          currentQty = allBisForProd.reduce((sum, b) => sum + (b.stock || 0), 0);
+        }
+
+        itemMap.set(normKey, {
+          id: prod.id,
+          productId: prod.id,
+          code: prod.batchCode || '',
+          name: prod.name,
+          unit: prod.unit || 'Kg',
+          category: 'Sản phẩm chế biến',
+          branchId: targetBranchId,
+          currentQuantity: currentQty,
+          minQuantity: 5,
+          costPerUnit: prod.costPrice || 0,
+          supplier: 'Kho Chi Nhánh',
+          hotline: '',
+          updatedAt: bi.updatedAt ? bi.updatedAt.toISOString() : new Date().toISOString(),
+          transactions: [],
+        });
+      }
+    }
+
+    // Step C: Add custom items with actual transactions
+    for (const inv of customInvItems) {
+      const normKey = inv.name.trim().toLowerCase();
+      if (!itemMap.has(normKey)) {
+        let currentQty = 0;
+        const matchingBis = allBranchInventories.filter(
           (bi) =>
             bi.product?.name.toLowerCase().trim() === normKey ||
             bi.productId === inv.id
         );
 
         if (targetBranchId !== 'all') {
-          const biMatch = matchingBranchInvs.find((b) => b.branchId === targetBranchId);
+          const biMatch = matchingBis.find((b) => b.branchId === targetBranchId);
           currentQty = biMatch ? biMatch.stock : (inv.branchId === targetBranchId ? inv.currentQuantity : 0);
         } else {
-          if (matchingBranchInvs.length > 0) {
-            currentQty = matchingBranchInvs.reduce((sum, b) => sum + (b.stock || 0), 0);
+          if (matchingBis.length > 0) {
+            currentQty = matchingBis.reduce((sum, b) => sum + (b.stock || 0), 0);
           } else {
             currentQty = inv.currentQuantity || 0;
           }
@@ -190,20 +236,20 @@ export async function GET(request: NextRequest) {
           code: inv.code || '',
           name: inv.name,
           unit: inv.unit || 'Kg',
-          category: inv.category || 'Gia vị thảo mộc & Sốt',
+          category: inv.category || 'Vật tư & Nguyên liệu',
           branchId: targetBranchId,
           currentQuantity: currentQty,
           minQuantity: inv.minQuantity || 5,
-          costPerUnit: inv.costPerUnit || 50000,
-          supplier: inv.supplier || 'Kho Tổng Gà Ủ Muối Smart',
-          hotline: inv.hotline || '0988.888.999',
+          costPerUnit: inv.costPerUnit || 0,
+          supplier: inv.supplier || '',
+          hotline: inv.hotline || '',
           updatedAt: inv.updatedAt ? inv.updatedAt.toISOString() : new Date().toISOString(),
           transactions: inv.transactions || [],
         });
       }
     }
 
-    // Step C: Convert map to array and generate dynamic sequential SKU/Code if empty
+    // Step D: Format code
     let items = Array.from(itemMap.values()).map((item, idx) => {
       const formattedCode = (item.code && item.code !== 'VT-01' && !item.code.includes('VT-01'))
         ? item.code

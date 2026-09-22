@@ -188,46 +188,7 @@ export async function ensureDbInitialized() {
         INSERT INTO User (id, staffCode, name, username, password, role, branchId, isActive, createdAt, updatedAt)
         VALUES ('${adminId}', 'NV-0101', 'Nguyễn Văn Quyền (Admin)', 'admin', '${defaultPasswordHash}', 'ADMIN', 'cs1', 1, '${now}', '${now}')
       `);
-      console.log("-> Admin user created successfully!");
-    }
-
-    // 7. Auto-seed BranchInventory for existing products if empty
-    try {
-      const biCountResult: any = await prisma.$queryRawUnsafe(`SELECT COUNT(*) as count FROM BranchInventory`);
-      const biCount = Array.isArray(biCountResult) && biCountResult[0] ? Number(biCountResult[0].count) : 0;
-      if (biCount === 0) {
-        console.log("-> Auto-seeding initial BranchInventory data...");
-        const products = await prisma.product.findMany({ select: { id: true, stockQuantity: true } });
-        const branches = await prisma.branch.findMany({ select: { id: true } });
-
-        const targetBranches = branches.length > 0 ? branches.map((b) => b.id) : ['cs1', 'cs2', 'cs3'];
-
-        for (const p of products) {
-          const totalStock = p.stockQuantity ?? 50;
-          // Allocate stock: put all into first branch or cs1
-          for (let i = 0; i < targetBranches.length; i++) {
-            const bId = targetBranches[i];
-            const stockVal = i === 0 ? totalStock : 0;
-            await prisma.branchInventory.upsert({
-              where: {
-                productId_branchId: {
-                  productId: p.id,
-                  branchId: bId,
-                },
-              },
-              update: {},
-              create: {
-                productId: p.id,
-                branchId: bId,
-                stock: stockVal,
-              },
-            });
-          }
-        }
-        console.log("-> Initial BranchInventory seeded successfully!");
-      }
-    } catch (biErr: any) {
-      console.warn("Notice seeding BranchInventory:", biErr.message);
+      console.log("-> Admin user verified/created successfully!");
     }
   } catch (err: any) {
     console.warn("Notice in ensureDbInitialized:", err.message);

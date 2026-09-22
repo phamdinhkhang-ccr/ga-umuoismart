@@ -599,8 +599,16 @@ export default function StockCheckPage() {
                 </tr>
               ) : displayItems.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-8 text-center text-neutral-500">
-                    Chưa có vật tư nào phù hợp với bộ lọc.
+                  <td colSpan={9} className="py-12 text-center text-neutral-400">
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <Boxes className="w-8 h-8 text-neutral-600 stroke-[1.5]" />
+                      <p className="text-sm font-semibold text-neutral-300">
+                        Chưa có dữ liệu tồn kho.
+                      </p>
+                      <p className="text-xs text-neutral-500">
+                        Vui lòng tạo phiếu nhập kho để bắt đầu theo dõi.
+                      </p>
+                    </div>
                   </td>
                 </tr>
               ) : (

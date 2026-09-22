@@ -465,37 +465,7 @@ async function main() {
     ],
   });
 
-  // 9. Seed Inventory Items
-  await prisma.inventoryItem.createMany({
-    data: [
-      {
-        name: 'Gà Ta Mái Rạ Tươi Thả Vườn',
-        unit: 'Con',
-        currentQuantity: 35,
-        minQuantity: 10,
-        costPerUnit: 120000,
-        supplier: 'Trang Trại Gà Sạch Đồng Nai',
-      },
-      {
-        name: 'Muối Tiêu Hoa Tiêu Thảo Mộc',
-        unit: 'Kg',
-        currentQuantity: 8.5,
-        minQuantity: 3.0,
-        costPerUnit: 150000,
-        supplier: 'Gia Vị Tây Bắc Smart',
-      },
-      {
-        name: 'Chân Gà Tươi Làm Sạch',
-        unit: 'Kg',
-        currentQuantity: 4,
-        minQuantity: 8, // Low stock alert
-        costPerUnit: 42000,
-        supplier: 'Nông Sản Việt',
-      },
-    ],
-  });
-
-  // 10. Seed Users (Admin, Manager, Cashier, Kitchen, Shipper)
+  // 9. Users (Admin, Manager, Cashier, Kitchen, Shipper)
   const defaultPasswordHash = await bcrypt.hash('GaMuoi@2026', 10);
 
   const seedUsers = [
