@@ -604,9 +604,12 @@ export default function StockCheckPage() {
                   </td>
                 </tr>
               ) : (
-                displayItems.map((item) => {
+                displayItems.map((item, idx) => {
                   const isAlert = item.currentQuantity < item.minQuantity;
                   const totalVal = item.currentQuantity * item.costPerUnit;
+                  const itemCode = (item.code && item.code !== 'VT-01' && item.code !== '#VT-01')
+                    ? item.code
+                    : `#VT-${String(idx + 1).padStart(2, '0')}`;
 
                   return (
                     <tr key={item.id} className={`hover:bg-[#181C23] ${isAlert ? 'bg-rose-950/15' : 'bg-[#14171D]'}`}>
@@ -614,7 +617,7 @@ export default function StockCheckPage() {
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-2">
                           <span className="font-mono text-[10px] px-1.5 py-0.5 bg-[#0B0D11] border border-amber-500/30 text-amber-400 font-bold rounded-xs">
-                            {item.code || '#VT-01'}
+                            {itemCode}
                           </span>
                           <span className="font-bold text-[#FAFAF9]">{item.name}</span>
                         </div>
