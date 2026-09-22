@@ -192,32 +192,29 @@ function InboundReceiptsInner() {
         if (data.success && Array.isArray(data.products)) {
           setDbProducts(data.products);
           const singleProds = data.products.filter((p: any) => p.type !== 'COMBO');
-          if (singleProds.length > 0 && rows.length === 0) {
-            // Try to pre-fill with the product from URL param (Nhập Nhanh pre-fill)
-            const paramProductName = searchParams.get('productName');
-            const paramSuggestedQty = searchParams.get('suggestedQty');
-            const matchedProd = paramProductName
-              ? singleProds.find((p: any) =>
-                  p.name.toLowerCase().includes(paramProductName.toLowerCase()) ||
-                  paramProductName.toLowerCase().includes(p.name.toLowerCase())
-                )
-              : null;
-
-            const targetP = matchedProd || singleProds[0];
-            const targetCost = Number(targetP.costPrice) > 0 ? Number(targetP.costPrice) : (targetP.price ? Math.round(targetP.price * 0.6) : 60000);
-            const targetQty = (matchedProd && paramSuggestedQty) ? Math.max(1, Number(paramSuggestedQty)) : 20;
-
-            setRows([
-              {
-                id: 'row-1',
-                productId: targetP.id,
-                productName: targetP.name,
-                unit: targetP.unit || '',
-                quantity: targetQty,
-                unitPrice: targetCost,
-                subtotal: targetQty * targetCost,
-              },
-            ]);
+          // Only pre-fill if entered via "Nhập Nhanh" with URL search params!
+          const paramProductName = searchParams.get('productName');
+          const paramSuggestedQty = searchParams.get('suggestedQty');
+          if (paramProductName && paramSuggestedQty && rows.length === 0) {
+            const matchedProd = singleProds.find((p: any) =>
+              p.name.toLowerCase().includes(paramProductName.toLowerCase()) ||
+              paramProductName.toLowerCase().includes(p.name.toLowerCase())
+            );
+            if (matchedProd) {
+              const targetCost = Number(matchedProd.costPrice) > 0 ? Number(matchedProd.costPrice) : (matchedProd.price ? Math.round(matchedProd.price * 0.6) : 60000);
+              const targetQty = Math.max(1, Number(paramSuggestedQty));
+              setRows([
+                {
+                  id: 'row-1',
+                  productId: matchedProd.id,
+                  productName: matchedProd.name,
+                  unit: matchedProd.unit || '',
+                  quantity: targetQty,
+                  unitPrice: targetCost,
+                  subtotal: targetQty * targetCost,
+                },
+              ]);
+            }
           }
         }
       })
@@ -268,6 +265,25 @@ function InboundReceiptsInner() {
 
   // Handle row changes in dynamic table (Auto-fill costPrice & recalculate subtotal)
   const handleProductSelectChange = (rowId: string, prodId: string) => {
+    if (!prodId) {
+      setRows((prev) =>
+        prev.map((r) => {
+          if (r.id === rowId) {
+            return {
+              ...r,
+              productId: '',
+              productName: '',
+              unit: '',
+              unitPrice: 0,
+              subtotal: 0,
+            };
+          }
+          return r;
+        })
+      );
+      return;
+    }
+
     const prod = dbProducts.find((p) => p.id === prodId);
     if (!prod) return;
 
@@ -280,7 +296,7 @@ function InboundReceiptsInner() {
             ...r,
             productId: prod.id,
             productName: prod.name,
-            unit: prod.unit || 'Con',
+            unit: prod.unit || '',
             unitPrice: uPrice,
             subtotal: qty * uPrice,
           };
@@ -308,28 +324,20 @@ function InboundReceiptsInner() {
   };
 
   const handleAddRow = () => {
-    const singleProds = dbProducts.filter((p) => p.type !== 'COMBO');
-    const defaultP = singleProds.length > 0 ? singleProds[0] : null;
-    const defaultCost = defaultP ? (defaultP.costPrice ?? (defaultP.price ? Math.round(defaultP.price * 0.6) : 50000)) : 50000;
-
     const newRow: ImportRow = {
       id: `row-${Date.now()}`,
-      productId: defaultP ? defaultP.id : '',
-      productName: defaultP ? defaultP.name : 'Món mới',
-      unit: defaultP ? defaultP.unit || 'Con' : 'Con',
-      quantity: 10,
-      unitPrice: defaultCost,
-      subtotal: 10 * defaultCost,
+      productId: '',
+      productName: '',
+      unit: '',
+      quantity: 1,
+      unitPrice: 0,
+      subtotal: 0,
     };
 
     setRows((prev) => [...prev, newRow]);
   };
 
   const handleRemoveRow = (rowId: string) => {
-    if (rows.length === 1) {
-      alert('Phiếu nhập phải có ít nhất 1 mặt hàng!');
-      return;
-    }
     setRows((prev) => prev.filter((r) => r.id !== rowId));
   };
 
@@ -342,18 +350,23 @@ function InboundReceiptsInner() {
     const activeSupplier = supplierName === 'Khác (Nhập tùy chỉnh)' ? customSupplier : supplierName;
 
     if (!activeSupplier || !activeSupplier.trim()) {
-      alert('Vui lòng chọn hoặc nhập tên Nhà Cung Cấp!');
+      showToast('Vui lòng chọn hoặc nhập tên Nhà Cung Cấp!');
       return;
     }
 
     if (rows.length === 0) {
-      alert('Phiếu nhập phải có ít nhất 1 mặt hàng!');
+      showToast('Vui lòng thêm ít nhất một mặt hàng nhập kho!');
       return;
     }
 
-    for (const r of rows) {
-      if (!r.productName || !r.quantity || Number(r.quantity) <= 0) {
-        alert('Vui lòng điền đẩy đủ Số lượng > 0 cho tất cả các mặt hàng!');
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      if (!r.productId || !r.productName || !r.productName.trim()) {
+        showToast(`Dòng thứ ${i + 1}: Vui lòng chọn sản phẩm / nguyên liệu nhập kho!`);
+        return;
+      }
+      if (!r.quantity || Number(r.quantity) <= 0) {
+        showToast(`Dòng "${r.productName}": Số lượng nhập phải lớn hơn 0!`);
         return;
       }
     }
@@ -576,35 +589,43 @@ function InboundReceiptsInner() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-neutral-800/80 font-medium text-slate-800 dark:text-neutral-200">
-                {rows.map((row) => {
-                  const singleProds = dbProducts.filter((p) => p.type !== 'COMBO');
-                  return (
-                    <tr key={row.id} className="hover:bg-slate-50/80 dark:hover:bg-neutral-900/60">
-                      {/* 1. Product select */}
-                      <td className="py-2.5 px-3">
-                        <select
-                          value={row.productId}
-                          onChange={(e) => handleProductSelectChange(row.id, e.target.value)}
-                          className="w-full px-2.5 py-1.5 bg-slate-50 dark:bg-[#0B0D11] border border-slate-300 dark:border-neutral-800 rounded-lg font-bold text-xs text-slate-900 dark:text-white"
-                        >
-                          {singleProds.map((p: any) => {
-                            const stock = p.branchStock !== undefined ? p.branchStock : (p.stockQuantity ?? 0);
-                            return (
-                              <option key={p.id} value={p.id}>
-                                {p.name} (Tồn tại cơ sở chọn: {stock}{p.unit ? ` ${p.unit}` : ''})
-                              </option>
-                            );
-                          })}
-                        </select>
-                      </td>
+                {rows.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="py-8 text-center text-slate-400 dark:text-neutral-500 text-xs">
+                      Chưa có mặt hàng nào. Vui lòng bấm <span className="font-bold text-amber-500">+ Thêm Dòng Mặt Hàng Nhập Kho</span> để bắt đầu.
+                    </td>
+                  </tr>
+                ) : (
+                  rows.map((row) => {
+                    const singleProds = dbProducts.filter((p) => p.type !== 'COMBO');
+                    return (
+                      <tr key={row.id} className="hover:bg-slate-50/80 dark:hover:bg-neutral-900/60">
+                        {/* 1. Product select */}
+                        <td className="py-2.5 px-3">
+                          <select
+                            value={row.productId}
+                            onChange={(e) => handleProductSelectChange(row.id, e.target.value)}
+                            className="w-full px-2.5 py-1.5 bg-slate-50 dark:bg-[#0B0D11] border border-slate-300 dark:border-neutral-800 rounded-lg font-bold text-xs text-slate-900 dark:text-white"
+                          >
+                            <option value="">-- Chọn sản phẩm / nguyên liệu nhập kho --</option>
+                            {singleProds.map((p: any) => {
+                              const stock = p.branchStock !== undefined ? p.branchStock : (p.stockQuantity ?? 0);
+                              return (
+                                <option key={p.id} value={p.id}>
+                                  {p.name} (Tồn tại cơ sở chọn: {stock}{p.unit ? ` ${p.unit}` : ''})
+                                </option>
+                              );
+                            })}
+                          </select>
+                        </td>
 
-                      {/* 3. Quantity input */}
-                      <td className="py-2.5 px-3">
-                        <input
-                          type="number"
-                          min="1"
-                          value={row.quantity}
-                          onChange={(e) => handleRowInputChange(row.id, 'quantity', e.target.value)}
+                        {/* 3. Quantity input */}
+                        <td className="py-2.5 px-3">
+                          <input
+                            type="number"
+                            min="1"
+                            value={row.quantity || ''}
+                            onChange={(e) => handleRowInputChange(row.id, 'quantity', e.target.value)}
                           className="w-full px-2.5 py-1.5 bg-slate-50 dark:bg-[#0B0D11] border border-slate-300 dark:border-neutral-800 rounded-lg font-bold text-xs text-amber-400"
                         />
                       </td>
@@ -637,7 +658,7 @@ function InboundReceiptsInner() {
                       </td>
                     </tr>
                   );
-                })}
+                }))}
               </tbody>
             </table>
           </div>

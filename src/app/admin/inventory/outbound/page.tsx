@@ -79,16 +79,7 @@ export default function InventoryOutboundPage() {
   const [notes, setNotes] = useState('');
 
   // Form Multi-Items Rows State
-  const [exportRows, setExportRows] = useState<ExportRow[]>([
-    {
-      productId: '',
-      productName: '',
-      unit: 'Con',
-      quantity: 1,
-      unitCost: 0,
-      stockQuantity: 0,
-    },
-  ]);
+  const [exportRows, setExportRows] = useState<ExportRow[]>([]);
 
   const [submitting, setSubmitting] = useState(false);
 
@@ -145,26 +136,12 @@ export default function InventoryOutboundPage() {
             id: p.id,
             name: p.name,
             type: p.type,
-            unit: p.unit || 'Con',
+            unit: p.unit || '',
             stockQuantity: bStock,
             costPrice: cost,
           };
         });
         setProducts(formatted);
-
-        // Pre-fill row 1 if empty
-        if (formatted.length > 0 && (!exportRows[0].productId || exportRows[0].unitCost === 0)) {
-          setExportRows([
-            {
-              productId: formatted[0].id,
-              productName: formatted[0].name,
-              unit: formatted[0].unit,
-              quantity: 1,
-              unitCost: formatted[0].costPrice,
-              stockQuantity: formatted[0].stockQuantity,
-            },
-          ]);
-        }
       }
     } catch (err) {
       console.error('Error fetching products:', err);
@@ -209,6 +186,22 @@ export default function InventoryOutboundPage() {
 
   // Handle product selection change in row (Auto-fill costPrice from product)
   const handleProductChange = (index: number, pId: string) => {
+    if (!pId) {
+      setExportRows((prevRows) => {
+        const updated = [...prevRows];
+        updated[index] = {
+          ...updated[index],
+          productId: '',
+          productName: '',
+          unit: '',
+          unitCost: 0,
+          stockQuantity: 0,
+        };
+        return updated;
+      });
+      return;
+    }
+
     const prod = products.find((p) => p.id === pId);
     if (!prod) return;
 
@@ -221,7 +214,7 @@ export default function InventoryOutboundPage() {
         ...updated[index],
         productId: prod.id,
         productName: prod.name,
-        unit: prod.unit || 'Con',
+        unit: prod.unit || '',
         unitCost: productCost,
         stockQuantity: prod.stockQuantity ?? 50,
         quantity: currentQty,
@@ -242,29 +235,23 @@ export default function InventoryOutboundPage() {
     });
   };
 
-  // Add new empty row (Auto-fill costPrice of default product)
+  // Add new empty row
   const handleAddRow = () => {
-    const firstProd = products[0];
-    const defaultCost = firstProd ? (Number(firstProd.costPrice) > 0 ? Number(firstProd.costPrice) : 60000) : 60000;
     setExportRows((prevRows) => [
       ...prevRows,
       {
-        productId: firstProd ? firstProd.id : '',
-        productName: firstProd ? firstProd.name : '',
-        unit: firstProd ? firstProd.unit : 'Con',
+        productId: '',
+        productName: '',
+        unit: '',
         quantity: 1,
-        unitCost: defaultCost,
-        stockQuantity: firstProd ? firstProd.stockQuantity : 0,
+        unitCost: 0,
+        stockQuantity: 0,
       },
     ]);
   };
 
   // Remove row
   const handleRemoveRow = (index: number) => {
-    if (exportRows.length <= 1) {
-      alert('Phiếu xuất kho phải chứa ít nhất 1 mặt hàng!');
-      return;
-    }
     const newRows = exportRows.filter((_, i) => i !== index);
     setExportRows(newRows);
   };
@@ -604,34 +591,42 @@ export default function InventoryOutboundPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-800/60 font-medium">
-                {exportRows.map((row, idx) => {
-                  const qty = Number(row.quantity) || 0;
-                  const isStockExceeded = qty > row.stockQuantity;
-                  const subtotal = qty * (Number(row.unitCost) || 0);
+                {exportRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="py-8 text-center text-neutral-500 text-xs">
+                      Chưa có mặt hàng nào. Vui lòng bấm <span className="font-bold text-amber-500">+ Thêm Mặt Hàng Cần Xuất</span> để bắt đầu.
+                    </td>
+                  </tr>
+                ) : (
+                  exportRows.map((row, idx) => {
+                    const qty = Number(row.quantity) || 0;
+                    const isStockExceeded = qty > row.stockQuantity;
+                    const subtotal = qty * (Number(row.unitCost) || 0);
 
-                  return (
-                    <tr key={idx} className={`bg-[#14171D] hover:bg-[#181C23] ${isStockExceeded ? 'bg-rose-950/20' : ''}`}>
-                      <td className="py-2.5 px-3 text-center text-neutral-500 font-mono font-bold">{idx + 1}</td>
+                    return (
+                      <tr key={idx} className={`bg-[#14171D] hover:bg-[#181C23] ${isStockExceeded ? 'bg-rose-950/20' : ''}`}>
+                        <td className="py-2.5 px-3 text-center text-neutral-500 font-mono font-bold">{idx + 1}</td>
 
-                      {/* Product Selector */}
-                      <td className="py-2.5 px-3">
-                        <select
-                          value={row.productId}
-                          onChange={(e) => handleProductChange(idx, e.target.value)}
-                          className="w-full px-2.5 py-1.5 bg-[#0B0D11] border border-neutral-800 rounded-lg font-bold text-[#FAFAF9] text-xs focus:border-amber-500"
-                        >
-                          {products.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.name} (Tồn tại cơ sở xuất: {p.stockQuantity}{p.unit ? ` ${p.unit}` : ''})
-                            </option>
-                          ))}
-                        </select>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="text-[10px] text-neutral-400">
-                            Tồn thực tế tại kho xuất: <strong className="text-amber-400 font-mono">{row.stockQuantity}{row.unit ? ` ${row.unit}` : ''}</strong>
-                          </span>
-                        </div>
-                      </td>
+                        {/* Product Selector */}
+                        <td className="py-2.5 px-3">
+                          <select
+                            value={row.productId}
+                            onChange={(e) => handleProductChange(idx, e.target.value)}
+                            className="w-full px-2.5 py-1.5 bg-[#0B0D11] border border-neutral-800 rounded-lg font-bold text-[#FAFAF9] text-xs focus:border-amber-500"
+                          >
+                            <option value="">-- Chọn mặt hàng cần xuất kho --</option>
+                            {products.map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.name} (Tồn tại cơ sở xuất: {p.stockQuantity}{p.unit ? ` ${p.unit}` : ''})
+                              </option>
+                            ))}
+                          </select>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-[10px] text-neutral-400">
+                              Tồn thực tế tại kho xuất: <strong className="text-amber-400 font-mono">{row.stockQuantity}{row.unit ? ` ${row.unit}` : ''}</strong>
+                            </span>
+                          </div>
+                        </td>
 
                       {/* Quantity Input with Stock Validation */}
                       <td className="py-2.5 px-3">
@@ -682,7 +677,7 @@ export default function InventoryOutboundPage() {
                       </td>
                     </tr>
                   );
-                })}
+                }))}
               </tbody>
             </table>
           </div>
