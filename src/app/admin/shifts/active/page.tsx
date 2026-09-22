@@ -30,9 +30,15 @@ export default function ActiveShiftPage() {
   const [currentUser, setCurrentUser] = useState<any>(null);
 
   // Shift & Branch States
-  const [selectedBranchId, setSelectedBranchId] = useState('cs1');
+  const [selectedBranchId, setSelectedBranchId] = useState('');
   const [activeShift, setActiveShift] = useState<any>(null);
   const [openShiftsByBranch, setOpenShiftsByBranch] = useState<Record<string, any>>({});
+
+  useEffect(() => {
+    if (branches.length > 0 && (!selectedBranchId || !branches.some((b) => b.id === selectedBranchId))) {
+      setSelectedBranchId(branches[0].id);
+    }
+  }, [branches]);
 
   // Open Shift Form States
   const [selectedMainCashier, setSelectedMainCashier] = useState('');
@@ -54,16 +60,11 @@ export default function ActiveShiftPage() {
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [lastClosedShiftData, setLastClosedShiftData] = useState<any>(null);
 
-  const branchesList = branches.length > 0
-    ? branches.map((b) => ({ id: b.id, name: b.name, badge: b.code || `CƠ SỞ ${b.id.toUpperCase()}` }))
-    : [
-        { id: 'cs1', name: 'Cơ Sở Cầu Giấy', badge: 'CƠ SỞ 01' },
-        { id: 'cs2', name: 'Cơ Sở Đống Đa', badge: 'CƠ SỞ 02' },
-        { id: 'cs3', name: 'Cơ Sở Hai Bà Trưng', badge: 'CƠ SỞ 03' },
-        { id: 'cs4', name: 'Cơ Sở Thanh Xuân', badge: 'CƠ SỞ 04' },
-        { id: 'cs5', name: 'Cơ Sở Tây Hồ', badge: 'CƠ SỞ 05' },
-        { id: 'cs6', name: 'Cơ Sở Nam Từ Liêm', badge: 'CƠ SỞ 06' },
-      ];
+  const branchesList = branches.map((b) => ({
+    id: b.id,
+    name: b.name,
+    badge: b.code || `CƠ SỞ ${b.id.toUpperCase()}`,
+  }));
 
   const fetchShiftData = async () => {
     setLoading(true);

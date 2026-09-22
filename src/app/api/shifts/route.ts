@@ -18,37 +18,37 @@ export async function GET(request: NextRequest) {
       endDate = new Date(`${dateParam}T23:59:59.999+07:00`);
     }
 
-    // Fetch branch list
-    const branchesSetting = await prisma.setting.findUnique({
-      where: { key: 'CMS_BRANCHES_JSON' },
+    // Fetch active branch list from Database
+    const dbBranches = await prisma.branch.findMany({
+      where: { isActive: true },
+      orderBy: { sortOrder: 'asc' },
     });
 
-    let branchList = [
-      { id: 'cs1', name: 'Cơ Sở Cầu Giấy', badge: 'CƠ SỞ 01' },
-      { id: 'cs2', name: 'Cơ Sở Đống Đa', badge: 'CƠ SỞ 02' },
-      { id: 'cs3', name: 'Cơ Sở Hai Bà Trưng', badge: 'CƠ SỞ 03' },
-      { id: 'cs4', name: 'Cơ Sở Thanh Xuân', badge: 'CƠ SỞ 04' },
-      { id: 'cs5', name: 'Cơ Sở Tây Hồ', badge: 'CƠ SỞ 05' },
-      { id: 'cs6', name: 'Cơ Sở Nam Từ Liêm', badge: 'CƠ SỞ 06' },
-    ];
-
-    if (branchesSetting && branchesSetting.value) {
-      try {
-        const parsed = JSON.parse(branchesSetting.value);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          branchList = parsed.map((b: any, idx: number) => ({
-            id: b.id || `cs${idx + 1}`,
-            name: b.name || `Cơ Sở ${b.district || idx + 1}`,
-            badge: b.badge || `CƠ SỞ 0${idx + 1}`,
-          }));
-        }
-      } catch (e) {}
-    }
+    const branchList = dbBranches.map((b) => ({
+      id: b.id,
+      code: b.code,
+      name: b.name,
+      badge: b.code ? b.code.toUpperCase() : `CƠ SỞ`,
+    }));
 
     const branchNameMap: Record<string, string> = {};
-    branchList.forEach((b) => {
+    dbBranches.forEach((b) => {
       branchNameMap[b.id] = b.name;
+      if (b.code) {
+        branchNameMap[b.code] = b.name;
+      }
     });
+
+    // Determine target branch filter IDs
+    let targetBranchIds: string[] = [];
+    if (!isAllBranches) {
+      const foundBranch = dbBranches.find((b) => b.id === branchId || b.code === branchId);
+      if (foundBranch) {
+        targetBranchIds = [foundBranch.id, foundBranch.code].filter(Boolean) as string[];
+      } else {
+        targetBranchIds = [branchId];
+      }
+    }
 
     // 1. Fetch Orders for Summary KPI Cards
     const orderWhere: any = {};
@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
       orderWhere.createdAt = { gte: startDate, lte: endDate };
     }
     if (!isAllBranches) {
-      orderWhere.branchId = branchId;
+      orderWhere.branchId = { in: targetBranchIds };
     }
 
     const ordersInDay = await prisma.order.findMany({ where: orderWhere });
@@ -89,7 +89,7 @@ export async function GET(request: NextRequest) {
       expenseWhere.date = { gte: startDate, lte: endDate };
     }
     if (!isAllBranches) {
-      expenseWhere.branchId = branchId;
+      expenseWhere.branchId = { in: targetBranchIds };
     }
 
     const expensesInDay = await prisma.expense.findMany({ where: expenseWhere });
@@ -112,7 +112,7 @@ export async function GET(request: NextRequest) {
       shiftWhere.startTime = { gte: startDate, lte: endDate };
     }
     if (!isAllBranches) {
-      shiftWhere.branchId = branchId;
+      shiftWhere.branchId = { in: targetBranchIds };
     }
 
     const shifts = await prisma.shift.findMany({

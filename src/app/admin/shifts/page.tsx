@@ -26,7 +26,7 @@ export default function ShiftsManagementPage() {
   const todayStr = new Date().toISOString().split('T')[0];
 
   const [date, setDate] = useState<string>(todayStr);
-  const [branchId, setBranchId] = useState<string>('all');
+  const [branchId, setBranchId] = useState<string>('ALL');
 
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -50,7 +50,7 @@ export default function ShiftsManagementPage() {
 
   const handleResetFilter = () => {
     setDate(todayStr);
-    setBranchId('all');
+    setBranchId('ALL');
   };
 
   const metrics = data?.metrics || {
@@ -123,10 +123,10 @@ export default function ShiftsManagementPage() {
               onChange={(e) => setBranchId(e.target.value)}
               className="appearance-none bg-slate-50 dark:bg-[#0B0D11] text-xs font-semibold text-slate-800 dark:text-neutral-200 pl-9 pr-8 py-2.5 rounded-xl border border-slate-300 dark:border-neutral-800 hover:border-amber-500/50 focus:border-amber-500 focus:outline-none transition-all cursor-pointer"
             >
-              <option value="all">🏢 Tất cả cơ sở</option>
-              {(data?.branchList || branches).map((b: any) => (
-                <option key={b.id} value={b.id}>
-                  📍 {b.name} ({b.badge || b.id})
+              <option value="ALL">🏢 Tất Cả Cơ Sở (Toàn Hệ Thống)</option>
+              {(branches || []).map((branch) => (
+                <option key={branch.id} value={branch.id}>
+                  📍 {branch.name} {branch.code ? `(${branch.code})` : ''}
                 </option>
               ))}
             </select>
