@@ -115,77 +115,89 @@ export async function POST(request: NextRequest) {
     });
 
     const paymentStatus = paymentMethod === 'CREDIT' ? 'UNPAID' : 'PAID';
+    const targetBranch = branchId || 'cs1';
 
-    // 1. Save InventoryReceipt
-    const newReceipt = await prisma.inventoryReceipt.create({
-      data: {
-        receiptCode,
-        branchId: branchId || 'cs1',
-        supplierName,
-        totalAmount,
-        paymentMethod,
-        paymentStatus,
-        creatorName: creatorName || 'Quản lý kho',
-        notes: notes || '',
-        receivedAt: receivedAt ? new Date(receivedAt) : new Date(),
-        items: {
-          create: formattedItems,
+    // Execute full stock receipt & multi-branch stock update atomically via Prisma Transaction
+    const newReceipt = await prisma.$transaction(async (tx) => {
+      // 1. Save InventoryReceipt
+      const receipt = await tx.inventoryReceipt.create({
+        data: {
+          receiptCode,
+          branchId: targetBranch,
+          supplierName,
+          totalAmount,
+          paymentMethod,
+          paymentStatus,
+          creatorName: creatorName || 'Quản lý kho',
+          notes: notes || '',
+          receivedAt: receivedAt ? new Date(receivedAt) : new Date(),
+          items: {
+            create: formattedItems,
+          },
         },
-      },
-      include: {
-        items: true,
-      },
-    });
+        include: {
+          items: true,
+        },
+      });
 
-    // 2. 2-Way Sync: Update Products, InventoryItems & InventoryTransactions
-    for (const item of formattedItems) {
-      try {
-        // Sync Product Table
+      // 2. 2-Way Sync: Update Products, BranchInventory, InventoryItems & InventoryTransactions
+      for (const item of formattedItems) {
+        // Find or create Product
         let targetProduct = item.productId
-          ? await prisma.product.findUnique({ where: { id: item.productId } })
-          : await prisma.product.findFirst({ where: { name: item.productName } });
+          ? await tx.product.findUnique({ where: { id: item.productId } })
+          : await tx.product.findFirst({ where: { name: item.productName } });
 
-        if (targetProduct) {
-          // Update total stockQuantity and costPrice in Product table
-          await prisma.product.update({
-            where: { id: targetProduct.id },
+        if (!targetProduct) {
+          targetProduct = await tx.product.create({
             data: {
-              stockQuantity: { increment: item.quantity },
-              costPrice: item.unitPrice > 0 ? item.unitPrice : targetProduct.costPrice,
+              name: item.productName,
+              price: item.unitPrice > 0 ? Math.round(item.unitPrice * 1.5) : 60000,
+              costPrice: item.unitPrice > 0 ? item.unitPrice : 0,
+              stockQuantity: 0,
+              unit: item.unit || 'Kg',
               isAvailable: true,
-              ...(item.unit && { unit: item.unit }),
-            },
-          });
-
-          // Sync Per-Branch Stock in BranchInventory Table
-          const targetBranch = branchId || 'cs1';
-          await prisma.branchInventory.upsert({
-            where: {
-              productId_branchId: {
-                productId: targetProduct.id,
-                branchId: targetBranch,
-              },
-            },
-            update: {
-              stock: { increment: item.quantity },
-            },
-            create: {
-              productId: targetProduct.id,
-              branchId: targetBranch,
-              stock: item.quantity,
             },
           });
         }
 
+        // Update total stockQuantity and costPrice in Product table
+        await tx.product.update({
+          where: { id: targetProduct.id },
+          data: {
+            stockQuantity: { increment: item.quantity },
+            costPrice: item.unitPrice > 0 ? item.unitPrice : targetProduct.costPrice,
+            isAvailable: true,
+            ...(item.unit && { unit: item.unit }),
+          },
+        });
+
+        // Sync Per-Branch Stock in BranchInventory Table (Upsert)
+        await tx.branchInventory.upsert({
+          where: {
+            productId_branchId: {
+              productId: targetProduct.id,
+              branchId: targetBranch,
+            },
+          },
+          update: {
+            stock: { increment: item.quantity },
+          },
+          create: {
+            productId: targetProduct.id,
+            branchId: targetBranch,
+            stock: item.quantity,
+          },
+        });
+
         // Sync InventoryItem Table
-        let targetInvItem = await prisma.inventoryItem.findFirst({
+        let targetInvItem = await tx.inventoryItem.findFirst({
           where: {
             OR: [{ name: item.productName }, { name: { contains: item.productName } }],
           },
         });
 
         if (targetInvItem) {
-          await prisma.inventoryItem.update({
+          await tx.inventoryItem.update({
             where: { id: targetInvItem.id },
             data: {
               currentQuantity: Math.max(0, targetInvItem.currentQuantity + item.quantity),
@@ -195,67 +207,66 @@ export async function POST(request: NextRequest) {
           });
 
           // Create InventoryTransaction IN
-          await prisma.inventoryTransaction.create({
+          await tx.inventoryTransaction.create({
             data: {
               itemId: targetInvItem.id,
               type: 'IN',
               quantity: item.quantity,
-              note: `Nhập kho từ phiếu ${receiptCode} (NCC: ${supplierName})`,
+              note: `Nhập kho từ phiếu ${receiptCode} tại ${targetBranch} (NCC: ${supplierName})`,
             },
           });
         } else {
           // Create new InventoryItem if not existing
-          const createdInvItem = await prisma.inventoryItem.create({
+          const createdInvItem = await tx.inventoryItem.create({
             data: {
               name: item.productName,
-              unit: item.unit || 'Con',
+              unit: item.unit || 'Kg',
               currentQuantity: item.quantity,
               minQuantity: 10,
               costPerUnit: item.unitPrice,
               supplier: supplierName,
+              branchId: targetBranch,
             },
           });
 
-          await prisma.inventoryTransaction.create({
+          await tx.inventoryTransaction.create({
             data: {
               itemId: createdInvItem.id,
               type: 'IN',
               quantity: item.quantity,
-              note: `Tạo mới & Nhập kho từ phiếu ${receiptCode} (NCC: ${supplierName})`,
+              note: `Tạo mới & Nhập kho từ phiếu ${receiptCode} tại ${targetBranch} (NCC: ${supplierName})`,
             },
           });
         }
-      } catch (syncErr) {
-        console.error('Error syncing inventory item:', syncErr);
       }
-    }
 
-    // 3. Auto Expense Voucher creation if paid by CASH or BANK_TRANSFER
-    if (paymentMethod === 'CASH' || paymentMethod === 'BANK_TRANSFER') {
-      try {
+      // 3. Auto Expense Voucher creation if paid by CASH or BANK_TRANSFER
+      if (paymentMethod === 'CASH' || paymentMethod === 'BANK_TRANSFER') {
         const expCode = `#EXP-${Math.floor(1000 + Math.random() * 9000)}`;
-        await prisma.expense.create({
+        await tx.expense.create({
           data: {
             expenseCode: expCode,
             title: `Thanh toán phiếu nhập kho ${receiptCode} (NCC: ${supplierName})`,
             amount: totalAmount,
             paymentMethod: paymentMethod === 'CASH' ? 'CASH' : 'BANK_TRANSFER',
+            paymentSource: paymentMethod === 'CASH' ? 'CASH' : 'BANK_TRANSFER',
             category: 'OTHER',
-            branchId: branchId || 'cs1',
+            branchId: targetBranch,
             creatorName: creatorName || 'Quản lý kho',
             note: notes ? `Ghi chú phiếu nhập ${receiptCode}: ${notes}` : `Thanh toán trực tiếp phiếu nhập ${receiptCode}`,
             date: new Date(),
           },
         });
-      } catch (expErr) {
-        console.error('Error creating auto expense voucher:', expErr);
       }
-    }
+
+      return receipt;
+    });
 
     // 4. Revalidate stock check pages for instant sync
     try {
       revalidatePath('/admin/inventory/stock');
       revalidatePath('/admin/inventory-check');
+      revalidatePath('/admin/inventory/inbound');
     } catch (_) {}
 
     return NextResponse.json({

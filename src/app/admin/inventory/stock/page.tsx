@@ -373,7 +373,7 @@ export default function StockCheckPage() {
             <p className="text-2xl font-black text-amber-400 font-mono mt-2">
               {Number(summary.totalInventoryValue || 0).toLocaleString('vi-VN')} <span className="text-xs font-normal text-neutral-400">đ</span>
             </p>
-            <p className="text-[11px] text-neutral-400 mt-1">Tổng Tồn kho $\times$ Giá vốn nhập gần nhất</p>
+            <p className="text-[11px] text-neutral-400 mt-1">Tổng Tồn kho x Giá vốn nhập gần nhất</p>
           </div>
         )}
 
@@ -406,7 +406,7 @@ export default function StockCheckPage() {
           <p className="text-2xl font-black text-rose-400 font-mono mt-2">
             {summary.lowStockCount || 0} <span className="text-xs font-normal text-rose-300">vật tư</span>
           </p>
-          <p className="text-[11px] text-rose-400/80 mt-1 font-semibold">Tồn hiện tại $\le$ Định mức tối thiểu</p>
+          <p className="text-[11px] text-rose-400/80 mt-1 font-semibold">Tồn hiện tại &lt;= Định mức tối thiểu</p>
         </div>
 
         {/* Card 4: Safe Count */}

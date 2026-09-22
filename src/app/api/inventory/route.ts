@@ -16,21 +16,75 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status') || 'all'; // alert, safe, all
     const lowStockOnly = searchParams.get('lowStock') === 'true';
 
-    const whereClause: any = {};
+    // 0. Auto-reconciliation: ensure previous InventoryReceipt records are synced to BranchInventory & Product
+    try {
+      const receiptCount = await prisma.inventoryReceipt.count();
+      if (receiptCount > 0) {
+        const allReceipts = await prisma.inventoryReceipt.findMany({
+          include: { items: true },
+        });
+        for (const rc of allReceipts) {
+          const rcBranch = rc.branchId || 'cs1';
+          for (const it of rc.items) {
+            let prod = it.productId
+              ? await prisma.product.findUnique({ where: { id: it.productId } })
+              : await prisma.product.findFirst({ where: { name: it.productName } });
 
-    if (userPayload && userPayload.role === 'MANAGER' && userPayload.branchIds && userPayload.branchIds.length > 0) {
-      if (branchId && branchId !== 'all' && userPayload.branchIds.includes(branchId)) {
-        whereClause.branchId = branchId;
-      } else {
-        whereClause.branchId = { in: userPayload.branchIds };
+            if (!prod) {
+              prod = await prisma.product.create({
+                data: {
+                  name: it.productName,
+                  price: it.unitPrice > 0 ? Math.round(it.unitPrice * 1.5) : 60000,
+                  costPrice: it.unitPrice > 0 ? it.unitPrice : 0,
+                  stockQuantity: it.quantity,
+                  unit: it.unit || 'Kg',
+                  isAvailable: true,
+                },
+              });
+            }
+
+            // Check if BranchInventory exists for this receipt item
+            const existingBi = await prisma.branchInventory.findUnique({
+              where: {
+                productId_branchId: {
+                  productId: prod.id,
+                  branchId: rcBranch,
+                },
+              },
+            });
+
+            if (!existingBi) {
+              await prisma.branchInventory.create({
+                data: {
+                  productId: prod.id,
+                  branchId: rcBranch,
+                  stock: it.quantity,
+                },
+              });
+            }
+          }
+        }
       }
-    } else if (userPayload && (userPayload.role === 'STAFF' || userPayload.role === 'CASHIER') && userPayload.branchId) {
-      whereClause.branchId = userPayload.branchId;
-    } else if (branchId !== 'all') {
-      whereClause.branchId = branchId;
+    } catch (reconcileErr) {
+      console.error('Reconciliation error in GET /api/inventory:', reconcileErr);
     }
 
-    if (category !== 'all') {
+    // Determine target branch based on RBAC or query param
+    let targetBranchId = branchId;
+    if (userPayload && (userPayload.role === 'STAFF' || userPayload.role === 'CASHIER') && userPayload.branchId) {
+      targetBranchId = userPayload.branchId;
+    } else if (userPayload && userPayload.role === 'MANAGER' && userPayload.branchIds && userPayload.branchIds.length > 0) {
+      if (branchId !== 'all' && userPayload.branchIds.includes(branchId)) {
+        targetBranchId = branchId;
+      } else if (branchId === 'all') {
+        targetBranchId = 'all';
+      }
+    }
+
+    // 1. Build master item filter (DO NOT filter branchId on master table!)
+    const whereClause: any = {};
+
+    if (category && category !== 'all' && category !== 'Tất cả danh mục') {
       whereClause.category = category;
     }
 
@@ -43,6 +97,7 @@ export async function GET(request: NextRequest) {
       ];
     }
 
+    // Query all master inventory items
     let items = await prisma.inventoryItem.findMany({
       where: whereClause,
       include: {
@@ -54,39 +109,99 @@ export async function GET(request: NextRequest) {
       orderBy: { name: 'asc' },
     });
 
-    // If a specific branch is selected, map per-branch stock from BranchInventory
-    if (branchId !== 'all') {
+    // Also include any Product from menu that might not be in InventoryItem yet
+    const allProducts = await prisma.product.findMany();
+    const existingNames = new Set(items.map((i) => i.name.toLowerCase().trim()));
+    const missingProducts = allProducts.filter(
+      (p) => !existingNames.has(p.name.toLowerCase().trim()) && p.type !== 'COMBO'
+    );
+
+    if (missingProducts.length > 0 && (!category || category === 'all' || category === 'Tất cả danh mục')) {
+      const extraItems: any[] = missingProducts
+        .filter((p) => !search || p.name.toLowerCase().includes(search))
+        .map((p) => ({
+          id: p.id,
+          code: `#SP-${p.id.slice(-4).toUpperCase()}`,
+          name: p.name,
+          unit: p.unit || 'Phần',
+          category: 'Sản phẩm chế biến & Món ăn',
+          branchId: 'all',
+          currentQuantity: p.stockQuantity || 0,
+          minQuantity: 10,
+          costPerUnit: p.costPrice || (p.price ? Math.round(p.price * 0.6) : 50000),
+          supplier: 'Bếp trung tâm / Kho',
+          hotline: '0988.888.999',
+          transactions: [],
+        }));
+      items = [...items, ...extraItems];
+    }
+
+    // 2. Map branch-specific stock (LEFT JOIN logic)
+    if (targetBranchId !== 'all') {
       const branchInventories = await prisma.branchInventory.findMany({
-        where: { branchId },
+        where: { branchId: targetBranchId },
         include: { product: true },
       });
 
       items = items.map((item) => {
+        // Find matching BranchInventory
         const prodMatch = branchInventories.find(
-          (bi) => bi.product.name.toLowerCase().trim() === item.name.toLowerCase().trim()
+          (bi) =>
+            bi.productId === item.id ||
+            bi.product.name.toLowerCase().trim() === item.name.toLowerCase().trim() ||
+            item.name.toLowerCase().trim().includes(bi.product.name.toLowerCase().trim()) ||
+            bi.product.name.toLowerCase().trim().includes(item.name.toLowerCase().trim())
         );
-        const branchStock = prodMatch ? prodMatch.stock : (item.branchId === branchId ? item.currentQuantity : 0);
+
+        // If found at this branch, use actual branch stock; otherwise 0
+        const branchStock = prodMatch ? prodMatch.stock : (item.branchId === targetBranchId ? item.currentQuantity : 0);
         return {
           ...item,
+          branchId: targetBranchId,
           currentQuantity: branchStock,
         };
       });
+    } else {
+      // 'all' branches: Sum all branch inventories or use total baseline stock
+      const allBranchInventories = await prisma.branchInventory.findMany({
+        include: { product: true },
+      });
+
+      if (allBranchInventories.length > 0) {
+        items = items.map((item) => {
+          const matches = allBranchInventories.filter(
+            (bi) =>
+              bi.productId === item.id ||
+              bi.product.name.toLowerCase().trim() === item.name.toLowerCase().trim() ||
+              item.name.toLowerCase().trim().includes(bi.product.name.toLowerCase().trim()) ||
+              bi.product.name.toLowerCase().trim().includes(item.name.toLowerCase().trim())
+          );
+          if (matches.length > 0) {
+            const totalStock = matches.reduce((sum, bi) => sum + (bi.stock || 0), 0);
+            return {
+              ...item,
+              currentQuantity: totalStock,
+            };
+          }
+          return item;
+        });
+      }
     }
 
-    // Filter by Stock Status if requested
+    // 3. Filter by Stock Status if requested
     if (status === 'alert' || lowStockOnly) {
-      items = items.filter((item) => item.currentQuantity < item.minQuantity);
+      items = items.filter((item) => (Number(item.currentQuantity) || 0) <= (Number(item.minQuantity) || 0));
     } else if (status === 'safe') {
-      items = items.filter((item) => item.currentQuantity >= item.minQuantity);
+      items = items.filter((item) => (Number(item.currentQuantity) || 0) > (Number(item.minQuantity) || 0));
     }
 
-    // Calculate KPI metrics based on filtered branch items
+    // 4. Calculate KPI metrics based on filtered branch items
     const totalInventoryValue = items.reduce(
-      (sum, i) => sum + i.currentQuantity * i.costPerUnit,
+      (sum, i) => sum + (Number(i.currentQuantity) || 0) * (Number(i.costPerUnit) || 0),
       0
     );
-    const lowStockCount = items.filter((i) => i.currentQuantity < i.minQuantity).length;
-    const safeCount = items.filter((i) => i.currentQuantity >= i.minQuantity).length;
+    const lowStockCount = items.filter((i) => (Number(i.currentQuantity) || 0) <= (Number(i.minQuantity) || 0)).length;
+    const safeCount = items.filter((i) => (Number(i.currentQuantity) || 0) > (Number(i.minQuantity) || 0)).length;
     const totalItemsCount = items.length;
 
     return NextResponse.json({
