@@ -240,24 +240,7 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // 3. Auto Expense Voucher creation if paid by CASH or BANK_TRANSFER
-      if (paymentMethod === 'CASH' || paymentMethod === 'BANK_TRANSFER') {
-        const expCode = `#EXP-${Math.floor(1000 + Math.random() * 9000)}`;
-        await tx.expense.create({
-          data: {
-            expenseCode: expCode,
-            title: `Thanh toán phiếu nhập kho ${receiptCode} (NCC: ${supplierName})`,
-            amount: totalAmount,
-            paymentMethod: paymentMethod === 'CASH' ? 'CASH' : 'BANK_TRANSFER',
-            paymentSource: paymentMethod === 'CASH' ? 'CASH' : 'BANK_TRANSFER',
-            category: 'OTHER',
-            branchId: targetBranch,
-            creatorName: creatorName || 'Quản lý kho',
-            note: notes ? `Ghi chú phiếu nhập ${receiptCode}: ${notes}` : `Thanh toán trực tiếp phiếu nhập ${receiptCode}`,
-            date: new Date(),
-          },
-        });
-      }
+      // 3. Stock receipt only manages stock and AP to supplier, never creating Expense/cashbook records
 
       return receipt;
     });

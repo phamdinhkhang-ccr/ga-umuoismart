@@ -478,10 +478,11 @@ export async function GET(request: NextRequest) {
     };
 
     // ==========================================
-    // TAB 3: EXPENSE ANALYSIS METRICS
+    // TAB 3: EXPENSE ANALYSIS METRICS (OPEX ONLY)
     // ==========================================
-    let chickenExpTotal = 0;
-    let springRollExpTotal = 0;
+    let shippingExpTotal = 0;
+    let utilitiesExpTotal = 0;
+    let packagingExpTotal = 0;
     let otherExpTotal = 0;
 
     const mappedExpenses = expenses.map((e) => {
@@ -489,17 +490,23 @@ export async function GET(request: NextRequest) {
       const titleLower = (e.title || '' + ' ' + (e.note || '')).toLowerCase();
 
       let detectedCat = 'OTHER';
-      let categoryLabel = '📦 Chi Phí Vận Hành & Khác';
+      let categoryLabel = '☕ Tiếp Khách / Marketing / Khác';
 
-      if (catUpper === 'CHICKEN' || titleLower.includes('gà') || titleLower.includes('chicken')) {
-        detectedCat = 'CHICKEN';
-        categoryLabel = '🍗 Nhập Gà Nguyên Liệu';
-        chickenExpTotal += e.amount;
-      } else if (catUpper === 'SPRING_ROLL' || titleLower.includes('nem') || titleLower.includes('nhắm')) {
-        detectedCat = 'SPRING_ROLL';
-        categoryLabel = '🥟 Nhập Nem & Đồ Nhắm';
-        springRollExpTotal += e.amount;
+      if (catUpper.includes('SHIP') || titleLower.includes('ship') || titleLower.includes('vận chuyển') || titleLower.includes('cước')) {
+        detectedCat = 'SHIPPING';
+        categoryLabel = '🚚 Tiền Ship / Vận Chuyển';
+        shippingExpTotal += e.amount;
+      } else if (catUpper.includes('ĐIỆN') || catUpper.includes('NƯỚC') || catUpper.includes('MẶT BẰNG') || catUpper.includes('UTILITY') || titleLower.includes('điện') || titleLower.includes('nước') || titleLower.includes('mặt bằng') || titleLower.includes('thuê') || titleLower.includes('internet')) {
+        detectedCat = 'UTILITIES';
+        categoryLabel = '⚡ Điện / Nước / Mặt Bằng';
+        utilitiesExpTotal += e.amount;
+      } else if (catUpper.includes('VẬT TƯ') || catUpper.includes('HỘP') || catUpper.includes('TÚI') || catUpper.includes('PACKAGING') || titleLower.includes('hộp') || titleLower.includes('túi') || titleLower.includes('bọc') || titleLower.includes('đũa') || titleLower.includes('vật tư')) {
+        detectedCat = 'PACKAGING';
+        categoryLabel = '📦 Vật Tư Tiêu Hao (Hộp, Túi)';
+        packagingExpTotal += e.amount;
       } else {
+        detectedCat = 'OTHER';
+        categoryLabel = '☕ Tiếp Khách / Marketing / Khác';
         otherExpTotal += e.amount;
       }
 
@@ -525,13 +532,17 @@ export async function GET(request: NextRequest) {
 
     const cashflowCards = {
       total: totalExpenses,
-      chicken: {
-        amount: chickenExpTotal,
-        percent: Number(((chickenExpTotal / totalExpenseSum) * 100).toFixed(1)),
+      shipping: {
+        amount: shippingExpTotal,
+        percent: Number(((shippingExpTotal / totalExpenseSum) * 100).toFixed(1)),
       },
-      springRoll: {
-        amount: springRollExpTotal,
-        percent: Number(((springRollExpTotal / totalExpenseSum) * 100).toFixed(1)),
+      utilities: {
+        amount: utilitiesExpTotal,
+        percent: Number(((utilitiesExpTotal / totalExpenseSum) * 100).toFixed(1)),
+      },
+      packaging: {
+        amount: packagingExpTotal,
+        percent: Number(((packagingExpTotal / totalExpenseSum) * 100).toFixed(1)),
       },
       other: {
         amount: otherExpTotal,
@@ -540,9 +551,10 @@ export async function GET(request: NextRequest) {
     };
 
     const categoryChartData = [
-      { name: 'Gà Nguyên Liệu', value: chickenExpTotal, color: '#EF4444', key: 'CHICKEN' },
-      { name: 'Nem & Đồ Nhắm', value: springRollExpTotal, color: '#F59E0B', key: 'SPRING_ROLL' },
-      { name: 'Vận Hành & Khác', value: otherExpTotal, color: '#64748B', key: 'OTHER' },
+      { name: 'Cước Ship / Vận Chuyển', value: shippingExpTotal, color: '#3B82F6', key: 'SHIPPING' },
+      { name: 'Điện / Nước / Mặt Bằng', value: utilitiesExpTotal, color: '#F59E0B', key: 'UTILITIES' },
+      { name: 'Vật Tư Tiêu Hao (Hộp, Túi)', value: packagingExpTotal, color: '#10B981', key: 'PACKAGING' },
+      { name: 'Chi Phí Vận Hành Khác', value: otherExpTotal, color: '#64748B', key: 'OTHER' },
     ].filter((c) => c.value > 0);
 
     let filteredExpenseReceipts = mappedExpenses;

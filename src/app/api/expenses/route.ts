@@ -33,23 +33,33 @@ export async function GET(request: NextRequest) {
     }
 
     if (categoryParam && categoryParam !== 'ALL') {
-      if (categoryParam.includes('Gà') || categoryParam === 'CHICKEN') {
+      if (categoryParam.includes('Ship') || categoryParam === 'SHIPPING') {
         whereClause.OR = [
-          { category: { contains: 'Gà' } },
-          { category: 'CHICKEN' },
+          { category: { contains: 'Ship' } },
+          { category: 'SHIPPING' },
+          { title: { contains: 'ship' } },
+          { title: { contains: 'vận chuyển' } },
         ];
-      } else if (categoryParam.includes('Nem') || categoryParam === 'SPRING_ROLL') {
+      } else if (categoryParam.includes('Điện') || categoryParam.includes('Nước') || categoryParam === 'UTILITIES') {
         whereClause.OR = [
-          { category: { contains: 'Nem' } },
-          { category: 'SPRING_ROLL' },
+          { category: { contains: 'Điện' } },
+          { category: { contains: 'Nước' } },
+          { category: { contains: 'Mặt Bằng' } },
+          { category: 'UTILITIES' },
+        ];
+      } else if (categoryParam.includes('Vật Tư') || categoryParam.includes('Hộp') || categoryParam === 'PACKAGING') {
+        whereClause.OR = [
+          { category: { contains: 'Vật Tư' } },
+          { category: { contains: 'Hộp' } },
+          { category: 'PACKAGING' },
+        ];
+      } else if (categoryParam.includes('Lương') || categoryParam === 'SALARY') {
+        whereClause.OR = [
+          { category: { contains: 'Lương' } },
+          { category: 'SALARY' },
         ];
       } else {
-        whereClause.AND = [
-          { category: { not: { contains: 'Gà' } } },
-          { category: { not: { contains: 'Nem' } } },
-          { category: { not: 'CHICKEN' } },
-          { category: { not: 'SPRING_ROLL' } },
-        ];
+        whereClause.category = { contains: categoryParam };
       }
     }
 

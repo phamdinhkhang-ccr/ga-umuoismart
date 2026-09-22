@@ -115,6 +115,19 @@ function InboundReceiptsInner() {
   // Auth User State
   const [currentUser, setCurrentUser] = useState<any>(null);
 
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.user) {
+          setCurrentUser(data.user);
+        }
+      })
+      .catch(console.error);
+  }, []);
+
+  const isStaff = currentUser?.role === 'STAFF' || currentUser?.role === 'CASHIER';
+
   // DB Products list for selection
   const [dbProducts, setDbProducts] = useState<ProductItem[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
@@ -395,25 +408,9 @@ function InboundReceiptsInner() {
 
       const data = await res.json();
       if (data.success) {
-        showToast(`🎉 Tạo phiếu nhập kho ${data.receipt.receiptCode} thành công! Đã tự động cập nhật tồn kho & tạo phiếu chi.`);
+        showToast(`🎉 Tạo phiếu nhập kho ${data.receipt.receiptCode} thành công! Đã tự động cập nhật tồn kho chi nhánh.`);
         setNotes('');
-
-        // Reset rows
-        const singleProds = dbProducts.filter((p) => p.type !== 'COMBO');
-        if (singleProds.length > 0) {
-          const firstP = singleProds[0];
-          setRows([
-            {
-              id: `row-${Date.now()}`,
-              productId: firstP.id,
-              productName: firstP.name,
-              unit: firstP.unit || 'Con',
-              quantity: 20,
-              unitPrice: firstP.costPrice || Math.round(firstP.price * 0.6),
-              subtotal: 20 * (firstP.costPrice || Math.round(firstP.price * 0.6)),
-            },
-          ]);
-        }
+        setRows([]);
         fetchReceipts();
       } else {
         alert(data.error || 'Lỗi tạo phiếu nhập');
@@ -469,11 +466,11 @@ function InboundReceiptsInner() {
                 Quản Lý Nhập Hàng Kho
               </h1>
               <span className="bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1">
-                <Sparkles className="w-3.5 h-3.5" /> 2-Way Sync Kho & Sổ Quỹ
+                <Sparkles className="w-3.5 h-3.5" /> Đồng Bộ Kho Hàng & Giá Vốn
               </span>
             </div>
             <p className="text-xs text-slate-500 dark:text-neutral-400 mt-1">
-              Tạo phiếu nhập hàng nhanh, tự động cộng dồn số lượng tồn kho và tạo phiếu chi sổ quỹ.
+              Tạo phiếu nhập hàng nhanh, tự động cộng dồn số lượng tồn kho theo từng cơ sở.
             </p>
           </div>
         </div>
@@ -627,20 +624,24 @@ function InboundReceiptsInner() {
                         />
                       </td>
 
-                      {/* 4. Unit Price input */}
+                      {/* 4. Unit Price */}
                       <td className="py-2.5 px-3">
-                        <input
-                          type="number"
-                          min="0"
-                          value={row.unitPrice}
-                          onChange={(e) => handleRowInputChange(row.id, 'unitPrice', e.target.value)}
-                          className="w-full px-2.5 py-1.5 bg-slate-50 dark:bg-[#0B0D11] border border-slate-300 dark:border-neutral-800 rounded-lg font-bold text-xs text-slate-900 dark:text-white"
-                        />
+                        {isStaff ? (
+                          <span className="font-mono text-slate-400 font-bold">******</span>
+                        ) : (
+                          <input
+                            type="number"
+                            min="0"
+                            value={row.unitPrice}
+                            onChange={(e) => handleRowInputChange(row.id, 'unitPrice', e.target.value)}
+                            className="w-full px-2.5 py-1.5 bg-slate-50 dark:bg-[#0B0D11] border border-slate-300 dark:border-neutral-800 rounded-lg font-bold text-xs text-slate-900 dark:text-white"
+                          />
+                        )}
                       </td>
 
                       {/* 5. Subtotal */}
                       <td className="py-2.5 px-3 text-right font-mono font-extrabold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
-                        {row.subtotal.toLocaleString('vi-VN')} đ
+                        {isStaff ? '****** đ' : `${row.subtotal.toLocaleString('vi-VN')} đ`}
                       </td>
 
                       {/* 6. Delete row */}
@@ -687,7 +688,7 @@ function InboundReceiptsInner() {
             <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-600 dark:text-amber-400 text-[11px] font-semibold flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
               <span>
-                Tự động đồng bộ số lượng vào kho, cập nhật giá vốn & tạo phiếu chi tương ứng bên Sổ Quỹ.
+                Tự động đồng bộ số lượng vào kho chi nhánh và cập nhật giá vốn tồn kho.
               </span>
             </div>
           </div>
@@ -697,7 +698,7 @@ function InboundReceiptsInner() {
             <div className="flex items-center justify-between border-b border-slate-200 dark:border-neutral-800 pb-3">
               <span className="font-extrabold text-slate-700 dark:text-neutral-300 text-xs">TỔNG TIỀN PHIẾU NHẬP:</span>
               <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400 font-mono">
-                {grandTotal.toLocaleString('vi-VN')} đ
+                {isStaff ? '****** đ' : `${grandTotal.toLocaleString('vi-VN')} đ`}
               </span>
             </div>
 
@@ -720,7 +721,7 @@ function InboundReceiptsInner() {
                     className="hidden"
                   />
                   <Wallet className="w-4 h-4 text-emerald-500" />
-                  <span>💵 Đã thanh toán Tiền mặt (Tự tạo Phiếu chi)</span>
+                  <span>💵 Đã thanh toán Tiền mặt</span>
                 </label>
 
                 <label className={`p-2.5 rounded-xl border font-bold text-xs flex items-center gap-2 cursor-pointer transition ${
@@ -736,7 +737,7 @@ function InboundReceiptsInner() {
                     className="hidden"
                   />
                   <CreditCard className="w-4 h-4 text-blue-500" />
-                  <span>🏦 Đã thanh toán Chuyển khoản (Tự tạo Phiếu chi)</span>
+                  <span>🏦 Đã thanh toán Chuyển khoản</span>
                 </label>
 
                 <label className={`p-2.5 rounded-xl border font-bold text-xs flex items-center gap-2 cursor-pointer transition ${
@@ -779,7 +780,7 @@ function InboundReceiptsInner() {
               <span>Lịch Sử Tất Cả Phiếu Nhập Kho</span>
             </h2>
             <p className="text-xs text-slate-500 dark:text-neutral-400 mt-0.5">
-              Theo dõi lịch sử nhập nguyên liệu, đối soát tiền hàng nhà cung cấp và kiểm tra phiếu chi sổ quỹ.
+              Theo dõi lịch sử nhập nguyên liệu, đối soát tiền hàng nhà cung cấp và quản lý công nợ.
             </p>
           </div>
 
@@ -859,7 +860,7 @@ function InboundReceiptsInner() {
                       {r.items?.length || 0} món
                     </td>
                     <td className="py-3 px-3 font-mono font-extrabold text-emerald-600 dark:text-emerald-400">
-                      {r.totalAmount.toLocaleString('vi-VN')} đ
+                      {isStaff ? '****** đ' : `${r.totalAmount.toLocaleString('vi-VN')} đ`}
                     </td>
                     <td className="py-3 px-3">
                       {r.paymentMethod === 'CASH' ? (
@@ -958,9 +959,11 @@ function InboundReceiptsInner() {
                       <td className="py-2 px-3 text-center font-bold">
                         {item.quantity} {item.unit}
                       </td>
-                      <td className="py-2 px-3 font-mono">{item.unitPrice?.toLocaleString('vi-VN')}đ</td>
+                      <td className="py-2 px-3 font-mono">
+                        {isStaff ? '******' : `${item.unitPrice?.toLocaleString('vi-VN')}đ`}
+                      </td>
                       <td className="py-2 px-3 text-right font-mono font-extrabold text-emerald-500">
-                        {item.subtotal?.toLocaleString('vi-VN')}đ
+                        {isStaff ? '****** đ' : `${item.subtotal?.toLocaleString('vi-VN')}đ`}
                       </td>
                     </tr>
                   ))}
@@ -973,7 +976,7 @@ function InboundReceiptsInner() {
                 Thanh toán: <strong className="text-amber-500">{viewingReceipt.paymentMethod}</strong> ({viewingReceipt.paymentStatus})
               </div>
               <div className="text-sm font-black text-emerald-500 font-mono">
-                Tổng: {viewingReceipt.totalAmount?.toLocaleString('vi-VN')} đ
+                Tổng: {isStaff ? '****** đ' : `${viewingReceipt.totalAmount?.toLocaleString('vi-VN')} đ`}
               </div>
             </div>
 

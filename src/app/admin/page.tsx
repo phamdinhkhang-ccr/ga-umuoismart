@@ -824,10 +824,11 @@ export default function AdminDashboardPage() {
                 <Filter className="w-3.5 h-3.5" /> Hạng Mục Chi Tiêu:
               </span>
               {[
-                { id: 'ALL', label: 'Tất Cả Hạng Mục' },
-                { id: 'CHICKEN', label: '🍗 Nhập Gà Nguyên Liệu' },
-                { id: 'SPRING_ROLL', label: '🥟 Nhập Nem & Đồ Nhắm' },
-                { id: 'OTHER', label: '📦 Chi Phí Vận Hành & Khác' },
+                { id: 'ALL', label: 'Tất Cả OPEX' },
+                { id: 'SHIPPING', label: '🚚 Cước Ship / Vận Chuyển' },
+                { id: 'UTILITIES', label: '⚡ Điện / Nước / Mặt Bằng' },
+                { id: 'PACKAGING', label: '📦 Vật Tư Tiêu Hao' },
+                { id: 'OTHER', label: '☕ Marketing & Khác' },
               ].map((c) => (
                 <button
                   key={c.id}
@@ -861,55 +862,55 @@ export default function AdminDashboardPage() {
               <h2 className="text-2xl font-black dark:text-white text-stone-900 mt-2">
                 {(data.cashflowCards?.total || 0).toLocaleString('vi-VN')} <span className="text-sm font-semibold">đ</span>
               </h2>
-              <p className="text-[11px] text-stone-400 mt-1">Toàn bộ phiếu chi phát sinh</p>
+              <p className="text-[11px] text-stone-400 mt-1">Toàn bộ chi phí vận hành (OPEX)</p>
             </div>
 
-            {/* Card 2: Chi Gà Nguyên Liệu */}
+            {/* Card 2: Tiền Ship / Vận chuyển */}
             <div className="p-5 rounded-2xl dark:bg-[#12141A] bg-white border dark:border-neutral-800/80 border-stone-200 shadow-sm">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold dark:text-neutral-400 text-stone-500 uppercase">
-                  Chi Nhập Gà
+                  Cước Ship / Vận Chuyển
                 </span>
-                <span className="text-[10px] font-bold bg-rose-500/15 text-rose-500 px-2 py-0.5 rounded-full border border-rose-500/30">
-                  {data.cashflowCards?.chicken?.percent || 0}%
+                <span className="text-[10px] font-bold bg-blue-500/15 text-blue-500 px-2 py-0.5 rounded-full border border-blue-500/30">
+                  {data.cashflowCards?.shipping?.percent || 0}%
                 </span>
               </div>
-              <h2 className="text-2xl font-black text-rose-500 mt-2">
-                {(data.cashflowCards?.chicken?.amount || 0).toLocaleString('vi-VN')} <span className="text-sm font-semibold">đ</span>
+              <h2 className="text-2xl font-black text-blue-500 mt-2">
+                {(data.cashflowCards?.shipping?.amount || 0).toLocaleString('vi-VN')} <span className="text-sm font-semibold">đ</span>
               </h2>
-              <p className="text-[11px] text-stone-400 mt-1">Gà tươi & phụ phẩm</p>
+              <p className="text-[11px] text-stone-400 mt-1">Giao hàng ngoại thành, ship ngoài</p>
             </div>
 
-            {/* Card 3: Chi Nem & Đồ Nhắm */}
+            {/* Card 3: Điện Nước Mặt Bằng */}
             <div className="p-5 rounded-2xl dark:bg-[#12141A] bg-white border dark:border-neutral-800/80 border-stone-200 shadow-sm">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold dark:text-neutral-400 text-stone-500 uppercase">
-                  Chi Nem & Đồ Nhắm
+                  Điện / Nước / Mặt Bằng
                 </span>
                 <span className="text-[10px] font-bold bg-amber-500/15 text-amber-500 px-2 py-0.5 rounded-full border border-amber-500/30">
-                  {data.cashflowCards?.springRoll?.percent || 0}%
+                  {data.cashflowCards?.utilities?.percent || 0}%
                 </span>
               </div>
               <h2 className="text-2xl font-black text-amber-500 mt-2">
-                {(data.cashflowCards?.springRoll?.amount || 0).toLocaleString('vi-VN')} <span className="text-sm font-semibold">đ</span>
+                {(data.cashflowCards?.utilities?.amount || 0).toLocaleString('vi-VN')} <span className="text-sm font-semibold">đ</span>
               </h2>
-              <p className="text-[11px] text-stone-400 mt-1">Nem chua, đồ ăn kèm</p>
+              <p className="text-[11px] text-stone-400 mt-1">Thuê mặt bằng, điện nước, internet</p>
             </div>
 
-            {/* Card 4: Chi Phí Khác */}
+            {/* Card 4: Vật Tư Tiêu Hao */}
             <div className="p-5 rounded-2xl dark:bg-[#12141A] bg-white border dark:border-neutral-800/80 border-stone-200 shadow-sm">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold dark:text-neutral-400 text-stone-500 uppercase">
-                  Chi Phí Vận Hành & Khác
+                  Vật Tư Tiêu Hao
                 </span>
-                <span className="text-[10px] font-bold bg-slate-500/15 text-slate-400 px-2 py-0.5 rounded-full border border-slate-500/30">
-                  {data.cashflowCards?.other?.percent || 0}%
+                <span className="text-[10px] font-bold bg-emerald-500/15 text-emerald-500 px-2 py-0.5 rounded-full border border-emerald-500/30">
+                  {data.cashflowCards?.packaging?.percent || 0}%
                 </span>
               </div>
-              <h2 className="text-2xl font-black dark:text-neutral-300 text-stone-700 mt-2">
-                {(data.cashflowCards?.other?.amount || 0).toLocaleString('vi-VN')} <span className="text-sm font-semibold">đ</span>
+              <h2 className="text-2xl font-black text-emerald-500 mt-2">
+                {(data.cashflowCards?.packaging?.amount || 0).toLocaleString('vi-VN')} <span className="text-sm font-semibold">đ</span>
               </h2>
-              <p className="text-[11px] text-stone-400 mt-1">Điện nước, mặt bằng, vật tư</p>
+              <p className="text-[11px] text-stone-400 mt-1">Túi nilong, hộp xốp, màng bọc, đũa</p>
             </div>
           </div>
 
@@ -1001,10 +1002,12 @@ export default function AdminDashboardPage() {
                         <td className="py-3 px-2">
                           <span
                             className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
-                              e.category === 'CHICKEN'
-                                ? 'bg-rose-500/15 text-rose-500 border-rose-500/30'
-                                : e.category === 'SPRING_ROLL'
+                              e.category === 'SHIPPING'
+                                ? 'bg-blue-500/15 text-blue-500 border-blue-500/30'
+                                : e.category === 'UTILITIES'
                                 ? 'bg-amber-500/15 text-amber-500 border-amber-500/30'
+                                : e.category === 'PACKAGING'
+                                ? 'bg-emerald-500/15 text-emerald-500 border-emerald-500/30'
                                 : 'bg-slate-500/15 text-slate-400 border-slate-500/30'
                             }`}
                           >
