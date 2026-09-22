@@ -608,14 +608,11 @@ function InboundReceiptsInner() {
                             className="w-full px-2.5 py-1.5 bg-slate-50 dark:bg-[#0B0D11] border border-slate-300 dark:border-neutral-800 rounded-lg font-bold text-xs text-slate-900 dark:text-white"
                           >
                             <option value="">-- Chọn sản phẩm / nguyên liệu nhập kho --</option>
-                            {singleProds.map((p: any) => {
-                              const stock = p.branchStock !== undefined ? p.branchStock : (p.stockQuantity ?? 0);
-                              return (
-                                <option key={p.id} value={p.id}>
-                                  {p.name} (Tồn tại cơ sở chọn: {stock}{p.unit ? ` ${p.unit}` : ''})
-                                </option>
-                              );
-                            })}
+                            {singleProds.map((p: any) => (
+                              <option key={p.id} value={p.id}>
+                                {p.name}
+                              </option>
+                            ))}
                           </select>
                         </td>
 

@@ -617,7 +617,7 @@ export default function InventoryOutboundPage() {
                             <option value="">-- Chọn mặt hàng cần xuất kho --</option>
                             {products.map((p) => (
                               <option key={p.id} value={p.id}>
-                                {p.name} (Tồn tại cơ sở xuất: {p.stockQuantity}{p.unit ? ` ${p.unit}` : ''})
+                                {p.name}
                               </option>
                             ))}
                           </select>
