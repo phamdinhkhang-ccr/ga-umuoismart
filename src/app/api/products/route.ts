@@ -49,6 +49,9 @@ export async function GET(request: Request) {
 
     const now = new Date();
 
+    const allBranches = await prisma.branch.findMany({ select: { id: true } });
+    const branchIdsList = allBranches.length > 0 ? allBranches.map((b) => b.id) : ['cs1', 'cs2', 'cs3'];
+
     const processedProducts = products.map((p) => {
       let branchStock = p.stockQuantity;
       let virtualComboStock = p.stockQuantity;
@@ -60,43 +63,28 @@ export async function GET(request: Request) {
               const childProd = ci.product;
               if (!childProd) return 0;
               const bi = childProd.branchInventories?.find((b) => b.branchId === branchId);
-              const childStock = bi ? bi.stock : (branchId === 'cs1' ? childProd.stockQuantity : 0);
-              const reqQty = ci.quantity || 1;
+              const childStock = bi ? bi.stock : 0;
+              const reqQty = Math.max(1, ci.quantity || 1);
               return Math.floor(Math.max(0, childStock) / reqQty);
             });
             virtualComboStock = Math.min(...possibleCombos);
             branchStock = virtualComboStock;
           } else {
-            // Calculate total virtual combo stock across all branches
-            const allBranchIds = Array.from(
-              new Set(
-                p.comboItems.flatMap((ci) => ci.product?.branchInventories?.map((bi) => bi.branchId) || [])
-              )
-            );
-            if (allBranchIds.length === 0) allBranchIds.push('cs1');
-
+            // Calculate total virtual combo stock as the sum of virtual stocks across all branches
             let sumVirtualComboStock = 0;
-            for (const bId of allBranchIds) {
+            for (const bId of branchIdsList) {
               const possibleCombosForBranch = p.comboItems.map((ci) => {
                 const childProd = ci.product;
                 if (!childProd) return 0;
                 const bi = childProd.branchInventories?.find((b) => b.branchId === bId);
-                const childStock = bi ? bi.stock : (bId === 'cs1' ? childProd.stockQuantity : 0);
-                const reqQty = ci.quantity || 1;
+                const childStock = bi ? bi.stock : 0;
+                const reqQty = Math.max(1, ci.quantity || 1);
                 return Math.floor(Math.max(0, childStock) / reqQty);
               });
-              sumVirtualComboStock += Math.min(...possibleCombosForBranch);
+              const bVirtual = p.comboItems.length > 0 ? Math.min(...possibleCombosForBranch) : 0;
+              sumVirtualComboStock += bVirtual;
             }
-
-            const systemCombos = p.comboItems.map((ci) => {
-              const childProd = ci.product;
-              if (!childProd) return 0;
-              const reqQty = ci.quantity || 1;
-              return Math.floor(Math.max(0, childProd.stockQuantity) / reqQty);
-            });
-            const fallbackTotalCombos = Math.min(...systemCombos);
-
-            virtualComboStock = Math.max(sumVirtualComboStock, fallbackTotalCombos);
+            virtualComboStock = sumVirtualComboStock;
             branchStock = virtualComboStock;
           }
         } else {
@@ -144,12 +132,15 @@ export async function GET(request: Request) {
           ? Math.round(p.price * 0.6)
           : 60000;
 
-      const effectiveStockQuantity = p.type === 'COMBO' ? virtualComboStock : p.stockQuantity;
+      const isSpecificBranch = Boolean(branchId && branchId !== 'ALL' && branchId !== 'all');
+      const effectiveStockQuantity = isSpecificBranch ? branchStock : (p.type === 'COMBO' ? virtualComboStock : p.stockQuantity);
+      const dynamicIsAvailable = p.type === 'COMBO' ? (effectiveStockQuantity > 0) : p.isAvailable;
 
       return {
         ...p,
         stockQuantity: effectiveStockQuantity,
         branchStock,
+        isAvailable: dynamicIsAvailable,
         costPrice: effectiveCostPrice,
         batchCode: effectiveBatchCode,
         effectiveExpiryDate: baseDate.toISOString(),

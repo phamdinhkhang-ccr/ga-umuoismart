@@ -156,42 +156,101 @@ export async function POST(request: NextRequest) {
       orderBy: { createdAt: 'desc' },
     });
 
-    // Create Order in PENDING status (Step 1 Telesales -> Branch)
-    const newOrder = await prisma.order.create({
-      data: {
-        orderCode,
-        customerName,
-        customerPhone,
-        deliveryAddress,
-        note: note || '',
-        paymentMethod,
-        subTotal: itemsTotal,
-        discountAmount: Number(discountAmount) || 0,
-        shippingFee: Number(shippingFee) || 0,
-        totalAmount: finalTotal,
-        cashAmount: finalCashAmount,
-        transferAmount: finalTransferAmount,
-        branchId: effectiveBranchId,
-        sellerName: sellerName || 'Thu ngân POS',
-        sourceTag: sourceTag || 'TỔNG ĐÀI TELESALES',
-        status: 'PENDING',
-        paymentStatus: 'UNPAID',
-        shiftId: activeShift ? activeShift.id : null,
-        createdById: userPayload?.username || userPayload?.fullName || 'Telesales',
-        items: {
-          create: formattedItems,
+    // 1. Pre-validation of Stock at Branch
+    for (const item of formattedItems) {
+      if (!item.productId) continue;
+      const prod = await prisma.product.findUnique({
+        where: { id: item.productId },
+        include: {
+          comboItems: {
+            include: {
+              product: {
+                include: {
+                  branchInventories: true,
+                },
+              },
+            },
+          },
+          branchInventories: true,
         },
-      },
-      include: {
-        items: true,
-      },
-    });
+      });
 
-    // Auto Stock Deduction for SINGLE & COMBO products
-    try {
+      if (!prod) continue;
+
+      if (prod.type === 'COMBO') {
+        if (!prod.comboItems || prod.comboItems.length === 0) {
+          return NextResponse.json(
+            { success: false, error: `Món combo "${item.productName}" chưa có thành phần cấu hình.` },
+            { status: 400 }
+          );
+        }
+        for (const ci of prod.comboItems) {
+          const reqQty = (ci.quantity || 1) * (item.quantity || 1);
+          const childProd = ci.product;
+          const bi = childProd?.branchInventories?.find((b) => b.branchId === effectiveBranchId);
+          const currentStock = bi ? bi.stock : 0;
+          if (currentStock < reqQty) {
+            return NextResponse.json(
+              {
+                success: false,
+                error: `Không đủ tồn kho cho Combo "${item.productName}". Thành phần "${childProd?.name || 'nguyên liệu'}" tại chi nhánh chỉ còn ${currentStock}, yêu cầu ${reqQty}.`,
+              },
+              { status: 400 }
+            );
+          }
+        }
+      } else {
+        const reqQty = item.quantity || 1;
+        const bi = prod.branchInventories?.find((b) => b.branchId === effectiveBranchId);
+        const currentStock = bi ? bi.stock : 0;
+        if (currentStock < reqQty) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: `Sản phẩm "${item.productName}" không đủ tồn kho tại chi nhánh (Còn ${currentStock}, yêu cầu ${reqQty}).`,
+            },
+            { status: 400 }
+          );
+        }
+      }
+    }
+
+    // 2. Create Order & Deduct Stock in Transaction
+    const newOrder = await prisma.$transaction(async (tx) => {
+      const order = await tx.order.create({
+        data: {
+          orderCode,
+          customerName,
+          customerPhone,
+          deliveryAddress,
+          note: note || '',
+          paymentMethod,
+          subTotal: itemsTotal,
+          discountAmount: Number(discountAmount) || 0,
+          shippingFee: Number(shippingFee) || 0,
+          totalAmount: finalTotal,
+          cashAmount: finalCashAmount,
+          transferAmount: finalTransferAmount,
+          branchId: effectiveBranchId,
+          sellerName: sellerName || 'Thu ngân POS',
+          sourceTag: sourceTag || 'TỔNG ĐÀI TELESALES',
+          status: 'PENDING',
+          paymentStatus: 'UNPAID',
+          shiftId: activeShift ? activeShift.id : null,
+          createdById: userPayload?.username || userPayload?.fullName || 'Telesales',
+          items: {
+            create: formattedItems,
+          },
+        },
+        include: {
+          items: true,
+        },
+      });
+
+      // Stock Deduction for SINGLE & COMBO products
       for (const item of formattedItems) {
         if (!item.productId) continue;
-        const prod = await prisma.product.findUnique({
+        const prod = await tx.product.findUnique({
           where: { id: item.productId },
           include: {
             comboItems: {
@@ -207,9 +266,9 @@ export async function POST(request: NextRequest) {
         if (prod.type === 'COMBO' && prod.comboItems && prod.comboItems.length > 0) {
           for (const ci of prod.comboItems) {
             const childQtyToDeduct = (ci.quantity || 1) * (item.quantity || 1);
-            
+
             // 1. Deduct from BranchInventory for component product
-            const existingBranchInv = await prisma.branchInventory.findUnique({
+            const existingBranchInv = await tx.branchInventory.findUnique({
               where: {
                 productId_branchId: {
                   productId: ci.productId,
@@ -221,7 +280,7 @@ export async function POST(request: NextRequest) {
             const currentStock = existingBranchInv ? existingBranchInv.stock : defaultStock;
             const newStock = Math.max(0, currentStock - childQtyToDeduct);
 
-            await prisma.branchInventory.upsert({
+            await tx.branchInventory.upsert({
               where: {
                 productId_branchId: {
                   productId: ci.productId,
@@ -239,7 +298,7 @@ export async function POST(request: NextRequest) {
             });
 
             // 2. Deduct from Product.stockQuantity for component product
-            await prisma.product.update({
+            await tx.product.update({
               where: { id: ci.productId },
               data: {
                 stockQuantity: { decrement: childQtyToDeduct },
@@ -250,7 +309,7 @@ export async function POST(request: NextRequest) {
           const qtyToDeduct = item.quantity || 1;
 
           // 1. Deduct from BranchInventory for single product
-          const existingBranchInv = await prisma.branchInventory.findUnique({
+          const existingBranchInv = await tx.branchInventory.findUnique({
             where: {
               productId_branchId: {
                 productId: prod.id,
@@ -261,7 +320,7 @@ export async function POST(request: NextRequest) {
           const currentStock = existingBranchInv ? existingBranchInv.stock : prod.stockQuantity;
           const newStock = Math.max(0, currentStock - qtyToDeduct);
 
-          await prisma.branchInventory.upsert({
+          await tx.branchInventory.upsert({
             where: {
               productId_branchId: {
                 productId: prod.id,
@@ -279,7 +338,7 @@ export async function POST(request: NextRequest) {
           });
 
           // 2. Deduct from Product.stockQuantity
-          await prisma.product.update({
+          await tx.product.update({
             where: { id: prod.id },
             data: {
               stockQuantity: { decrement: qtyToDeduct },
@@ -287,9 +346,9 @@ export async function POST(request: NextRequest) {
           });
         }
       }
-    } catch (stockDeductError) {
-      console.error('Stock deduction error:', stockDeductError);
-    }
+
+      return order;
+    });
 
     return NextResponse.json({ success: true, order: newOrder });
   } catch (error: any) {

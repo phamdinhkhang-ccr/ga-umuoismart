@@ -172,6 +172,7 @@ export default function AdminProductsPage() {
       if (search) params.append('search', search);
       if (selectedType !== 'all') params.append('type', selectedType);
       if (expiryFilter !== 'all') params.append('expiryFilter', expiryFilter);
+      if (branchId) params.append('branchId', branchId);
 
       const resProd = await fetch(`/api/products?${params.toString()}`);
       const dataProd = await resProd.json();
@@ -189,7 +190,7 @@ export default function AdminProductsPage() {
 
   useEffect(() => {
     fetchData();
-  }, [search, selectedType, expiryFilter]);
+  }, [search, selectedType, expiryFilter, branchId]);
 
   const handleOpenAdd = () => {
     setEditingProduct(null);
@@ -226,7 +227,7 @@ export default function AdminProductsPage() {
       expiryDate: product.expiryDate ? new Date(product.expiryDate).toISOString().slice(0, 10) : '',
       batchCode: product.batchCode || '',
       aiKeywords: product.aiKeywords || '',
-      stockQuantity: product.stockQuantity ?? 50,
+      stockQuantity: product.type === 'COMBO' ? 0 : (product.stockQuantity ?? 50),
       unit: product.unit || (product.type === 'COMBO' ? 'Combo' : 'Con'),
       comboItems: product.comboItems
         ? product.comboItems.map((ci) => ({ productId: ci.productId, quantity: ci.quantity }))
@@ -638,11 +639,11 @@ export default function AdminProductsPage() {
                           <div className="space-y-1">
                             <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full font-bold text-xs border shadow-xs ${
                               (p.stockQuantity || 0) > 0
-                                ? 'bg-purple-500/20 text-purple-300 border-purple-500/40'
+                                ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
                                 : 'bg-rose-500/20 text-rose-400 border-rose-500/40'
                             }`}>
-                              <span className={`w-2 h-2 rounded-full ${ (p.stockQuantity || 0) > 0 ? 'bg-purple-400 animate-pulse' : 'bg-rose-400' }`}></span>
-                              <span>{(p.stockQuantity || 0) > 0 ? '🍱 Còn Combo' : '⚪ Hết (Thành phần)'}</span>
+                              <span className={`w-2 h-2 rounded-full ${ (p.stockQuantity || 0) > 0 ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400' }`}></span>
+                              <span>{(p.stockQuantity || 0) > 0 ? '🟢 Còn' : '🔴 Hết'}</span>
                             </span>
                             <p className="text-[11px] font-mono text-purple-300 font-semibold">
                               Tồn: <span className="text-amber-400 font-extrabold">{p.stockQuantity ?? 0}</span> Combo
@@ -837,7 +838,7 @@ export default function AdminProductsPage() {
                               />
                               <div>
                                 <p className="font-bold text-xs text-[#FAFAF9]">
-                                  {singleP.name} <span className="text-neutral-400 font-normal">({singleP.unit || 'Con'})</span>
+                                  {singleP.name}
                                 </p>
                                 <p className="text-[10px] text-neutral-400 font-mono">
                                   Giá vốn gốc: {(singleP.costPrice || 0).toLocaleString('vi-VN')} đ
@@ -964,7 +965,7 @@ export default function AdminProductsPage() {
                     <span>TỒN KHO COMBO TỰ ĐỘNG</span>
                   </div>
                   <p className="text-[11.5px] text-neutral-300 leading-relaxed bg-purple-950/20 p-2.5 rounded-xs border border-purple-800/30">
-                    ⚡ Tồn kho của Combo được tính toán tự động dựa theo số lượng món thành phần (nguyên liệu) nhỏ nhất hiện có trong kho tại từng cơ sở. Không nhập tồn kho trực tiếp cho Combo.
+                    ⚡ Tồn kho tự động tính theo lượng tồn thực tế của các món thành phần tại từng cơ sở.
                   </p>
                 </div>
               )}

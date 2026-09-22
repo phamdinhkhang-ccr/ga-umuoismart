@@ -51,18 +51,54 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     if (body.aiKeywords !== undefined) updateData.aiKeywords = body.aiKeywords;
     if (body.unit !== undefined) updateData.unit = body.unit;
 
-    if (body.stockQuantity !== undefined) {
-      const qty = Math.max(0, Number(body.stockQuantity));
-      updateData.stockQuantity = qty;
-      updateData.isAvailable = qty === 0 ? false : (body.isAvailable !== undefined ? Boolean(body.isAvailable) : true);
-    } else if (body.isAvailable !== undefined) {
-      updateData.isAvailable = Boolean(body.isAvailable);
+    if (body.type === 'COMBO') {
+      updateData.type = 'COMBO';
+      updateData.stockQuantity = 0;
+      updateData.unit = 'Combo';
+
+      if (Array.isArray(body.comboItems)) {
+        let calculatedCostPrice = 0;
+        await prisma.comboItem.deleteMany({ where: { comboId: id } });
+        for (const item of body.comboItems) {
+          if (item.productId && Number(item.quantity) > 0) {
+            const qty = Number(item.quantity) || 1;
+            await prisma.comboItem.create({
+              data: {
+                comboId: id,
+                productId: item.productId,
+                quantity: qty,
+              },
+            });
+            const childProduct = await prisma.product.findUnique({ where: { id: item.productId } });
+            if (childProduct) {
+              calculatedCostPrice += (childProduct.costPrice || 0) * qty;
+            }
+          }
+        }
+        updateData.costPrice = calculatedCostPrice;
+      }
+    } else {
+      if (body.type !== undefined) updateData.type = body.type;
+      if (body.stockQuantity !== undefined) {
+        const qty = Math.max(0, Number(body.stockQuantity));
+        updateData.stockQuantity = qty;
+        updateData.isAvailable = qty === 0 ? false : (body.isAvailable !== undefined ? Boolean(body.isAvailable) : true);
+      } else if (body.isAvailable !== undefined) {
+        updateData.isAvailable = Boolean(body.isAvailable);
+      }
     }
 
     const updated = await prisma.product.update({
       where: { id },
       data: updateData,
-      include: { category: true },
+      include: {
+        category: true,
+        comboItems: {
+          include: {
+            product: true,
+          },
+        },
+      },
     });
 
     // 2-Way Sync to InventoryItem
