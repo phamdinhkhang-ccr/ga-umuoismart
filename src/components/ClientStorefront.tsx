@@ -117,6 +117,50 @@ export default function ClientStorefront({ categories, products, settings, initi
     settings['tiktok_url'] ||
     'https://tiktok.com';
 
+  // Dynamic Footer configuration with database CMS fallbacks
+  let footerConfigObj: any = null;
+  if (settings['CMS_FOOTER_JSON']) {
+    try {
+      footerConfigObj = JSON.parse(settings['CMS_FOOTER_JSON']);
+    } catch (e) {}
+  }
+
+  const defaultCs1Address =
+    effectiveBranches && effectiveBranches.length > 0 && effectiveBranches[0].address
+      ? effectiveBranches[0].address
+      : '6 - A20 Geleximco An Khánh - Tây Mỗ, Hoài Đức / Nam Từ Liêm, Hà Nội';
+
+  const footerBrand =
+    settings['CMS_FOOTER_BRAND'] ||
+    footerConfigObj?.brandName ||
+    settings['STORE_NAME'] ||
+    (headerConfig.logoText1 + ' ' + headerConfig.logoText2) ||
+    'GÀ Ủ MUỐI SMART';
+
+  const footerAddress =
+    settings['CMS_FOOTER_ADDRESS'] ||
+    footerConfigObj?.address ||
+    settings['STORE_ADDRESS'] ||
+    defaultCs1Address;
+
+  const footerHotline =
+    settings['CMS_FOOTER_HOTLINE'] ||
+    footerConfigObj?.hotline ||
+    settings['STORE_HOTLINE'] ||
+    headerConfig.hotline ||
+    '0396637038';
+
+  const footerEmail =
+    settings['CMS_FOOTER_EMAIL'] ||
+    footerConfigObj?.email ||
+    settings['STORE_EMAIL'] ||
+    '';
+
+  const footerHours =
+    settings['CMS_FOOTER_HOURS'] ||
+    footerConfigObj?.hours ||
+    'Thứ 2 - Chủ Nhật: 08:00 - 22:00';
+
   const handleAddToCart = (product: Product) => {
     setCart((prev) => {
       const existing = prev.find((item) => item.product.id === product.id);
@@ -350,14 +394,19 @@ export default function ClientStorefront({ categories, products, settings, initi
           {/* Col 1: Store info */}
           <div>
             <h4 className="font-extrabold dark:text-[#FAFAF9] text-stone-900 text-lg mb-3 tracking-tight">
-              {settings['STORE_NAME'] || headerConfig.logoText1 + ' ' + headerConfig.logoText2 || 'GÀ Ủ MUỐI SMART'}
+              {footerBrand}
             </h4>
             <p className="dark:text-neutral-400 text-stone-600 font-normal leading-relaxed">
-              {settings['STORE_ADDRESS'] || '88 Đường Phạm Văn Đồng, Q. Bình Thạnh, TP. Hồ Chí Minh'}
+              {footerAddress}
             </p>
             <p className="mt-3 dark:text-amber-400 text-amber-600 font-bold tracking-wider">
-              Hotline: {settings['STORE_HOTLINE'] || headerConfig.hotline || '0988.888.999'}
+              Hotline: {footerHotline}
             </p>
+            {footerEmail && (
+              <p className="mt-1 dark:text-neutral-400 text-stone-600 font-medium">
+                Email: {footerEmail}
+              </p>
+            )}
           </div>
 
           {/* Col 2: Social Media Channels */}
@@ -407,7 +456,7 @@ export default function ClientStorefront({ categories, products, settings, initi
           {/* Col 3: Service Hours */}
           <div>
             <h4 className="font-extrabold dark:text-[#FAFAF9] text-stone-900 text-sm mb-3 tracking-tight">Thời Gian Phục Vụ</h4>
-            <p className="dark:text-neutral-400 text-stone-600 font-normal">Thứ 2 - Chủ Nhật: 08:00 - 22:00</p>
+            <p className="dark:text-neutral-400 text-stone-600 font-normal">{footerHours}</p>
             <p className="dark:text-neutral-400 text-stone-600 font-normal mt-1">Giao chuẩn nhiệt hỏa tốc tận tay trong 30 phút</p>
           </div>
 

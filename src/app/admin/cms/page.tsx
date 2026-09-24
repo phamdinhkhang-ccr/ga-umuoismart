@@ -35,7 +35,7 @@ interface BranchItem {
 }
 
 export default function CMSConfigPage() {
-  const [activeTab, setActiveTab] = useState<'header' | 'hero' | 'branches' | 'story' | 'menu'>('header');
+  const [activeTab, setActiveTab] = useState<'header' | 'hero' | 'branches' | 'story' | 'footer' | 'menu'>('header');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -54,6 +54,15 @@ export default function CMSConfigPage() {
   const [heroConfig, setHeroConfig] = useState({
     line1: 'Gà Ủ Muối Smart',
     line2: 'Giao Hỏa Tốc Nội Thành',
+  });
+
+  // Tab 5: Chân Trang & Liên Hệ (Footer)
+  const [footerConfig, setFooterConfig] = useState({
+    brandName: 'GÀ Ủ MUỐI SMART',
+    address: '6 - A20 Geleximco An Khánh - Tây Mỗ, Hoài Đức / Nam Từ Liêm, Hà Nội',
+    hotline: '0396637038',
+    email: 'cskh@gaumuoismart.vn',
+    hours: 'Thứ 2 - Chủ Nhật: 08:00 - 22:00',
   });
 
   const [promoConfig, setPromoConfig] = useState({
@@ -219,6 +228,29 @@ export default function CMSConfigPage() {
               }
             } catch (e) {}
           }
+          if (s.CMS_FOOTER_JSON) {
+            try {
+              const parsed = JSON.parse(s.CMS_FOOTER_JSON);
+              if (parsed && typeof parsed === 'object') {
+                setFooterConfig((prev) => ({ ...prev, ...parsed }));
+              }
+            } catch (e) {}
+          }
+          if (s.CMS_FOOTER_ADDRESS || s.STORE_ADDRESS) {
+            setFooterConfig((prev) => ({ ...prev, address: s.CMS_FOOTER_ADDRESS || s.STORE_ADDRESS }));
+          }
+          if (s.CMS_FOOTER_HOTLINE || s.STORE_HOTLINE) {
+            setFooterConfig((prev) => ({ ...prev, hotline: s.CMS_FOOTER_HOTLINE || s.STORE_HOTLINE }));
+          }
+          if (s.CMS_FOOTER_BRAND || s.STORE_NAME) {
+            setFooterConfig((prev) => ({ ...prev, brandName: s.CMS_FOOTER_BRAND || s.STORE_NAME }));
+          }
+          if (s.CMS_FOOTER_EMAIL || s.STORE_EMAIL) {
+            setFooterConfig((prev) => ({ ...prev, email: s.CMS_FOOTER_EMAIL || s.STORE_EMAIL }));
+          }
+          if (s.CMS_FOOTER_HOURS) {
+            setFooterConfig((prev) => ({ ...prev, hours: s.CMS_FOOTER_HOURS }));
+          }
 
           if (s.CMS_FACEBOOK_URL || s.facebook_url) {
             setHeaderConfig((prev) => ({ ...prev, facebook_url: s.CMS_FACEBOOK_URL || s.facebook_url }));
@@ -293,7 +325,16 @@ export default function CMSConfigPage() {
         CMS_PROMO_JSON: JSON.stringify(promoConfig),
         CMS_BRANCHES_JSON: JSON.stringify(branchesConfig),
         CMS_STORY_JSON: JSON.stringify(storyConfig),
-        STORE_HOTLINE: headerConfig.hotline,
+        CMS_FOOTER_JSON: JSON.stringify(footerConfig),
+        CMS_FOOTER_BRAND: footerConfig.brandName,
+        CMS_FOOTER_ADDRESS: footerConfig.address,
+        CMS_FOOTER_HOTLINE: footerConfig.hotline,
+        CMS_FOOTER_EMAIL: footerConfig.email,
+        CMS_FOOTER_HOURS: footerConfig.hours,
+        STORE_NAME: footerConfig.brandName,
+        STORE_ADDRESS: footerConfig.address,
+        STORE_HOTLINE: footerConfig.hotline || headerConfig.hotline,
+        STORE_EMAIL: footerConfig.email,
         CMS_FACEBOOK_URL: headerConfig.facebook_url || 'https://facebook.com',
         CMS_ZALO_URL: headerConfig.zalo_url || 'https://zalo.me',
         CMS_TIKTOK_URL: headerConfig.tiktok_url || 'https://tiktok.com',
@@ -594,6 +635,19 @@ export default function CMSConfigPage() {
 
         <button
           type="button"
+          onClick={() => setActiveTab('footer')}
+          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+            activeTab === 'footer'
+              ? 'bg-amber-500/15 border border-amber-500/50 text-amber-300 shadow-md'
+              : 'bg-neutral-900/60 border border-neutral-800 text-neutral-400 hover:text-white hover:bg-neutral-800'
+          }`}
+        >
+          <MapPin className="w-4 h-4 stroke-[1.75]" />
+          <span>5. Chân Trang & Liên Hệ (Footer)</span>
+        </button>
+
+        <button
+          type="button"
           onClick={() => setActiveTab('menu')}
           className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
             activeTab === 'menu'
@@ -602,7 +656,7 @@ export default function CMSConfigPage() {
           }`}
         >
           <UtensilsCrossed className="w-4 h-4 stroke-[1.75]" />
-          <span>🍽️ 5. Quản Lý Thực Đơn (Menu)</span>
+          <span>🍽️ 6. Quản Lý Thực Đơn (Menu)</span>
         </button>
       </div>
 
@@ -1078,6 +1132,87 @@ export default function CMSConfigPage() {
                       <span className="text-[10px] text-neutral-400">{storyConfig.badgeSub}</span>
                     </div>
                   </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 5: FOOTER & LIÊN HỆ */}
+          {activeTab === 'footer' && (
+            <div className="bg-[#14171D] rounded-2xl border border-neutral-800 p-6 space-y-6">
+              <div className="border-b border-neutral-800/80 pb-4">
+                <h2 className="text-base font-bold text-white flex items-center gap-2">
+                  <MapPin className="w-4 h-4 text-amber-400 stroke-[2]" />
+                  Thông Tin Chân Trang & Liên Hệ (Footer Config)
+                </h2>
+                <p className="text-xs text-neutral-400 mt-1">
+                  Cấu hình địa chỉ trụ sở chính, hotline tổng đài khiếu nại, email hỗ trợ và giờ mở cửa hiển thị ở khu vực Footer chân trang Storefront
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs">
+                <div>
+                  <label className="block font-bold text-neutral-300 mb-2">1. Tên Thương Hiệu Footer (*):</label>
+                  <input
+                    type="text"
+                    required
+                    value={footerConfig.brandName}
+                    onChange={(e) => setFooterConfig({ ...footerConfig, brandName: e.target.value })}
+                    className="w-full px-4 py-3 bg-[#0B0D11] border border-neutral-800 rounded-xl font-bold text-sm text-[#FAFAF9] focus:border-amber-500 focus:outline-none"
+                    placeholder="GÀ Ủ MUỐI SMART"
+                  />
+                  <span className="text-[11px] text-neutral-500 mt-1 block">Mặc định: GÀ Ủ MUỐI SMART</span>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-neutral-300 mb-2">2. Hotline Tổng Đài / Khiếu Nại (*):</label>
+                  <input
+                    type="text"
+                    required
+                    value={footerConfig.hotline}
+                    onChange={(e) => setFooterConfig({ ...footerConfig, hotline: e.target.value })}
+                    className="w-full px-4 py-3 bg-[#0B0D11] border border-neutral-800 rounded-xl font-mono font-bold text-sm text-emerald-400 focus:border-amber-500 focus:outline-none"
+                    placeholder="0396637038"
+                  />
+                  <span className="text-[11px] text-neutral-500 mt-1 block">Mặc định: 0396637038</span>
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block font-bold text-neutral-300 mb-2">3. Địa Chỉ Trụ Sở / Tổng Đại Bản Doanh (*):</label>
+                  <textarea
+                    rows={3}
+                    required
+                    value={footerConfig.address}
+                    onChange={(e) => setFooterConfig({ ...footerConfig, address: e.target.value })}
+                    className="w-full px-4 py-3 bg-[#0B0D11] border border-neutral-800 rounded-xl text-neutral-200 leading-relaxed focus:border-amber-500 focus:outline-none"
+                    placeholder="6 - A20 Geleximco An Khánh - Tây Mỗ, Hoài Đức / Nam Từ Liêm, Hà Nội"
+                  />
+                  <span className="text-[11px] text-neutral-500 mt-1 block">Địa chỉ chính của hệ thống hiển thị dưới chân trang</span>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-neutral-300 mb-2">4. Email Hỗ Trợ (Tùy chọn):</label>
+                  <input
+                    type="email"
+                    value={footerConfig.email}
+                    onChange={(e) => setFooterConfig({ ...footerConfig, email: e.target.value })}
+                    className="w-full px-4 py-3 bg-[#0B0D11] border border-neutral-800 rounded-xl text-neutral-300 font-mono text-xs focus:border-amber-500 focus:outline-none"
+                    placeholder="cskh@gaumuoismart.vn"
+                  />
+                  <span className="text-[11px] text-neutral-500 mt-1 block">Email nhận góp ý và chăm sóc khách hàng</span>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-neutral-300 mb-2">5. Giờ Phục Vụ Toàn Hệ Thống (*):</label>
+                  <input
+                    type="text"
+                    required
+                    value={footerConfig.hours}
+                    onChange={(e) => setFooterConfig({ ...footerConfig, hours: e.target.value })}
+                    className="w-full px-4 py-3 bg-[#0B0D11] border border-neutral-800 rounded-xl text-neutral-200 font-medium text-xs focus:border-amber-500 focus:outline-none"
+                    placeholder="Thứ 2 - Chủ Nhật: 08:00 - 22:00"
+                  />
+                  <span className="text-[11px] text-neutral-500 mt-1 block">Ví dụ: Thứ 2 - Chủ Nhật: 08:00 - 22:00</span>
                 </div>
               </div>
             </div>
