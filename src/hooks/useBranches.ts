@@ -33,7 +33,10 @@ export function useBranches(onlyActive: boolean = true) {
 
   const fetchBranches = useCallback(async () => {
     try {
-      const res = await fetch(`/api/branches${onlyActive ? '?status=active' : ''}`);
+      const res = await fetch(
+        `/api/branches?${onlyActive ? 'status=active&' : ''}_t=${Date.now()}`,
+        { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } }
+      );
       const data = await res.json();
       if (data.success && Array.isArray(data.branches)) {
         globalBranchesCache = data.branches;

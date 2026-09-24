@@ -68,25 +68,16 @@ interface Product {
 }
 
 import { useBranches } from '@/hooks/useBranches';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function AdminProductsPage() {
   const { branches } = useBranches();
+  const { user: authUser } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [counts, setCounts] = useState({ total: 0, expiring: 0, expired: 0, good: 0 });
-  const [userRole, setUserRole] = useState<string>('ADMIN');
 
-  useEffect(() => {
-    fetch('/api/auth/me')
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success && data.user) {
-          setUserRole(data.user.role);
-        }
-      })
-      .catch(console.error);
-  }, []);
-
+  const userRole = authUser?.role || 'ADMIN';
   const isStaff = userRole === 'STAFF' || userRole === 'CASHIER';
 
   // Search & Filter state
@@ -173,8 +164,12 @@ export default function AdminProductsPage() {
       if (selectedType !== 'all') params.append('type', selectedType);
       if (expiryFilter !== 'all') params.append('expiryFilter', expiryFilter);
       if (branchId) params.append('branchId', branchId);
+      params.append('_t', Date.now().toString());
 
-      const resProd = await fetch(`/api/products?${params.toString()}`);
+      const resProd = await fetch(`/api/products?${params.toString()}`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' },
+      });
       const dataProd = await resProd.json();
 
       if (dataProd.success) {

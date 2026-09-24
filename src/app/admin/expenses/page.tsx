@@ -49,26 +49,13 @@ const CATEGORIES = [
   '💼 Lương & Phụ Cấp',
 ];
 
+import { useAuth } from '@/contexts/AuthContext';
+
 export default function ExpensesManagementPage() {
   const { branches } = useBranches();
+  const { user: currentUser } = useAuth();
   const [expenses, setExpenses] = useState<ExpenseRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [currentUser, setCurrentUser] = useState<{
-    role: string;
-    branchId?: string | null;
-    branchIds?: string[];
-  } | null>(null);
-
-  useEffect(() => {
-    fetch('/api/auth/me')
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success && data.user) {
-          setCurrentUser(data.user);
-        }
-      })
-      .catch(console.error);
-  }, []);
 
   const availableBranches = (currentUser?.role === 'MANAGER' && currentUser.branchIds && currentUser.branchIds.length > 0)
     ? branches.filter((b) => currentUser.branchIds!.includes(b.id) || currentUser.branchIds!.includes(b.code))
@@ -129,8 +116,12 @@ export default function ExpensesManagementPage() {
       if (branchFilter !== 'ALL') params.append('branchId', branchFilter);
       if (fromDate) params.append('fromDate', fromDate);
       if (toDate) params.append('toDate', toDate);
+      params.append('_t', Date.now().toString());
 
-      const res = await fetch(`/api/expenses?${params.toString()}`);
+      const res = await fetch(`/api/expenses?${params.toString()}`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' },
+      });
       const data = await res.json();
       if (data.success) {
         const fetchedExpenses: ExpenseRecord[] = data.expenses || [];

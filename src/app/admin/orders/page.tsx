@@ -25,6 +25,7 @@ import {
 import PhoneActionCell from '@/components/PhoneActionCell';
 import * as XLSX from 'xlsx';
 import { useBranches, detectBranchIdFromText } from '@/hooks/useBranches';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface OrderItem {
   id?: string;
@@ -138,23 +139,7 @@ export default function CentralizedOrdersPage() {
 
   const [statusTab, setStatusTab] = useState('ALL'); // ALL, PENDING, CONFIRMED, DELIVERING, COMPLETED, CANCELLED
 
-  const [currentUser, setCurrentUser] = useState<{
-    role: string;
-    branchId?: string | null;
-    branchIds?: string[];
-  } | null>(null);
-
-  useEffect(() => {
-    fetch('/api/auth/me')
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success && data.user) {
-          setCurrentUser(data.user);
-        }
-      })
-      .catch(console.error);
-  }, []);
-
+  const { user: currentUser } = useAuth();
   const { branches } = useBranches();
 
   const availableBranches = (currentUser?.role === 'MANAGER' && currentUser.branchIds && currentUser.branchIds.length > 0)
@@ -428,8 +413,12 @@ export default function CentralizedOrdersPage() {
       if (fromDate) params.append('fromDate', fromDate);
       if (toDate) params.append('toDate', toDate);
       if (statusTab !== 'ALL') params.append('status', statusTab);
+      params.append('_t', Date.now().toString());
 
-      const res = await fetch(`/api/orders?${params.toString()}`);
+      const res = await fetch(`/api/orders?${params.toString()}`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' },
+      });
       const data = await res.json();
       if (data.success) {
         setOrders(data.orders || []);
@@ -444,7 +433,10 @@ export default function CentralizedOrdersPage() {
   // 3. Fetch Products for Order Form
   const fetchProducts = async () => {
     try {
-      const res = await fetch('/api/products');
+      const res = await fetch(`/api/products?_t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' },
+      });
       const data = await res.json();
       if (data.success && Array.isArray(data.products)) {
         setDbProducts(data.products.filter((p: any) => p.isAvailable));

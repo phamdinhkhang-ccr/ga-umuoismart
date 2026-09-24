@@ -39,6 +39,7 @@ interface InventoryItem {
 }
 
 import { useBranches } from '@/hooks/useBranches';
+import { useAuth } from '@/contexts/AuthContext';
 
 const CATEGORIES = [
   'Tất cả danh mục',
@@ -49,37 +50,18 @@ const CATEGORIES = [
 
 export default function StockCheckPage() {
   const { branches } = useBranches();
+  const { user: authUser } = useAuth();
+  const router = useRouter();
+
   const BRANCHES = [
     { id: 'all', name: 'Tất cả cơ sở (Toàn hệ thống)' },
     { id: 'bep-tong', name: 'Bếp Tổng / Kho Trung Tâm' },
-    ...(branches.length > 0
-      ? branches.map((b) => ({ id: b.id, name: `${b.code ? b.code + ': ' : ''}${b.name}` }))
-      : [
-          { id: 'cs1', name: 'CS1: 12 Thái Hà, Đống Đa' },
-          { id: 'cs2', name: 'CS2: 45 Cầu Giấy, Cầu Giấy' },
-          { id: 'cs3', name: 'CS3: 88 Nguyễn Trãi, Thanh Xuân' },
-          { id: 'cs4', name: 'CS4: 102 Trần Phú, Hà Đông' },
-          { id: 'cs5', name: 'CS5: 15 Lạc Long Quân, Tây Hồ' },
-          { id: 'cs6', name: 'CS6: 66 Linh Đàm, Hoàng Mai' },
-        ]),
+    ...branches.map((b) => ({ id: b.id, name: `${b.code ? b.code + ': ' : ''}${b.name}` })),
   ];
-  const router = useRouter();
 
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [userRole, setUserRole] = useState<string>('ADMIN');
-
-  useEffect(() => {
-    fetch('/api/auth/me')
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success && data.user) {
-          setUserRole(data.user.role);
-        }
-      })
-      .catch(console.error);
-  }, []);
-
+  const userRole = authUser?.role || 'ADMIN';
   const isStaff = userRole === 'STAFF' || userRole === 'CASHIER';
 
   const [summary, setSummary] = useState<any>({
@@ -128,8 +110,12 @@ export default function StockCheckPage() {
       if (selectedBranch !== 'all') params.append('branchId', selectedBranch);
       if (selectedCategory !== 'Tất cả danh mục') params.append('category', selectedCategory);
       if (selectedStatusTab !== 'all') params.append('status', selectedStatusTab);
+      params.append('_t', Date.now().toString());
 
-      const res = await fetch(`/api/inventory?${params.toString()}`);
+      const res = await fetch(`/api/inventory?${params.toString()}`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' },
+      });
       const data = await res.json();
       if (data.success) {
         setItems(data.items || []);

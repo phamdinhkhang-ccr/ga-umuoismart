@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+export const fetchCache = 'force-no-store';
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -19,11 +24,20 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       include: { category: true },
     });
 
-    return NextResponse.json({
-      success: true,
-      product: updated,
-      message: `Đã chuyển trạng thái kho sang ${newStockState ? 'Còn Hàng' : 'Hết Hàng'}`,
-    });
+    try {
+      revalidatePath('/admin/products');
+      revalidatePath('/admin/inventory/stock');
+      revalidatePath('/admin/orders');
+    } catch (_) {}
+
+    return new NextResponse(
+      JSON.stringify({
+        success: true,
+        product: updated,
+        message: `Đã chuyển trạng thái kho sang ${newStockState ? 'Còn Hàng' : 'Hết Hàng'}`,
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } }
+    );
   } catch (error: any) {
     console.error('API PATCH /api/products/[id] error:', error);
     return NextResponse.json(
@@ -119,7 +133,16 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       }
     }
 
-    return NextResponse.json({ success: true, product: updated });
+    try {
+      revalidatePath('/admin/products');
+      revalidatePath('/admin/inventory/stock');
+      revalidatePath('/admin/orders');
+    } catch (_) {}
+
+    return new NextResponse(
+      JSON.stringify({ success: true, product: updated }),
+      { status: 200, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } }
+    );
   } catch (error: any) {
     console.error('API PUT /api/products/[id] error:', error);
     return NextResponse.json(
@@ -132,8 +155,41 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    await prisma.product.delete({ where: { id } });
-    return NextResponse.json({ success: true, message: 'Đã xóa món ăn thành công' });
+
+    await prisma.$transaction(async (tx) => {
+      const existing = await tx.product.findUnique({ where: { id } });
+      if (!existing) return;
+
+      // Clean relations
+      await tx.comboItem.deleteMany({
+        where: { OR: [{ comboId: id }, { productId: id }] },
+      });
+      await tx.branchInventory.deleteMany({
+        where: { productId: id },
+      });
+      await tx.inventoryReceiptItem.deleteMany({
+        where: { OR: [{ productId: id }, { productName: existing.name }] },
+      });
+      await tx.inventoryExportItem.deleteMany({
+        where: { OR: [{ productId: id }, { productName: existing.name }] },
+      });
+      await tx.inventoryItem.deleteMany({
+        where: { name: existing.name },
+      });
+
+      await tx.product.delete({ where: { id } });
+    });
+
+    try {
+      revalidatePath('/admin/products');
+      revalidatePath('/admin/inventory/stock');
+      revalidatePath('/admin/orders');
+    } catch (_) {}
+
+    return new NextResponse(
+      JSON.stringify({ success: true, message: 'Đã xóa món ăn thành công' }),
+      { status: 200, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } }
+    );
   } catch (error: any) {
     console.error('API DELETE /api/products/[id] error:', error);
     return NextResponse.json(

@@ -1,10 +1,9 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-  LayoutDashboard,
   Clock,
   History,
   Camera,
@@ -28,11 +27,11 @@ import {
   Flame,
   ChevronRight,
   LogOut,
-  User as UserIcon,
 } from 'lucide-react';
 
 import ThemeToggle from '@/components/ThemeToggle';
 import NotificationCenter from '@/components/NotificationCenter';
+import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 
 interface SidebarItem {
   name: string;
@@ -62,30 +61,19 @@ const navItems: SidebarItem[] = [
   { name: 'Kiểm Tra Tồn Kho', href: '/admin/inventory/stock', icon: AlertTriangle },
 ];
 
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
+function AdminLayoutInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  const { user: currentUser, loading: authLoading, logout } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [currentUser, setCurrentUser] = useState<{
-    username: string;
-    fullName: string;
-    role: string;
-  } | null>(null);
   const [lowStockCount, setLowStockCount] = useState<number>(0);
 
+  // Fetch low stock count dynamically
   useEffect(() => {
-    fetch('/api/auth/me')
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success && data.user) {
-          setCurrentUser(data.user);
-        }
-      })
-      .catch(console.error);
-  }, []);
-
-  useEffect(() => {
-    fetch('/api/inventory?lowStock=true')
+    fetch(`/api/inventory?lowStock=true&_t=${Date.now()}`, {
+      cache: 'no-store',
+      headers: { 'Cache-Control': 'no-cache' },
+    })
       .then((res) => res.json())
       .then((data) => {
         if (data.items) {
@@ -97,21 +85,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       .catch((err) => console.error(err));
   }, [pathname]);
 
-  const handleLogout = async () => {
-    try {
-      await fetch('/api/auth/logout', { method: 'POST' });
-      router.push('/login');
-      router.refresh();
-    } catch (e) {
-      router.push('/login');
-    }
-  };
+  // Compute filtered nav items strictly based on authenticated role
+  const filteredNavItems = useMemo(() => {
+    if (authLoading || !currentUser) return [];
 
-  const userRole = currentUser?.role || 'ADMIN';
-  const filteredNavItems = navItems.filter((item) => {
+    const userRole = currentUser.role || 'STAFF';
+
     if (userRole === 'TELESALES') {
-      return item.href === '/admin/orders';
+      return navItems.filter((item) => item.href === '/admin/orders');
     }
+
     if (userRole === 'STAFF' || userRole === 'CASHIER') {
       const allowedPaths = [
         '/admin/shifts/active',
@@ -121,17 +104,27 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         '/admin/products',
         '/admin/inventory/stock',
       ];
-      return allowedPaths.includes(item.href);
+      return navItems.filter((item) => allowedPaths.includes(item.href));
     }
+
     if (userRole === 'MANAGER') {
       const forbiddenPaths = ['/admin/store', '/admin/branches'];
-      return !forbiddenPaths.includes(item.href);
+      return navItems.filter((item) => !forbiddenPaths.includes(item.href));
     }
-    return true;
-  });
 
+    // ADMIN has full access
+    return navItems;
+  }, [currentUser, authLoading]);
+
+  // Route protection redirect
   useEffect(() => {
-    if (!currentUser) return;
+    if (authLoading) return;
+
+    if (!currentUser) {
+      router.push('/login');
+      return;
+    }
+
     const role = currentUser.role;
     if (role === 'TELESALES') {
       if (pathname !== '/admin/orders') {
@@ -140,11 +133,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     } else if (role === 'STAFF' || role === 'CASHIER') {
       const allowedPaths = [
         '/admin/shifts/active',
+        '/admin/shifts/open-close',
+        '/admin/shift-pos',
         '/admin/attendance',
         '/admin/orders',
         '/admin/expenses',
         '/admin/products',
         '/admin/inventory/stock',
+        '/admin/inventory-check',
       ];
       if (!allowedPaths.includes(pathname)) {
         router.push('/admin/orders');
@@ -155,7 +151,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         router.push('/admin/orders');
       }
     }
-  }, [currentUser, pathname, router]);
+  }, [currentUser, authLoading, pathname, router]);
 
   return (
     <div className="min-h-screen dark:bg-[#0F1115] bg-[#FBF9F5] dark:text-[#FAFAF9] text-stone-900 flex font-sans transition-colors duration-300">
@@ -177,80 +173,115 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             </div>
           </div>
 
-          {/* Navigation Links */}
+          {/* Navigation Links or Skeleton Loading */}
           <nav className="p-3 space-y-0.5 max-h-[calc(100vh-180px)] overflow-y-auto scrollbar-thin">
-            {filteredNavItems.map((item) => {
-              const isActive = pathname === item.href;
-              const Icon = item.icon;
-              const isStockCheckItem = item.href.includes('/inventory/stock') || item.href.includes('/inventory-check');
-
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`flex items-center justify-between px-3.5 py-2.5 rounded-lg text-xs tracking-wider transition-all duration-200 ${
-                    isActive
-                      ? 'dark:bg-neutral-900 dark:text-amber-400 bg-amber-500/10 text-amber-700 font-bold border-l-2 border-amber-500 shadow-xs'
-                      : 'dark:text-neutral-400 dark:hover:text-amber-300 dark:hover:bg-neutral-900/50 text-stone-600 hover:text-stone-900 hover:bg-stone-100 font-medium'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <Icon
-                      className={`w-4 h-4 stroke-[1.25] ${
-                        isActive ? 'dark:text-amber-400 text-amber-600' : 'dark:text-neutral-400 text-stone-500'
-                      }`}
-                    />
-                    <span>{item.name}</span>
+            {authLoading ? (
+              // Polished Skeleton Loading for Sidebar
+              <div className="space-y-2 p-1">
+                {[1, 2, 3, 4, 5, 6].map((idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-center gap-3 px-3.5 py-2.5 rounded-lg animate-pulse bg-slate-100 dark:bg-neutral-900/60"
+                  >
+                    <div className="w-4 h-4 rounded bg-slate-200 dark:bg-neutral-800 shrink-0"></div>
+                    <div className="h-3 bg-slate-200 dark:bg-neutral-800 rounded w-3/4"></div>
                   </div>
-                  {isStockCheckItem && lowStockCount > 0 ? (
-                    <span className="flex items-center gap-1 text-[9px] font-bold bg-rose-500/20 text-rose-400 border border-rose-500/40 px-2 py-0.5 rounded-full animate-pulse">
-                      <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
-                      {lowStockCount} sắp hết
-                    </span>
-                  ) : (
-                    item.badge && (
-                      <span className="text-[9px] font-semibold dark:bg-amber-500/10 dark:text-amber-400 bg-amber-500/15 text-amber-700 px-2 py-0.5 rounded-full border dark:border-amber-500/30 border-amber-500/40">
-                        {item.badge}
+                ))}
+              </div>
+            ) : (
+              filteredNavItems.map((item) => {
+                const isActive = pathname === item.href;
+                const Icon = item.icon;
+                const isStockCheckItem =
+                  item.href.includes('/inventory/stock') || item.href.includes('/inventory-check');
+
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={`flex items-center justify-between px-3.5 py-2.5 rounded-lg text-xs tracking-wider transition-all duration-200 ${
+                      isActive
+                        ? 'dark:bg-neutral-900 dark:text-amber-400 bg-amber-500/10 text-amber-700 font-bold border-l-2 border-amber-500 shadow-xs'
+                        : 'dark:text-neutral-400 dark:hover:text-amber-300 dark:hover:bg-neutral-900/50 text-stone-600 hover:text-stone-900 hover:bg-stone-100 font-medium'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <Icon
+                        className={`w-4 h-4 stroke-[1.25] ${
+                          isActive ? 'dark:text-amber-400 text-amber-600' : 'dark:text-neutral-400 text-stone-500'
+                        }`}
+                      />
+                      <span>{item.name}</span>
+                    </div>
+                    {isStockCheckItem && lowStockCount > 0 ? (
+                      <span className="flex items-center gap-1 text-[9px] font-bold bg-rose-500/20 text-rose-400 border border-rose-500/40 px-2 py-0.5 rounded-full animate-pulse">
+                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                        {lowStockCount} sắp hết
                       </span>
-                    )
-                  )}
-                </Link>
-              );
-            })}
+                    ) : (
+                      item.badge && (
+                        <span className="text-[9px] font-semibold dark:bg-amber-500/10 dark:text-amber-400 bg-amber-500/15 text-amber-700 px-2 py-0.5 rounded-full border dark:border-amber-500/30 border-amber-500/40">
+                          {item.badge}
+                        </span>
+                      )
+                    )}
+                  </Link>
+                );
+              })
+            )}
           </nav>
         </div>
 
         {/* Footer User Info & Logout Button */}
         <div className="p-4 border-t dark:border-neutral-800/80 border-stone-200/80 dark:bg-[#0B0D11] bg-stone-50 space-y-3">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-600 to-amber-400 text-neutral-950 font-black flex items-center justify-center text-xs shadow-xs shrink-0">
-                {currentUser?.role === 'ADMIN' ? 'AD' : 'ST'}
+            {authLoading ? (
+              <div className="flex items-center gap-2.5 animate-pulse w-full">
+                <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-neutral-800 shrink-0"></div>
+                <div className="space-y-1.5 flex-1">
+                  <div className="h-3 bg-slate-200 dark:bg-neutral-800 rounded w-2/3"></div>
+                  <div className="h-2.5 bg-slate-200 dark:bg-neutral-800 rounded w-1/3"></div>
+                </div>
               </div>
-              <div className="min-w-0">
-                <span className="font-bold dark:text-white text-stone-900 text-xs truncate block">
-                  {currentUser?.fullName || 'Quản Trị Viên'}
-                </span>
-                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-sm inline-block ${
-                  currentUser?.role === 'ADMIN' ? 'bg-amber-500/20 dark:text-amber-300 text-amber-700 border border-amber-500/30' : 'bg-emerald-500/20 dark:text-emerald-300 text-emerald-700 border border-emerald-500/30'
-                }`}>
-                  {currentUser?.role || 'ADMIN'}
-                </span>
-              </div>
-            </div>
+            ) : (
+              <>
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-600 to-amber-400 text-neutral-950 font-black flex items-center justify-center text-xs shadow-xs shrink-0">
+                    {currentUser?.role === 'ADMIN' ? 'AD' : 'ST'}
+                  </div>
+                  <div className="min-w-0">
+                    <span className="font-bold dark:text-white text-stone-900 text-xs truncate block">
+                      {currentUser?.fullName || currentUser?.username || 'Người Dùng'}
+                    </span>
+                    <span
+                      className={`text-[9px] font-bold px-1.5 py-0.5 rounded-sm inline-block ${
+                        currentUser?.role === 'ADMIN'
+                          ? 'bg-amber-500/20 dark:text-amber-300 text-amber-700 border border-amber-500/30'
+                          : 'bg-emerald-500/20 dark:text-emerald-300 text-emerald-700 border border-emerald-500/30'
+                      }`}
+                    >
+                      {currentUser?.role || 'STAFF'}
+                    </span>
+                  </div>
+                </div>
 
-            <button
-              onClick={handleLogout}
-              title="Đăng xuất khỏi hệ thống"
-              className="p-2 dark:text-neutral-400 text-stone-500 hover:text-rose-500 dark:hover:bg-neutral-900 hover:bg-stone-200 rounded-lg transition-colors cursor-pointer shrink-0"
-            >
-              <LogOut className="w-4 h-4 stroke-[1.75]" />
-            </button>
+                <button
+                  onClick={logout}
+                  title="Đăng xuất khỏi hệ thống"
+                  className="p-2 dark:text-neutral-400 text-stone-500 hover:text-rose-500 dark:hover:bg-neutral-900 hover:bg-stone-200 rounded-lg transition-colors cursor-pointer shrink-0"
+                >
+                  <LogOut className="w-4 h-4 stroke-[1.75]" />
+                </button>
+              </>
+            )}
           </div>
 
           <div className="flex items-center justify-between text-[11px] dark:text-neutral-500 text-stone-500 pt-2 border-t dark:border-neutral-800/60 border-stone-200">
             <span>Modern POS v2.0</span>
-            <Link href="/" className="dark:hover:text-amber-400 hover:text-amber-600 font-bold dark:text-amber-500/90 text-amber-700 transition">
+            <Link
+              href="/"
+              className="dark:hover:text-amber-400 hover:text-amber-600 font-bold dark:text-amber-500/90 text-amber-700 transition"
+            >
               Trang Khách ↗
             </Link>
           </div>
@@ -265,7 +296,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               <div className="flex items-center justify-between pb-4 border-b dark:border-neutral-800 border-stone-200 mb-4">
                 <div className="flex items-center gap-2">
                   <Flame className="w-6 h-6 text-amber-500 stroke-[1.5]" />
-                  <span className="font-extrabold dark:text-white text-stone-900 text-base tracking-tight">Gà Ủ Muối Smart</span>
+                  <span className="font-extrabold dark:text-white text-stone-900 text-base tracking-tight">
+                    Gà Ủ Muối Smart
+                  </span>
                 </div>
                 <button onClick={() => setMobileOpen(false)} className="dark:text-neutral-400 text-stone-500">
                   <X className="w-6 h-6 stroke-[1.5]" />
@@ -299,12 +332,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
             <div className="pt-4 border-t dark:border-neutral-800 border-stone-200 flex items-center justify-between">
               <div className="text-xs">
-                <span className="font-bold dark:text-white text-stone-900 block">{currentUser?.fullName || 'Quản Trị Viên'}</span>
-                <span className="text-[10px] text-amber-500">{currentUser?.role || 'ADMIN'}</span>
+                <span className="font-bold dark:text-white text-stone-900 block">
+                  {currentUser?.fullName || currentUser?.username || 'Người Dùng'}
+                </span>
+                <span className="text-[10px] text-amber-500">{currentUser?.role || 'STAFF'}</span>
               </div>
               <button
-                onClick={handleLogout}
-                className="px-3 py-1.5 bg-rose-500/10 border border-rose-500/30 text-rose-500 rounded-lg text-xs font-semibold"
+                onClick={logout}
+                className="px-3 py-1.5 bg-rose-500/10 border border-rose-500/30 text-rose-500 rounded-lg text-xs font-semibold cursor-pointer"
               >
                 Đăng Xuất
               </button>
@@ -347,24 +382,30 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <NotificationCenter />
 
             <div className="flex items-center gap-3 pl-3 border-l dark:border-neutral-800 border-stone-200">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-600 to-amber-400 text-neutral-950 font-black flex items-center justify-center text-xs shadow-xs">
-                {currentUser?.role === 'ADMIN' ? 'AD' : 'ST'}
-              </div>
-              <div className="hidden md:block">
-                <span className="font-bold dark:text-[#FAFAF9] text-stone-900 block leading-tight">
-                  {currentUser?.fullName || 'Quản Trị Viên'}
-                </span>
-                <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
-                  {currentUser?.role === 'ADMIN' ? 'Quản trị hệ thống' : 'Nhân viên vận hành'}
-                </span>
-              </div>
-              <button
-                onClick={handleLogout}
-                title="Đăng xuất"
-                className="hidden md:flex p-2 dark:text-neutral-400 text-stone-500 hover:text-rose-500 dark:hover:bg-neutral-900 hover:bg-stone-100 rounded-lg transition-colors cursor-pointer"
-              >
-                <LogOut className="w-4 h-4 stroke-[1.75]" />
-              </button>
+              {authLoading ? (
+                <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-neutral-800 animate-pulse"></div>
+              ) : (
+                <>
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-600 to-amber-400 text-neutral-950 font-black flex items-center justify-center text-xs shadow-xs">
+                    {currentUser?.role === 'ADMIN' ? 'AD' : 'ST'}
+                  </div>
+                  <div className="hidden md:block">
+                    <span className="font-bold dark:text-[#FAFAF9] text-stone-900 block leading-tight">
+                      {currentUser?.fullName || currentUser?.username || 'Người Dùng'}
+                    </span>
+                    <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+                      {currentUser?.role === 'ADMIN' ? 'Quản trị hệ thống' : 'Nhân viên vận hành'}
+                    </span>
+                  </div>
+                  <button
+                    onClick={logout}
+                    title="Đăng xuất"
+                    className="hidden md:flex p-2 dark:text-neutral-400 text-stone-500 hover:text-rose-500 dark:hover:bg-neutral-900 hover:bg-stone-100 rounded-lg transition-colors cursor-pointer"
+                  >
+                    <LogOut className="w-4 h-4 stroke-[1.75]" />
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </header>
@@ -373,5 +414,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <main className="flex-1 overflow-y-auto p-6 lg:p-8">{children}</main>
       </div>
     </div>
+  );
+}
+
+export default function AdminLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <AuthProvider>
+      <AdminLayoutInner>{children}</AdminLayoutInner>
+    </AuthProvider>
   );
 }
