@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { X, Search, Clock, CheckCircle2, Truck, XCircle, PackageCheck } from 'lucide-react';
+import { X, Search, Clock, CheckCircle2, Truck, XCircle, PackageCheck, ChefHat } from 'lucide-react';
 import PhoneActionCell from '@/components/PhoneActionCell';
 
 interface OrderLookupModalProps {
@@ -72,37 +72,36 @@ export default function OrderLookupModal({ isOpen, onClose, initialQuery }: Orde
     }
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'PENDING':
-        return (
-          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-400 bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/30">
-            <Clock className="w-3.5 h-3.5 stroke-[1.5]" /> Chờ Xác Nhận
-          </span>
-        );
-      case 'PROCESSING':
-      case 'DELIVERING':
-        return (
-          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-400 bg-blue-500/10 px-3 py-1 rounded-full border border-blue-500/30">
-            <Truck className="w-3.5 h-3.5 animate-pulse stroke-[1.5]" /> Đang Giao Hàng
-          </span>
-        );
-      case 'COMPLETED':
-        return (
-          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/30">
-            <CheckCircle2 className="w-3.5 h-3.5 stroke-[1.5]" /> Đã Hoàn Thành
-          </span>
-        );
-      case 'CANCELLED':
-        return (
-          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-400 bg-rose-500/10 px-3 py-1 rounded-full border border-rose-500/30">
-            <XCircle className="w-3.5 h-3.5 stroke-[1.5]" /> Đã Hủy
-          </span>
-        );
-      default:
-        return <span className="text-xs font-semibold bg-neutral-800 text-neutral-300 px-2.5 py-1 rounded-full">{status}</span>;
-    }
+const ORDER_STATUS_MAP: Record<string, { label: string; color: string; icon: React.ElementType }> = {
+  PENDING: { label: 'Chờ xác nhận', color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30', icon: Clock },
+  CONFIRMED: { label: 'Đã xác nhận', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30', icon: CheckCircle2 },
+  PREPARING: { label: 'Đang chuẩn bị món', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30', icon: ChefHat },
+  COOKING: { label: 'Đang chuẩn bị món', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30', icon: ChefHat },
+  PROCESSING: { label: 'Đang chuẩn bị', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30', icon: Clock },
+  SHIPPING: { label: 'Đang giao hàng', color: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30', icon: Truck },
+  DELIVERING: { label: 'Đang giao hàng', color: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30', icon: Truck },
+  COMPLETED: { label: 'Đã hoàn thành', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30', icon: CheckCircle2 },
+  CANCELLED: { label: 'Đã hủy', color: 'bg-rose-500/20 text-rose-400 border-rose-500/30', icon: XCircle },
+};
+
+const renderOrderStatus = (status: string) => {
+  const normalizedStatus = (status || '').toUpperCase();
+  const config = ORDER_STATUS_MAP[normalizedStatus] || {
+    label: status || 'Chờ xác nhận',
+    color: 'bg-neutral-800 text-neutral-300 border-neutral-700',
+    icon: Clock,
   };
+  const Icon = config.icon || Clock;
+
+  return (
+    <span className={`inline-flex items-center gap-1.5 text-[11px] font-bold px-3 py-1 rounded-full border ${config.color}`}>
+      <Icon className={`w-3.5 h-3.5 stroke-[2] ${normalizedStatus === 'DELIVERING' || normalizedStatus === 'SHIPPING' ? 'animate-pulse' : ''}`} />
+      <span>{config.label}</span>
+    </span>
+  );
+};
+
+const getStatusBadge = renderOrderStatus;
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-neutral-950/80 backdrop-blur-sm flex items-center justify-center p-4">
