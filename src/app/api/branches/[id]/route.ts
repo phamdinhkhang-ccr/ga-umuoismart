@@ -17,7 +17,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   try {
     const { id } = await params;
     const body = await req.json();
-    const { name, city, address, hotline, openingHours, managerName, googleMapsUrl, image, isActive, code } = body;
+    const { name, city, address, hotline, openingHours, managerName, googleMapsUrl, image, imageUrl, isActive, code } = body;
 
     const existing = await prisma.branch.findUnique({ where: { id } });
     if (!existing) {
@@ -27,25 +27,46 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     const updated = await prisma.branch.update({
       where: { id },
       data: {
-        code: code || existing.code,
-        name: name || existing.name,
-        city: city || existing.city,
-        address: address || existing.address,
-        hotline: hotline || existing.hotline,
-        openingHours: openingHours || existing.openingHours,
-        managerName: managerName !== undefined ? managerName : existing.managerName,
-        googleMapsUrl: googleMapsUrl !== undefined ? googleMapsUrl : existing.googleMapsUrl,
-        image: image !== undefined ? image : existing.image,
+        code: code ? code.trim() : existing.code,
+        name: name ? name.trim() : existing.name,
+        city: city !== undefined ? (city ? city.trim() : 'Hà Nội') : existing.city,
+        address: address ? address.trim() : existing.address,
+        hotline: hotline ? hotline.trim() : existing.hotline,
+        openingHours: openingHours !== undefined ? (openingHours ? openingHours.trim() : '08:00 - 22:30') : existing.openingHours,
+        managerName: managerName !== undefined ? (managerName ? managerName.trim() : null) : existing.managerName,
+        googleMapsUrl: googleMapsUrl !== undefined ? (googleMapsUrl ? googleMapsUrl.trim() : null) : existing.googleMapsUrl,
+        image: image !== undefined ? image : (imageUrl !== undefined ? imageUrl : existing.image),
         isActive: isActive !== undefined ? Boolean(isActive) : existing.isActive,
       },
     });
+
+    // Auto-sync branch inventories if missing
+    try {
+      const products = await prisma.product.findMany({ select: { id: true } });
+      for (const prod of products) {
+        await prisma.branchInventory.upsert({
+          where: {
+            productId_branchId: {
+              productId: prod.id,
+              branchId: id,
+            },
+          },
+          update: {},
+          create: {
+            productId: prod.id,
+            branchId: id,
+            stock: 0,
+          },
+        });
+      }
+    } catch (e) {}
 
     triggerRevalidation();
     return NextResponse.json({ success: true, branch: updated });
   } catch (error: any) {
     console.error('API PUT /api/branches/[id] error:', error);
     return NextResponse.json(
-      { success: false, message: 'Lỗi server khi cập nhật cơ sở' },
+      { success: false, message: error?.message || 'Lỗi server khi cập nhật cơ sở' },
       { status: 500 }
     );
   }
