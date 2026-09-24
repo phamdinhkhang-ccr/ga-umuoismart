@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import prisma from '@/lib/prisma';
+import { verifyJWT } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
   try {
@@ -73,12 +75,23 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get('auth_token')?.value;
+    const userPayload = token ? await verifyJWT(token) : null;
+
+    if (!userPayload || (userPayload.role !== 'ADMIN' && userPayload.role !== 'MANAGER')) {
+      return NextResponse.json(
+        { success: false, error: 'Tài khoản nhân viên không có quyền tạo phiếu nhập kho (403 Forbidden).' },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json();
     const {
       branchId = 'cs1',
       supplierName,
       receivedAt,
-      creatorName = 'Quản lý kho',
+      creatorName = userPayload.fullName || userPayload.username || 'Quản lý kho',
       paymentMethod = 'CASH', // CASH, BANK_TRANSFER, CREDIT
       notes,
       items,

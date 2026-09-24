@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { prisma, ensureDbInitialized } from '@/lib/prisma';
 import { normalizeImageUrl } from '@/lib/image-helper';
+import { verifyJWT } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -189,6 +191,17 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get('auth_token')?.value;
+    const userPayload = token ? await verifyJWT(token) : null;
+
+    if (!userPayload || (userPayload.role !== 'ADMIN' && userPayload.role !== 'MANAGER')) {
+      return NextResponse.json(
+        { success: false, error: 'Tài khoản nhân viên không có quyền tạo hoặc chỉnh sửa món ăn (403 Forbidden).' },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json();
     const {
       name,
@@ -340,6 +353,17 @@ export async function POST(request: Request) {
 
 export async function PUT(request: Request) {
   try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get('auth_token')?.value;
+    const userPayload = token ? await verifyJWT(token) : null;
+
+    if (!userPayload || (userPayload.role !== 'ADMIN' && userPayload.role !== 'MANAGER')) {
+      return NextResponse.json(
+        { success: false, error: 'Tài khoản nhân viên không có quyền chỉnh sửa món ăn (403 Forbidden).' },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json();
     const {
       id,
@@ -451,6 +475,17 @@ export async function PUT(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get('auth_token')?.value;
+    const userPayload = token ? await verifyJWT(token) : null;
+
+    if (!userPayload || (userPayload.role !== 'ADMIN' && userPayload.role !== 'MANAGER')) {
+      return NextResponse.json(
+        { success: false, error: 'Tài khoản nhân viên không có quyền xóa món ăn (403 Forbidden).' },
+        { status: 403 }
+      );
+    }
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
 

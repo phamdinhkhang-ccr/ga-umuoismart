@@ -444,6 +444,38 @@ function InboundReceiptsInner() {
     XLSX.writeFile(workbook, `Lich_Su_Nhap_Kho_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
+  if (isStaff) {
+    return (
+      <div className="p-8 max-w-4xl mx-auto text-center space-y-6">
+        <div className="w-20 h-20 rounded-3xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center mx-auto text-rose-500 shadow-xl">
+          <AlertTriangle className="w-10 h-10" />
+        </div>
+        <div className="space-y-2">
+          <h1 className="text-2xl font-black dark:text-white text-stone-900 tracking-tight">
+            TRUY CẬP BỊ TỪ CHỐI (ACCESS DENIED)
+          </h1>
+          <p className="text-sm dark:text-neutral-400 text-stone-600 max-w-lg mx-auto">
+            Tài khoản của bạn (<span className="font-bold text-amber-500">{currentUser?.role || 'STAFF'}</span>) không có quyền tạo phiếu Nhập Kho. Quyền hạn này chỉ dành riêng cho Quản lý & Admin.
+          </p>
+        </div>
+        <div className="pt-4 flex items-center justify-center gap-3">
+          <a
+            href="/admin/inventory/stock"
+            className="inline-flex items-center gap-2 px-6 py-3 bg-neutral-800 hover:bg-neutral-700 text-white font-bold rounded-xl text-sm transition-all shadow-md"
+          >
+            Xem Tồn Kho Cơ Sở
+          </a>
+          <a
+            href="/admin/orders"
+            className="inline-flex items-center gap-2 px-6 py-3 bg-amber-500 hover:bg-amber-600 text-neutral-950 font-bold rounded-xl text-sm transition-all shadow-md"
+          >
+            Quay Về Bán Hàng POS
+          </a>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8 font-sans pb-16">
       {/* Toast Notification Banner */}

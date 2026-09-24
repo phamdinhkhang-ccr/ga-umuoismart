@@ -95,14 +95,14 @@ function AdminLayoutInner({ children }: { children: React.ReactNode }) {
       return navItems.filter((item) => item.href === '/admin/orders');
     }
 
-    if (userRole === 'STAFF' || userRole === 'CASHIER') {
+    if (userRole === 'STAFF' || userRole === 'CASHIER' || userRole === 'USER') {
       const allowedPaths = [
-        '/admin/shifts/active',
-        '/admin/attendance',
         '/admin/orders',
-        '/admin/expenses',
-        '/admin/products',
+        '/admin/shifts/active',
+        '/admin/shifts',
         '/admin/inventory/stock',
+        '/admin/expenses',
+        '/admin/attendance',
       ];
       return navItems.filter((item) => allowedPaths.includes(item.href));
     }
@@ -130,15 +130,15 @@ function AdminLayoutInner({ children }: { children: React.ReactNode }) {
       if (pathname !== '/admin/orders') {
         router.push('/admin/orders');
       }
-    } else if (role === 'STAFF' || role === 'CASHIER') {
+    } else if (role === 'STAFF' || role === 'CASHIER' || role === 'USER') {
       const allowedPaths = [
+        '/admin/orders',
+        '/admin/shift-pos',
         '/admin/shifts/active',
         '/admin/shifts/open-close',
-        '/admin/shift-pos',
+        '/admin/shifts',
         '/admin/attendance',
-        '/admin/orders',
         '/admin/expenses',
-        '/admin/products',
         '/admin/inventory/stock',
         '/admin/inventory-check',
       ];

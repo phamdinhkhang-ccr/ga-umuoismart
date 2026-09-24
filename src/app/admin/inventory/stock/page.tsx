@@ -62,7 +62,7 @@ export default function StockCheckPage() {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const userRole = authUser?.role || 'ADMIN';
-  const isStaff = userRole === 'STAFF' || userRole === 'CASHIER';
+  const isStaff = userRole === 'STAFF' || userRole === 'CASHIER' || userRole === 'USER';
 
   const [summary, setSummary] = useState<any>({
     totalInventoryValue: 0,
@@ -73,9 +73,16 @@ export default function StockCheckPage() {
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedBranch, setSelectedBranch] = useState('all');
+  const [selectedBranch, setSelectedBranch] = useState(authUser?.branchId || 'all');
   const [selectedCategory, setSelectedCategory] = useState('Tất cả danh mục');
   const [selectedStatusTab, setSelectedStatusTab] = useState<'all' | 'alert' | 'safe'>('all');
+
+  // Auto lock branch for staff
+  useEffect(() => {
+    if (isStaff && authUser?.branchId) {
+      setSelectedBranch(authUser.branchId);
+    }
+  }, [isStaff, authUser]);
 
   // Modal State for Add Item
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -378,13 +385,15 @@ export default function StockCheckPage() {
             Xuất File Cân Kho Excel
           </button>
 
-          <button
-            onClick={() => setIsAddModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 hover:from-amber-400 hover:to-amber-600 text-neutral-950 font-bold text-xs uppercase tracking-wider rounded-xs shadow-lg transition-all cursor-pointer"
-          >
-            <Plus className="w-4 h-4 stroke-[2]" />
-            Thêm Vật Tư Mới
-          </button>
+          {!isStaff && (
+            <button
+              onClick={() => setIsAddModalOpen(true)}
+              className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 hover:from-amber-400 hover:to-amber-600 text-neutral-950 font-bold text-xs uppercase tracking-wider rounded-xs shadow-lg transition-all cursor-pointer"
+            >
+              <Plus className="w-4 h-4 stroke-[2]" />
+              Thêm Vật Tư Mới
+            </button>
+          )}
         </div>
       </div>
 
@@ -502,12 +511,14 @@ export default function StockCheckPage() {
               <span className="text-amber-300 font-semibold">
                 Đang xem tồn kho tại: <strong className="text-amber-400">{BRANCHES.find(b => b.id === selectedBranch)?.name || selectedBranch}</strong>
               </span>
-              <button
-                onClick={() => setSelectedBranch('all')}
-                className="ml-auto text-amber-400/70 hover:text-amber-300 text-[10px] underline cursor-pointer"
-              >
-                Xem toàn hệ thống
-              </button>
+              {!isStaff && (
+                <button
+                  onClick={() => setSelectedBranch('all')}
+                  className="ml-auto text-amber-400/70 hover:text-amber-300 text-[10px] underline cursor-pointer"
+                >
+                  Xem toàn hệ thống
+                </button>
+              )}
             </div>
           )}
 
@@ -529,14 +540,16 @@ export default function StockCheckPage() {
               </label>
               <select
                 value={selectedBranch}
+                disabled={isStaff && Boolean(authUser?.branchId)}
                 onChange={(e) => setSelectedBranch(e.target.value)}
                 className={`w-full px-3 py-2.5 bg-[#0B0D11] rounded-xs focus:outline-none font-semibold ${
                   selectedBranch !== 'all'
                     ? 'border border-amber-500/60 text-amber-400 focus:border-amber-500'
                     : 'border border-neutral-800 text-neutral-300 focus:border-amber-500'
-                }`}
+                } ${isStaff && Boolean(authUser?.branchId) ? 'opacity-70 cursor-not-allowed' : ''}`}
               >
-                {BRANCHES.map((b) => (
+                {!isStaff && <option value="all">Tất cả cơ sở (Toàn hệ thống)</option>}
+                {BRANCHES.filter((b) => !isStaff || b.id === authUser?.branchId).map((b) => (
                   <option key={b.id} value={b.id}>
                     {b.name}
                   </option>
@@ -685,35 +698,41 @@ export default function StockCheckPage() {
 
                       {/* Actions */}
                       <td className="py-3 px-4 text-center">
-                        <div className="flex items-center justify-center gap-2">
-                          <button
-                            onClick={() => handleQuickImport(item)}
-                            title="Tạo phiếu nhập hàng nhanh"
-                            className={`px-2.5 py-1 rounded-xs font-bold text-[11px] transition-colors flex items-center gap-1 cursor-pointer shadow-xs ${
-                              isAlert
-                                ? 'bg-amber-500 text-neutral-950 hover:bg-amber-400'
-                                : 'bg-neutral-700 text-neutral-200 hover:bg-amber-500 hover:text-neutral-950'
-                            }`}
-                          >
-                            <Zap className="w-3.5 h-3.5" /> Nhập Nhanh
-                          </button>
+                        {isStaff ? (
+                          <span className="px-2.5 py-1 bg-neutral-800 text-neutral-400 text-[11px] font-semibold rounded-xs border border-neutral-700">
+                            👁️ Chỉ xem
+                          </span>
+                        ) : (
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              onClick={() => handleQuickImport(item)}
+                              title="Tạo phiếu nhập hàng nhanh"
+                              className={`px-2.5 py-1 rounded-xs font-bold text-[11px] transition-colors flex items-center gap-1 cursor-pointer shadow-xs ${
+                                isAlert
+                                  ? 'bg-amber-500 text-neutral-950 hover:bg-amber-400'
+                                  : 'bg-neutral-700 text-neutral-200 hover:bg-amber-500 hover:text-neutral-950'
+                              }`}
+                            >
+                              <Zap className="w-3.5 h-3.5" /> Nhập Nhanh
+                            </button>
 
-                          <button
-                            onClick={() => openAuditModal(item)}
-                            title="Cân kho thực tế & chỉnh định mức"
-                            className="p-1.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white rounded-xs transition-colors cursor-pointer"
-                          >
-                            <ClipboardCheck className="w-4 h-4" />
-                          </button>
+                            <button
+                              onClick={() => openAuditModal(item)}
+                              title="Cân kho thực tế & chỉnh định mức"
+                              className="p-1.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white rounded-xs transition-colors cursor-pointer"
+                            >
+                              <ClipboardCheck className="w-4 h-4" />
+                            </button>
 
-                          <button
-                            onClick={() => handleDeleteItem(item)}
-                            title="Xóa vật tư"
-                            className="p-1.5 bg-neutral-800 hover:bg-rose-500/20 text-neutral-400 hover:text-rose-400 rounded-xs transition-colors cursor-pointer"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
+                            <button
+                              onClick={() => handleDeleteItem(item)}
+                              title="Xóa vật tư"
+                              className="p-1.5 bg-neutral-800 hover:bg-rose-500/20 text-neutral-400 hover:text-rose-400 rounded-xs transition-colors cursor-pointer"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   );
@@ -725,7 +744,7 @@ export default function StockCheckPage() {
       </div>
 
       {/* MODAL 1: ADD NEW ITEM MODAL */}
-      {isAddModalOpen && (
+      {!isStaff && isAddModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
           <div className="bg-[#14171D] border border-neutral-800 rounded-xs max-w-lg w-full p-6 space-y-5 shadow-2xl relative text-xs text-[#FAFAF9]">
             <button
@@ -894,7 +913,7 @@ export default function StockCheckPage() {
       )}
 
       {/* MODAL 2: STOCKTAKE AUDIT MODAL (CÂN KHO THỰC TẾ) */}
-      {selectedItemForAudit && (
+      {!isStaff && selectedItemForAudit && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
           <div className="bg-[#14171D] border border-neutral-800 rounded-xs max-w-md w-full p-6 space-y-5 shadow-2xl relative text-xs text-[#FAFAF9]">
             <button
