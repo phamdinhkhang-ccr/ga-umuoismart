@@ -173,6 +173,14 @@ function InboundReceiptsInner() {
     setTimeout(() => setToastMessage(''), 4000);
   };
 
+  useEffect(() => {
+    if (branches && branches.length > 0) {
+      if (!branches.some((b) => b.id === branchId || b.code === branchId)) {
+        setBranchId(branches[0].id);
+      }
+    }
+  }, [branches]);
+
   // Pre-fill form from URL query params (from "Nhập Nhanh" on stock check page)
   useEffect(() => {
     if (urlParamsApplied) return;

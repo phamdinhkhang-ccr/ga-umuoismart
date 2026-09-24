@@ -104,12 +104,44 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const rawBranchId = (branchId || 'cs1').trim();
+    let validBranch = await prisma.branch.findFirst({
+      where: {
+        OR: [
+          { id: rawBranchId },
+          { code: rawBranchId },
+          { code: rawBranchId.toLowerCase() },
+          { code: rawBranchId.toUpperCase() },
+          { name: rawBranchId },
+        ],
+      },
+    });
+
+    if (!validBranch) {
+      validBranch = await prisma.branch.findFirst({
+        where: { isActive: true },
+        orderBy: { sortOrder: 'asc' },
+      });
+      if (!validBranch) {
+        validBranch = await prisma.branch.findFirst();
+      }
+    }
+
+    if (!validBranch) {
+      return NextResponse.json(
+        { success: false, error: 'Không tìm thấy cơ sở chi nhánh hợp lệ trong hệ thống. Vui lòng tạo chi nhánh trước khi nhập kho!' },
+        { status: 400 }
+      );
+    }
+
+    const validBranchId = validBranch.id;
+
     // Auto-generate receipt code #NK-XXXXX
     const randomDigits = Math.floor(10000 + Math.random() * 90000);
     const receiptCode = `#NK-${randomDigits}`;
 
     let totalAmount = 0;
-    const formattedItems = items.map((item: any) => {
+    const preppedItems = items.map((item: any) => {
       const qty = Number(item.quantity) || 1;
       const price = Number(item.unitPrice) || 0;
       const subtotal = qty * price;
@@ -117,7 +149,7 @@ export async function POST(request: NextRequest) {
 
       return {
         productId: item.productId || null,
-        productName: item.productName || 'Món ăn/Nguyên liệu',
+        productName: (item.productName || 'Món ăn/Nguyên liệu').trim(),
         unit: item.unit || 'Con',
         batchCode: item.batchCode || null,
         expiryDate: item.expiryDate ? new Date(item.expiryDate) : null,
@@ -128,37 +160,19 @@ export async function POST(request: NextRequest) {
     });
 
     const paymentStatus = paymentMethod === 'CREDIT' ? 'UNPAID' : 'PAID';
-    const targetBranch = branchId || 'cs1';
 
     // Execute full stock receipt & multi-branch stock update atomically via Prisma Transaction
     const newReceipt = await prisma.$transaction(async (tx) => {
-      // 1. Save InventoryReceipt
-      const receipt = await tx.inventoryReceipt.create({
-        data: {
-          receiptCode,
-          branchId: targetBranch,
-          supplierName,
-          totalAmount,
-          paymentMethod,
-          paymentStatus,
-          creatorName: creatorName || 'Quản lý kho',
-          notes: notes || '',
-          receivedAt: receivedAt ? new Date(receivedAt) : new Date(),
-          items: {
-            create: formattedItems,
-          },
-        },
-        include: {
-          items: true,
-        },
-      });
-
-      // 2. 2-Way Sync: Update Products, BranchInventory, InventoryItems & InventoryTransactions
-      for (const item of formattedItems) {
-        // Find or create Product
-        let targetProduct = item.productId
-          ? await tx.product.findUnique({ where: { id: item.productId } })
-          : await tx.product.findFirst({ where: { name: item.productName } });
+      // 1. Ensure all Products exist first to get valid productIds
+      const receiptItemsData = [];
+      for (const item of preppedItems) {
+        let targetProduct = null;
+        if (item.productId) {
+          targetProduct = await tx.product.findUnique({ where: { id: item.productId } });
+        }
+        if (!targetProduct && item.productName) {
+          targetProduct = await tx.product.findFirst({ where: { name: item.productName } });
+        }
 
         if (!targetProduct) {
           targetProduct = await tx.product.create({
@@ -173,6 +187,11 @@ export async function POST(request: NextRequest) {
           });
         }
 
+        receiptItemsData.push({
+          ...item,
+          productId: targetProduct.id,
+        });
+
         // Update total stockQuantity and costPrice in Product table
         await tx.product.update({
           where: { id: targetProduct.id },
@@ -184,12 +203,12 @@ export async function POST(request: NextRequest) {
           },
         });
 
-        // Sync Per-Branch Stock in BranchInventory Table (Upsert)
+        // Sync Per-Branch Stock in BranchInventory Table (Upsert with guaranteed valid foreign keys)
         await tx.branchInventory.upsert({
           where: {
             productId_branchId: {
               productId: targetProduct.id,
-              branchId: targetBranch,
+              branchId: validBranchId,
             },
           },
           update: {
@@ -197,7 +216,7 @@ export async function POST(request: NextRequest) {
           },
           create: {
             productId: targetProduct.id,
-            branchId: targetBranch,
+            branchId: validBranchId,
             stock: item.quantity,
           },
         });
@@ -225,7 +244,7 @@ export async function POST(request: NextRequest) {
               itemId: targetInvItem.id,
               type: 'IN',
               quantity: item.quantity,
-              note: `Nhập kho từ phiếu ${receiptCode} tại ${targetBranch} (NCC: ${supplierName})`,
+              note: `Nhập kho từ phiếu ${receiptCode} tại ${validBranch.name} (NCC: ${supplierName})`,
             },
           });
         } else {
@@ -238,7 +257,7 @@ export async function POST(request: NextRequest) {
               minQuantity: 10,
               costPerUnit: item.unitPrice,
               supplier: supplierName,
-              branchId: targetBranch,
+              branchId: validBranchId,
             },
           });
 
@@ -247,27 +266,49 @@ export async function POST(request: NextRequest) {
               itemId: createdInvItem.id,
               type: 'IN',
               quantity: item.quantity,
-              note: `Tạo mới & Nhập kho từ phiếu ${receiptCode} tại ${targetBranch} (NCC: ${supplierName})`,
+              note: `Nhập kho ban đầu từ phiếu ${receiptCode} tại ${validBranch.name} (NCC: ${supplierName})`,
             },
           });
         }
       }
 
-      // 3. Stock receipt only manages stock and AP to supplier, never creating Expense/cashbook records
+      // 2. Save InventoryReceipt with validated productIds
+      const receipt = await tx.inventoryReceipt.create({
+        data: {
+          receiptCode,
+          branchId: validBranchId,
+          supplierName,
+          totalAmount,
+          paymentMethod,
+          paymentStatus,
+          creatorName: creatorName || 'Quản lý kho',
+          notes: notes || '',
+          receivedAt: receivedAt ? new Date(receivedAt) : new Date(),
+          items: {
+            create: receiptItemsData,
+          },
+        },
+        include: {
+          items: true,
+        },
+      });
 
       return receipt;
     });
 
-    // 4. Revalidate stock check pages for instant sync
+    // 3. Revalidate stock check pages for instant sync
     try {
       revalidatePath('/admin/inventory/stock');
       revalidatePath('/admin/inventory-check');
       revalidatePath('/admin/inventory/inbound');
+      revalidatePath('/admin/inventory/import');
+      revalidatePath('/admin/products');
+      revalidatePath('/');
     } catch (_) {}
 
     return NextResponse.json({
       success: true,
-      message: `Tạo phiếu nhập kho ${receiptCode} thành công với ${formattedItems.length} mặt hàng!`,
+      message: `Tạo phiếu nhập kho ${receiptCode} thành công với ${preppedItems.length} mặt hàng!`,
       receipt: newReceipt,
     });
   } catch (error: any) {

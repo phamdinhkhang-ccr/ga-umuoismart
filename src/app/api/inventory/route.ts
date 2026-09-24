@@ -33,6 +33,26 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    let resolvedBranchId = targetBranchId;
+    let targetBranchName = targetBranchId;
+    if (targetBranchId !== 'all') {
+      const bObj = await prisma.branch.findFirst({
+        where: {
+          OR: [
+            { id: targetBranchId },
+            { code: targetBranchId },
+            { code: targetBranchId.toLowerCase() },
+            { code: targetBranchId.toUpperCase() },
+            { name: targetBranchId },
+          ],
+        },
+      });
+      if (bObj) {
+        resolvedBranchId = bObj.id;
+        targetBranchName = bObj.name;
+      }
+    }
+
     // 1. Fetch active Products with branch inventories and category
     const products = await prisma.product.findMany({
       include: {
@@ -63,7 +83,9 @@ export async function GET(request: NextRequest) {
 
       let currentQty = 0;
       if (targetBranchId !== 'all') {
-        const bi = prod.branchInventories?.find((b) => b.branchId === targetBranchId);
+        const bi = prod.branchInventories?.find(
+          (b) => b.branchId === resolvedBranchId || b.branchId === targetBranchId
+        );
         currentQty = bi ? bi.stock : 0;
       } else {
         currentQty =
@@ -80,7 +102,7 @@ export async function GET(request: NextRequest) {
         name: prod.name,
         unit: prod.unit || 'Kg',
         category: prod.category?.name || 'Thịt gà & Phụ phẩm tươi',
-        branchId: targetBranchId === 'all' ? 'Toàn hệ thống' : targetBranchId,
+        branchId: targetBranchId === 'all' ? 'Toàn hệ thống' : (targetBranchName || targetBranchId),
         currentQuantity: currentQty,
         minQuantity: 5,
         costPerUnit: prod.costPrice || Math.round(prod.price * 0.6) || 0,
@@ -252,18 +274,41 @@ export async function POST(request: NextRequest) {
             },
           });
 
+          let validBranch = null;
           if (branchId && branchId !== 'all') {
+            validBranch = await prisma.branch.findFirst({
+              where: {
+                OR: [
+                  { id: branchId },
+                  { code: branchId },
+                  { code: branchId.toLowerCase() },
+                  { code: branchId.toUpperCase() },
+                ],
+              },
+            });
+          }
+
+          if (validBranch) {
             await prisma.branchInventory.upsert({
               where: {
-                productId_branchId: { productId: newProd.id, branchId },
+                productId_branchId: { productId: newProd.id, branchId: validBranch.id },
               },
               update: { stock: Number(currentQuantity) || 0 },
               create: {
                 productId: newProd.id,
-                branchId,
+                branchId: validBranch.id,
                 stock: Number(currentQuantity) || 0,
               },
             });
+          } else {
+            const allB = await prisma.branch.findMany();
+            for (const b of allB) {
+              await prisma.branchInventory.upsert({
+                where: { productId_branchId: { productId: newProd.id, branchId: b.id } },
+                update: { stock: Number(currentQuantity) || 0 },
+                create: { productId: newProd.id, branchId: b.id, stock: Number(currentQuantity) || 0 },
+              });
+            }
           }
         }
       } catch (prodErr) {
@@ -288,6 +333,20 @@ export async function POST(request: NextRequest) {
       const actualQty = Number(currentQuantity) >= 0 ? Number(currentQuantity) : 0;
       const effectiveBranch = branchId || 'all';
 
+      let validBranch = null;
+      if (effectiveBranch !== 'all') {
+        validBranch = await prisma.branch.findFirst({
+          where: {
+            OR: [
+              { id: effectiveBranch },
+              { code: effectiveBranch },
+              { code: effectiveBranch.toLowerCase() },
+              { code: effectiveBranch.toUpperCase() },
+            ],
+          },
+        });
+      }
+
       // Update BranchInventory or Product
       const matchingProds = await prisma.product.findMany({
         where: {
@@ -296,18 +355,18 @@ export async function POST(request: NextRequest) {
       });
 
       for (const prod of matchingProds) {
-        if (effectiveBranch !== 'all') {
+        if (validBranch) {
           await prisma.branchInventory.upsert({
             where: {
               productId_branchId: {
                 productId: prod.id,
-                branchId: effectiveBranch,
+                branchId: validBranch.id,
               },
             },
             update: { stock: actualQty },
             create: {
               productId: prod.id,
-              branchId: effectiveBranch,
+              branchId: validBranch.id,
               stock: actualQty,
             },
           });
@@ -319,6 +378,24 @@ export async function POST(request: NextRequest) {
               isAvailable: actualQty > 0,
             },
           });
+
+          const allB = await prisma.branch.findMany();
+          for (const b of allB) {
+            await prisma.branchInventory.upsert({
+              where: {
+                productId_branchId: {
+                  productId: prod.id,
+                  branchId: b.id,
+                },
+              },
+              update: { stock: actualQty },
+              create: {
+                productId: prod.id,
+                branchId: b.id,
+                stock: actualQty,
+              },
+            });
+          }
         }
       }
 

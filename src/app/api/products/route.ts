@@ -306,7 +306,34 @@ export async function POST(request: Request) {
       }
     }
 
-    // Direction 1: Auto-sync to InventoryItem
+    // Direction 1: Auto-sync to BranchInventory for all branches
+    try {
+      const branches = await prisma.branch.findMany();
+      if (branches && branches.length > 0) {
+        for (const b of branches) {
+          await prisma.branchInventory.upsert({
+            where: {
+              productId_branchId: {
+                productId: product.id,
+                branchId: b.id,
+              },
+            },
+            update: {
+              stock: stockQtyNum,
+            },
+            create: {
+              productId: product.id,
+              branchId: b.id,
+              stock: stockQtyNum,
+            },
+          });
+        }
+      }
+    } catch (bInvErr) {
+      console.warn('Auto sync product to BranchInventory failed:', bInvErr);
+    }
+
+    // Direction 2: Auto-sync to InventoryItem
     try {
       const invItem = await prisma.inventoryItem.findFirst({ where: { name } });
       if (invItem) {
@@ -334,6 +361,7 @@ export async function POST(request: Request) {
       revalidatePath('/');
       revalidatePath('/admin/products');
       revalidatePath('/admin/inventory/stock');
+      revalidatePath('/admin/inventory-check');
     } catch (_) {}
 
     return NextResponse.json({ success: true, product });
@@ -441,6 +469,29 @@ export async function PUT(request: Request) {
         const qtyNum = Math.max(0, Number(stockQuantity));
         updateData.stockQuantity = qtyNum;
         updateData.isAvailable = qtyNum === 0 ? false : (isAvailable !== undefined ? Boolean(isAvailable) : true);
+
+        // Sync BranchInventory
+        try {
+          const branches = await tx.branch.findMany();
+          for (const b of branches) {
+            await tx.branchInventory.upsert({
+              where: {
+                productId_branchId: {
+                  productId: id,
+                  branchId: b.id,
+                },
+              },
+              update: {
+                stock: qtyNum,
+              },
+              create: {
+                productId: id,
+                branchId: b.id,
+                stock: qtyNum,
+              },
+            });
+          }
+        } catch (_) {}
       } else if (isAvailable !== undefined) {
         updateData.isAvailable = Boolean(isAvailable);
       }
