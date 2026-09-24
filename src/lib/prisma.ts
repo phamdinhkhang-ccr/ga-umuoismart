@@ -462,20 +462,7 @@ export async function ensureDbInitialized() {
       );
     `);
 
-    // 21. Check if Branch exists, auto-insert default branch cs1 if missing
-    try {
-      const branchCountRes: any = await prisma.$queryRawUnsafe(`SELECT COUNT(*) as count FROM Branch`);
-      const bCount = Array.isArray(branchCountRes) && branchCountRes[0] ? Number(branchCountRes[0].count) : 0;
-      if (bCount === 0) {
-        const now = new Date().toISOString();
-        await prisma.$executeRawUnsafe(`
-          INSERT INTO Branch (id, code, name, city, address, hotline, openingHours, managerName, isActive, sortOrder, createdAt, updatedAt)
-          VALUES ('cs1', 'CS-HQ', 'Cơ Sở Tổng Hệ Thống', 'Hà Nội', '6 - A20 Geleximco An Khánh - Tây Mỗ, Nam Từ Liêm, Hà Nội', '0988.888.999', '08:00 - 22:00', 'Quản lý cơ sở', 1, 1, '${now}', '${now}')
-        `);
-      }
-    } catch (bErr) {}
-
-    // 22. Check if admin user exists, auto-insert if missing
+    // 21. Check if admin user exists, auto-insert if missing
     const userCount: any = await prisma.$queryRawUnsafe(`SELECT COUNT(*) as count FROM User`);
     const count = Array.isArray(userCount) && userCount[0] ? Number(userCount[0].count) : 0;
 
