@@ -1,5 +1,17 @@
 import { NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
+
+function triggerRevalidation() {
+  try {
+    revalidatePath('/');
+    revalidatePath('/admin/branches');
+    revalidatePath('/admin/store');
+    revalidatePath('/admin/inventory/import');
+    revalidatePath('/admin/inventory/export');
+    revalidatePath('/checkout');
+  } catch (e) {}
+}
 
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -28,6 +40,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       },
     });
 
+    triggerRevalidation();
     return NextResponse.json({ success: true, branch: updated });
   } catch (error: any) {
     console.error('API PUT /api/branches/[id] error:', error);
@@ -55,6 +68,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       data: { isActive: newStatus },
     });
 
+    triggerRevalidation();
     return NextResponse.json({
       success: true,
       branch: updated,
@@ -79,6 +93,7 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
 
     await prisma.branch.delete({ where: { id } });
 
+    triggerRevalidation();
     return NextResponse.json({ success: true, message: 'Đã xóa cơ sở thành công' });
   } catch (error: any) {
     console.error('API DELETE /api/branches/[id] error:', error);

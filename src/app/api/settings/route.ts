@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import prisma from '@/lib/prisma';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export async function GET(request: Request) {
   try {
@@ -50,6 +54,14 @@ export async function POST(request: Request) {
         }
       }
     }
+
+    try {
+      revalidatePath('/');
+      revalidatePath('/admin/cms');
+      revalidatePath('/admin/store');
+      revalidatePath('/admin/branches');
+      revalidatePath('/checkout');
+    } catch (e) {}
 
     return NextResponse.json({ success: true, message: 'Đã lưu cấu hình thành công' });
   } catch (error: any) {

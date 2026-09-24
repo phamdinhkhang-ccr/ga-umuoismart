@@ -10,82 +10,14 @@ import AIChatbotWidget from './AIChatbotWidget';
 import { PhoneCall, MapPin, Clock, Navigation } from 'lucide-react';
 import { useBranches } from '../hooks/useBranches';
 
-const STORES = [
-  {
-    id: 'cs1',
-    badge: 'CƠ SỞ 01',
-    name: 'Cơ Sở Cầu Giấy',
-    district: 'Q. Cầu Giấy',
-    address: '12 Đường Cầu Giấy, Q. Cầu Giấy, Hà Nội',
-    phone: '0988.888.901',
-    hours: '09:00 - 22:00',
-    image: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=600&q=80',
-    mapsUrl: 'https://maps.google.com/?q=12+C%E1%BA%A7u+Gi%E1%BA%A5y+H%C3%A0+N%E1%BB%99i',
-  },
-  {
-    id: 'cs2',
-    badge: 'CƠ SỞ 02',
-    name: 'Cơ Sở Đống Đa',
-    district: 'Q. Đống Đa',
-    address: '88 Phố Xã Đàn, Q. Đống Đa, Hà Nội',
-    phone: '0988.888.902',
-    hours: '09:00 - 22:00',
-    image: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=600&q=80',
-    mapsUrl: 'https://maps.google.com/?q=88+X%C3%A3+%C4%90%C3%A0n+H%C3%A0+N%E1%BB%99i',
-  },
-  {
-    id: 'cs3',
-    badge: 'CƠ SỞ 03',
-    name: 'Cơ Sở Hai Bà Trưng',
-    district: 'Q. Hai Bà Trưng',
-    address: '156 Phố Huế, Q. Hai Bà Trưng, Hà Nội',
-    phone: '0988.888.903',
-    hours: '09:00 - 22:00',
-    image: 'https://images.unsplash.com/photo-1550966871-3ed3cdb5ed0c?w=600&q=80',
-    mapsUrl: 'https://maps.google.com/?q=156+Ph%E1%BB%91+Hu%E1%BA%BF+H%C3%A0+N%E1%BB%99i',
-  },
-  {
-    id: 'cs4',
-    badge: 'CƠ SỞ 04',
-    name: 'Cơ Sở Thanh Xuân',
-    district: 'Q. Thanh Xuân',
-    address: '45 Đường Nguyễn Trãi, Q. Thanh Xuân, Hà Nội',
-    phone: '0988.888.904',
-    hours: '09:00 - 22:00',
-    image: 'https://images.unsplash.com/photo-1537047902294-62a40c20a6ae?w=600&q=80',
-    mapsUrl: 'https://maps.google.com/?q=45+Nguy%E1%BB%85n+Tr%C3%A3i+H%C3%A0+N%E1%BB%99i',
-  },
-  {
-    id: 'cs5',
-    badge: 'CƠ SỞ 05',
-    name: 'Cơ Sở Tây Hồ',
-    district: 'Q. Tây Hồ',
-    address: '210 Đường Lạc Long Quân, Q. Tây Hồ, Hà Nội',
-    phone: '0988.888.905',
-    hours: '09:00 - 22:00',
-    image: 'https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=600&q=80',
-    mapsUrl: 'https://maps.google.com/?q=210+L%E1%BA%A1c+Long+Qu%C3%A2n+H%C3%A0+N%E1%BB%99i',
-  },
-  {
-    id: 'cs6',
-    badge: 'CƠ SỞ 06',
-    name: 'Cơ Sở Nam Từ Liêm',
-    district: 'Q. Nam Từ Liêm',
-    address: '18 Đường Lê Đức Thọ, Q. Nam Từ Liêm, Hà Nội',
-    phone: '0988.888.906',
-    hours: '09:00 - 22:00',
-    image: 'https://images.unsplash.com/photo-1552566626-52f8b828add9?w=600&q=80',
-    mapsUrl: 'https://maps.google.com/?q=18+L%C3%AA+%C4%90%E1%BB%A9c+Th%E1%BB%8D+H%C3%A0+N%E1%BB%99i',
-  },
-];
-
 interface ClientStorefrontProps {
   categories: Category[];
   products: Product[];
   settings: Record<string, string>;
+  initialBranches?: any[];
 }
 
-export default function ClientStorefront({ categories, products, settings }: ClientStorefrontProps) {
+export default function ClientStorefront({ categories, products, settings, initialBranches = [] }: ClientStorefrontProps) {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isLookupOpen, setIsLookupOpen] = useState(false);
@@ -149,29 +81,19 @@ export default function ClientStorefront({ categories, products, settings }: Cli
   }
 
   const { branches } = useBranches();
+  const effectiveBranches = branches && branches.length > 0 ? branches : initialBranches;
 
-  let storeList = branches.length > 0
-    ? branches.map((b) => ({
-        id: b.id,
-        badge: b.code || `CƠ SỞ ${b.id.toUpperCase()}`,
-        name: b.name,
-        district: b.district || b.address || '',
-        address: b.address || '',
-        phone: b.phone || '0988.888.901',
-        hours: b.hours || '09:00 - 22:00',
-        image: b.image || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=600&q=80',
-        mapsUrl: `https://maps.google.com/?q=${encodeURIComponent(b.address || b.name)}`,
-      }))
-    : STORES;
-
-  if (settings['CMS_BRANCHES_JSON']) {
-    try {
-      const parsed = JSON.parse(settings['CMS_BRANCHES_JSON']);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        storeList = parsed;
-      }
-    } catch (e) {}
-  }
+  const storeList = effectiveBranches.map((b: any) => ({
+    id: b.id,
+    badge: b.code || `CƠ SỞ ${b.id.toUpperCase()}`,
+    name: b.name,
+    district: b.city || b.district || '',
+    address: b.address || '',
+    phone: b.hotline || b.phone || '0988.888.901',
+    hours: b.openingHours || b.hours || '08:00 - 22:00',
+    isActive: b.isActive !== false,
+    mapsUrl: b.googleMapsUrl || `https://maps.google.com/?q=${encodeURIComponent(b.address || b.name)}`,
+  }));
 
   // Parse Social Media URLs with robust fallbacks
   const facebookUrl =
@@ -346,12 +268,24 @@ export default function ClientStorefront({ categories, products, settings }: Cli
                       {store.badge}
                     </span>
 
-                    <span className="inline-flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-1 rounded-full text-[11px] text-emerald-400 font-medium">
+                    <span
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium ${
+                        store.isActive
+                          ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400'
+                          : 'bg-rose-500/10 border border-rose-500/30 text-rose-400'
+                      }`}
+                    >
                       <span className="relative flex h-2 w-2">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                        {store.isActive && (
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        )}
+                        <span
+                          className={`relative inline-flex rounded-full h-2 w-2 ${
+                            store.isActive ? 'bg-emerald-500' : 'bg-rose-500'
+                          }`}
+                        ></span>
                       </span>
-                      <span>Đang mở cửa</span>
+                      <span>{store.isActive ? 'Đang mở cửa' : 'Tạm đóng cửa'}</span>
                     </span>
                   </div>
 

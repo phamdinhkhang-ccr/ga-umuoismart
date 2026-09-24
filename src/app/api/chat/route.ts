@@ -343,7 +343,7 @@ HƯỚNG DẪN QUAN TRỌNG:
       if (lower.includes('cơ sở') || lower.includes('địa chỉ') || lower.includes('ở đâu') || lower.includes('quán') || lower.includes('chi nhánh')) {
         const branchLines = branches.length > 0
           ? branches.map((b) => `• **${b.code?.toUpperCase() || 'CS'} - ${b.name}**: ${b.address} (Hotline: ${b.hotline})`).join('\n')
-          : '• **CS1 Cầu Giấy**: 12 Đường Cầu Giấy (Hotline: 0988.888.901)\n• **CS2 Đống Đa**: 88 Phố Xã Đàn (Hotline: 0988.888.902)';
+          : '• **CS1 - Vin Smart city**: 6 - A20 Geleximco An Khánh - Tây Mỗ (Hotline: 0988.888.901)\n• **CS2 - Trần Cung - Cầu Giấy**: 5 - 208 Trần Cung (Hotline: 0988.888.902)';
         fallbackReply = `Dạ **Gà Ủ Muối Smart** hiện có các cơ sở sẵn sàng phục vụ hỏa tốc:\n\n${branchLines}\n\nQuý khách có thể ghé trực tiếp hoặc đặt giao tận nơi hỏa tốc trong 30 phút ạ!`;
       } else if (lower.includes('stk') || lower.includes('ngân hàng') || lower.includes('chuyển khoản') || lower.includes('tài khoản')) {
         const payLines = paymentConfigs.length > 0

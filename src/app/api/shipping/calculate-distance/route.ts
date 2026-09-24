@@ -7,12 +7,12 @@ export const revalidate = 0;
 // Coordinates for standard Hanoi locations / districts
 const KNOWN_COORDINATES: Record<string, { lat: number; lng: number }> = {
   // Branches
-  'cs1': { lat: 21.0333, lng: 105.7983 }, // 12 Cầu Giấy
-  'cs2': { lat: 21.0167, lng: 105.8333 }, // 88 Xã Đàn
-  'cs3': { lat: 21.0150, lng: 105.8520 }, // 156 Phố Huế
-  'cs4': { lat: 20.9980, lng: 105.8120 }, // 45 Nguyễn Trãi
-  'cs5': { lat: 21.0550, lng: 105.8100 }, // 210 Lạc Long Quân
-  'cs6': { lat: 21.0250, lng: 105.7680 }, // 18 Lê Đức Thọ / Nam Từ Liêm
+  'cs1': { lat: 20.9990, lng: 105.7360 }, // 6 - A20 Geleximco An Khánh / Vin Smart City
+  'cs2': { lat: 21.0505, lng: 105.7915 }, // 5 - 208 Trần Cung / Cầu Giấy
+  'cs3': { lat: 20.9705, lng: 105.8300 }, // Kiot 4 Nơ 7B Bán Đảo Linh Đàm
+  'cs4': { lat: 20.9985, lng: 105.8625 }, // 51 Yên Lạc - Vĩnh Tuy / Hai Bà Trưng
+  'cs5': { lat: 20.9920, lng: 105.9520 }, // SP10.11 Hải Âu 9 - Vin Ocean Park 1
+  'cs6': { lat: 10.5850, lng: 107.0600 }, // Phú Mỹ - Vũng Tàu
 
   // Districts & Areas
   'cau giay': { lat: 21.033, lng: 105.798 },

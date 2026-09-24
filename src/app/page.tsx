@@ -2,6 +2,7 @@ import React from 'react';
 import prisma from '@/lib/prisma';
 import ClientStorefront from '@/components/ClientStorefront';
 
+export const dynamic = 'force-dynamic';
 export const revalidate = 0; // Fresh dynamic rendering
 
 export default async function HomePage() {
@@ -18,18 +19,33 @@ export default async function HomePage() {
     category: { id: string; name: string; slug: string } | null;
   }> = [];
   let rawSettings: Array<{ key: string; value: string }> = [];
+  let rawBranches: Array<{
+    id: string;
+    code: string;
+    name: string;
+    city: string;
+    address: string;
+    hotline: string;
+    openingHours: string;
+    managerName: string | null;
+    googleMapsUrl: string | null;
+    image: string | null;
+    isActive: boolean;
+    sortOrder: number;
+  }> = [];
 
   try {
-    categories = await prisma.category.findMany({
-      orderBy: { name: 'asc' },
-    });
+    const [dbCategories, dbProducts, dbSettings, dbBranches] = await Promise.all([
+      prisma.category.findMany({ orderBy: { name: 'asc' } }),
+      prisma.product.findMany({ include: { category: true }, orderBy: { createdAt: 'desc' } }),
+      prisma.setting.findMany(),
+      prisma.branch.findMany({ where: { isActive: true }, orderBy: { sortOrder: 'asc' } }),
+    ]);
 
-    rawProducts = await prisma.product.findMany({
-      include: { category: true },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    rawSettings = await prisma.setting.findMany();
+    categories = dbCategories;
+    rawProducts = dbProducts;
+    rawSettings = dbSettings;
+    rawBranches = dbBranches;
   } catch (error) {
     console.error('Error loading storefront data from database:', error);
   }
@@ -65,11 +81,27 @@ export default async function HomePage() {
       : undefined,
   }));
 
+  const serializedBranches = rawBranches.map((b) => ({
+    id: b.id,
+    code: b.code,
+    name: b.name,
+    city: b.city,
+    address: b.address,
+    hotline: b.hotline,
+    openingHours: b.openingHours,
+    managerName: b.managerName || undefined,
+    googleMapsUrl: b.googleMapsUrl || undefined,
+    image: b.image || undefined,
+    isActive: b.isActive,
+    sortOrder: b.sortOrder,
+  }));
+
   return (
     <ClientStorefront
       categories={serializedCategories}
       products={serializedProducts}
       settings={settingsMap}
+      initialBranches={serializedBranches}
     />
   );
 }

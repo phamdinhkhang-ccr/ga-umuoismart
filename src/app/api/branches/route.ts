@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
@@ -8,79 +9,79 @@ export const fetchCache = 'force-no-store';
 const INITIAL_BRANCHES = [
   {
     code: 'cs1',
-    name: 'CS Cầu Giấy - Hà Nội',
+    name: 'Cơ Sở Vin Smart city',
     city: 'Hà Nội',
-    address: '123 Cầu Giấy, Q. Cầu Giấy, Hà Nội',
-    hotline: '0988 123 456',
-    openingHours: '08:00 - 22:30',
-    managerName: 'Nguyễn Văn Anh',
-    googleMapsUrl: 'https://maps.google.com',
-    image: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=500&q=80',
+    address: '6 - A20 Geleximco An Khánh - Tây Mỗ, Hoài Đức, Hà Nội',
+    hotline: '0988.888.901',
+    openingHours: '08:00 - 22:00',
+    managerName: 'Quản lý Vin Smart City',
+    googleMapsUrl: 'https://maps.google.com/?q=6+A20+Geleximco+An+Khanh+Tay+Mo+Ha+Noi',
+    image: null,
     isActive: true,
     sortOrder: 1,
   },
   {
     code: 'cs2',
-    name: 'CS Hoàn Kiếm - Hà Nội',
+    name: 'Cơ Sở Trần Cung - Cầu Giấy',
     city: 'Hà Nội',
-    address: '45 Lý Thường Kiệt, Q. Hoàn Kiếm, Hà Nội',
-    hotline: '0988 234 567',
-    openingHours: '08:00 - 23:00',
-    managerName: 'Trần Thị Bình',
-    googleMapsUrl: 'https://maps.google.com',
-    image: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=500&q=80',
+    address: '5 - 208 Trần Cung, Q. Cầu Giấy, Hà Nội',
+    hotline: '0988.888.902',
+    openingHours: '08:00 - 22:00',
+    managerName: 'Quản lý Trần Cung',
+    googleMapsUrl: 'https://maps.google.com/?q=208+Tran+Cung+Cau+Giay+Ha+Noi',
+    image: null,
     isActive: true,
     sortOrder: 2,
   },
   {
     code: 'cs3',
-    name: 'CS Đống Đa - Hà Nội',
+    name: 'Cơ Sở Bán Đảo Linh Đàm',
     city: 'Hà Nội',
-    address: '88 Chùa Bộc, Q. Đống Đa, Hà Nội',
-    hotline: '0988 345 678',
+    address: 'Kiot 4 Nơ 7B Bán Đảo Linh Đàm, Q. Hoàng Mai, Hà Nội',
+    hotline: '0988.888.903',
     openingHours: '08:00 - 22:00',
-    managerName: 'Lê Văn Cường',
-    googleMapsUrl: 'https://maps.google.com',
-    image: 'https://images.unsplash.com/photo-1552566626-52f8b828add9?w=500&q=80',
+    managerName: 'Quản lý Linh Đàm',
+    googleMapsUrl: 'https://maps.google.com/?q=Kiot+4+No+7B+Ban+Dao+Linh+Dam+Hoang+Mai+Ha+Noi',
+    image: null,
     isActive: true,
     sortOrder: 3,
   },
   {
     code: 'cs4',
-    name: 'CS Quận 1 - TP. HCM',
-    city: 'TP. Hồ Chí Minh',
-    address: '120 Nguyễn Trãi, Phường Bến Thành, Q.1, TP. Hồ Chí Minh',
-    hotline: '0909 111 222',
-    openingHours: '09:00 - 23:00',
-    managerName: 'Phạm Hoàng Dũng',
-    googleMapsUrl: 'https://maps.google.com',
-    image: 'https://images.unsplash.com/photo-1537047902294-62a40c20a6ae?w=500&q=80',
+    name: 'Cơ Sở Hai Bà Trưng',
+    city: 'Hà Nội',
+    address: '51 Yên Lạc - Vĩnh Tuy, Q. Hai Bà Trưng, Hà Nội',
+    hotline: '0988.888.904',
+    openingHours: '08:00 - 22:00',
+    managerName: 'Quản lý Hai Bà Trưng',
+    googleMapsUrl: 'https://maps.google.com/?q=51+Yen+Lac+Vinh+Tuy+Hai+Ba+Trung+Ha+Noi',
+    image: null,
     isActive: true,
     sortOrder: 4,
   },
   {
     code: 'cs5',
-    name: 'CS Bình Thạnh - TP. HCM',
-    city: 'TP. Hồ Chí Minh',
-    address: '54 Đinh Bộ Lĩnh, P.26, Q. Bình Thạnh, TP. Hồ Chí Minh',
-    hotline: '0909 333 444',
-    openingHours: '08:30 - 22:30',
-    managerName: 'Võ Thị Hương',
-    googleMapsUrl: 'https://maps.google.com',
-    image: 'https://images.unsplash.com/photo-1544025162-d76694265947?w=500&q=80',
+    name: 'Cơ Sở Vin Ocean Park 1',
+    city: 'Hà Nội',
+    address: 'SP10.11 Hải Âu 9 - Vin Ocean Park 1, Gia Lâm, Hà Nội',
+    hotline: '0988.888.905',
+    openingHours: '08:00 - 22:00',
+    managerName: 'Quản lý Ocean Park 1',
+    googleMapsUrl: 'https://maps.google.com/?q=Hai+Au+9+Vin+Ocean+Park+1+Gia+Lam+Ha+Noi',
+    image: null,
     isActive: true,
     sortOrder: 5,
   },
   {
     code: 'cs6',
-    name: 'CS Hai Bà Trưng - Hà Nội',
-    city: 'Hà Nội',
-    address: '210 Trần Khát Chân, Q. Hai Bà Trưng, Hà Nội',
-    hotline: '0988 999 888',
+    name: 'Cơ Sở Vũng Tàu - HCM',
+    city: 'Bà Rịa - Vũng Tàu',
+    address: 'Phú Mỹ - Vũng Tàu',
+    hotline: '0988.888.906',
     openingHours: '08:00 - 22:00',
-    managerName: 'Đỗ Minh Triết',
-    googleMapsUrl: 'https://maps.google.com',
-    image: 'https://images.unsplash.com/photo-1466978913421-dad2ebd01d17?w=500&q=80',
+    managerName: 'Quản lý Vũng Tàu',
+    googleMapsUrl: 'https://maps.google.com/?q=Phu+My+Ba+Ria+Vung+Tau',
+    image: null,
     isActive: true,
     sortOrder: 6,
   },
@@ -181,6 +182,15 @@ export async function POST(req: Request) {
       },
     });
 
+    try {
+      revalidatePath('/');
+      revalidatePath('/admin/branches');
+      revalidatePath('/admin/store');
+      revalidatePath('/admin/inventory/import');
+      revalidatePath('/admin/inventory/export');
+      revalidatePath('/checkout');
+    } catch (e) {}
+
     return NextResponse.json({ success: true, branch: newBranch });
   } catch (error: any) {
     console.error('API POST /api/branches error:', error);
@@ -203,6 +213,16 @@ export async function PUT(req: Request) {
           data: { sortOrder: item.sortOrder },
         });
       }
+
+      try {
+        revalidatePath('/');
+        revalidatePath('/admin/branches');
+        revalidatePath('/admin/store');
+        revalidatePath('/admin/inventory/import');
+        revalidatePath('/admin/inventory/export');
+        revalidatePath('/checkout');
+      } catch (e) {}
+
       return NextResponse.json({ success: true, message: 'Đã cập nhật thứ tự sắp xếp thành công' });
     }
 
