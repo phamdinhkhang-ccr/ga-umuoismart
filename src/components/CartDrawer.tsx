@@ -643,7 +643,7 @@ export default function CartDrawer({
                             : 'bg-[#0B0D11] border-neutral-800 text-neutral-400'
                         }`}
                       >
-                        💵 Tiền Mặt (COD)
+                        💵 Thanh toán khi nhận
                       </button>
                       <button
                         type="button"
@@ -654,7 +654,7 @@ export default function CartDrawer({
                             : 'bg-[#0B0D11] border-neutral-800 text-neutral-400'
                         }`}
                       >
-                        🏦 Chuyển Khoản QR
+                        🏦 Thanh toán trước
                       </button>
                     </div>
                   </div>

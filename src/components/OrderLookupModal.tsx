@@ -227,7 +227,7 @@ const getStatusBadge = renderOrderStatus;
                   {/* 6. Tổng Tiền Thanh Toán */}
                   <div className="flex justify-between items-center text-xs pt-1">
                     <span className="text-neutral-500">
-                      PTTT: {order.paymentMethod === 'COD' ? 'Tiền mặt (COD)' : 'Chuyển khoản'}
+                      PTTT: {order.paymentMethod === 'COD' ? 'Thanh toán khi nhận' : 'Thanh toán trước'}
                     </span>
                     <span className="font-extrabold text-base gold-gradient-text tracking-tight">
                       Tổng: {order.totalAmount?.toLocaleString('vi-VN')} đ

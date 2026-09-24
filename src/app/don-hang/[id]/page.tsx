@@ -343,7 +343,7 @@ export default function OrderTrackingPage() {
                 </span>
                 <p>
                   <strong className="text-white">Hình thức:</strong>{' '}
-                  {order.paymentMethod === 'COD' ? '💵 Tiền mặt khi nhận hàng (COD)' : '📱 Chuyển khoản QR ngân hàng'}
+                  {order.paymentMethod === 'COD' ? '💵 Thanh toán khi nhận' : '📱 Thanh toán trước (Chuyển khoản QR)'}
                 </p>
                 <p>
                   <strong className="text-white">Trạng thái tiền:</strong>{' '}
