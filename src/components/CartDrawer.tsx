@@ -131,11 +131,8 @@ export default function CartDrawer({
 
   // Financial calculations
   const subtotal = cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
-  const standardShipFee = 35000;
   const isFreeship = subtotal >= 355000;
-  const shipDiscount = isFreeship ? 35000 : 0;
-  const finalShipFee = standardShipFee - shipDiscount;
-  const finalTotalAmount = subtotal + finalShipFee;
+  const finalTotalAmount = subtotal; // Quán chỉ thu tiền món, ship trả riêng cho tài xế
 
   if (!isOpen) return null;
 
@@ -213,8 +210,8 @@ export default function CartDrawer({
           note: combinedNote,
           paymentMethod,
           totalAmount: finalTotalAmount,
-          discountAmount: shipDiscount,
-          shippingFee: finalShipFee,
+          discountAmount: 0,
+          shippingFee: 0,
           items: cart.map((item) => ({
             productId: item.product.id,
             productName: item.product.name,
@@ -553,26 +550,28 @@ export default function CartDrawer({
             {/* Total Financial Breakdown */}
             {cart.length > 0 && (
               <div className="p-5 border-t border-neutral-800 bg-[#0B0D11] space-y-3">
-                <div className="space-y-1.5 text-xs">
+                <div className="space-y-2 text-xs">
                   <div className="flex justify-between text-neutral-400">
                     <span>Tạm tính tiền món:</span>
                     <span className="font-semibold text-neutral-200">{subtotal.toLocaleString('vi-VN')} đ</span>
                   </div>
-                  <div className="flex justify-between text-neutral-400">
-                    <span>Phí vận chuyển hỏa tốc:</span>
-                    <span className="font-semibold text-neutral-200">{standardShipFee.toLocaleString('vi-VN')} đ</span>
+                  <div className="flex flex-col gap-0.5 text-neutral-400">
+                    <div className="flex justify-between">
+                      <span>Phí vận chuyển dự kiến:</span>
+                      <span className="font-semibold text-neutral-300">Đang tính theo địa chỉ... (~7.000đ/km)</span>
+                    </div>
+                    <span className="text-[10px] text-neutral-500">(Số km theo Google Maps x 7.000 vnđ • ~7.000đ/km từ cơ sở gần nhất)</span>
                   </div>
                   {isFreeship ? (
-                    <div className="flex justify-between text-emerald-400 font-semibold bg-emerald-950/40 p-1.5 rounded-lg border border-emerald-500/20 text-[11px]">
-                      <span className="flex items-center gap-1">
-                        <Sparkles className="w-3 h-3 text-emerald-400" />
-                        Ưu đãi Freeship (Đơn ≥ 355k):
+                    <div className="flex items-center justify-between text-emerald-400 font-semibold bg-emerald-950/40 p-2 rounded-lg border border-emerald-500/20 text-[11px]">
+                      <span className="flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                        🎁 Đơn từ 355k: Quán hỗ trợ 35k tiền ship (trả bớt cho shipper)
                       </span>
-                      <span>-{shipDiscount.toLocaleString('vi-VN')} đ</span>
                     </div>
                   ) : (
-                    <div className="text-[11px] text-amber-400/90 bg-amber-500/10 p-1.5 rounded-lg border border-amber-500/20 text-center">
-                      💡 Đặt thêm <strong className="text-amber-300 font-bold">{ (355000 - subtotal).toLocaleString('vi-VN') } đ</strong> để được <strong>FREESHIP 35k</strong>!
+                    <div className="text-[11px] text-amber-400/90 bg-amber-500/10 p-2 rounded-lg border border-amber-500/20 text-center">
+                      💡 Đặt thêm <strong className="text-amber-300 font-bold">{ (355000 - subtotal).toLocaleString('vi-VN') } đ</strong> để được <strong>Quán hỗ trợ 35k tiền ship</strong>!
                     </div>
                   )}
                 </div>
@@ -588,10 +587,13 @@ export default function CartDrawer({
                   type="submit"
                   form="order-form"
                   disabled={loading}
-                  className="w-full py-3.5 bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-neutral-950 font-bold text-xs uppercase tracking-wider rounded-xl shadow-[0_0_20px_rgba(245,158,11,0.2)] transition duration-300"
+                  className="w-full py-3.5 bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-neutral-950 font-bold text-xs uppercase tracking-wider rounded-xl shadow-[0_0_20px_rgba(245,158,11,0.2)] transition duration-300 cursor-pointer"
                 >
                   {loading ? 'Đang Khởi Tạo Đơn Hàng...' : 'Xác Nhận Đặt Món Ngay'}
                 </button>
+                <p className="text-[10px] text-neutral-400 text-center italic leading-tight">
+                  *(Quý khách thanh toán tiền món cho quán. Cước ship thực tế quý khách thanh toán trực tiếp cho tài xế khi nhận món)*
+                </p>
               </div>
             )}
           </>
