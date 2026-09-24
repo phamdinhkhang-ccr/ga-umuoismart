@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
@@ -340,58 +341,67 @@ export async function PUT(request: Request) {
     if (aiKeywords !== undefined) updateData.aiKeywords = aiKeywords;
     if (unit !== undefined) updateData.unit = unit;
 
-    if (type === 'COMBO' && Array.isArray(comboItems)) {
-      updateData.unit = 'Combo';
-      let calculatedCost = 0;
-      const validItems: { productId: string; quantity: number }[] = [];
-      for (const item of comboItems) {
-        if (item.productId && Number(item.quantity) > 0) {
-          validItems.push({ productId: item.productId, quantity: Number(item.quantity) || 1 });
-          const childProduct = await prisma.product.findUnique({ where: { id: item.productId } });
-          if (childProduct) {
-            calculatedCost += (childProduct.costPrice || 0) * (Number(item.quantity) || 1);
+    const product = await prisma.$transaction(async (tx) => {
+      if (type === 'COMBO' && Array.isArray(comboItems)) {
+        updateData.unit = 'Combo';
+        let calculatedCost = 0;
+        const validItems: { productId: string; quantity: number }[] = [];
+        for (const item of comboItems) {
+          if (item.productId && Number(item.quantity) > 0) {
+            validItems.push({ productId: item.productId, quantity: Number(item.quantity) || 1 });
+            const childProduct = await tx.product.findUnique({ where: { id: item.productId } });
+            if (childProduct) {
+              calculatedCost += (childProduct.costPrice || 0) * (Number(item.quantity) || 1);
+            }
           }
         }
+        updateData.costPrice = calculatedCost;
+
+        // Reset existing combo items and insert new ones inside transaction
+        await tx.comboItem.deleteMany({ where: { comboId: id } });
+        if (validItems.length > 0) {
+          await tx.comboItem.createMany({
+            data: validItems.map((ci) => ({
+              comboId: id,
+              productId: ci.productId,
+              quantity: ci.quantity,
+            })),
+          });
+        }
+      } else if (type === 'SINGLE') {
+        await tx.comboItem.deleteMany({ where: { comboId: id } });
       }
-      updateData.costPrice = calculatedCost;
 
-      // Reset existing combo items and insert new ones
-      await prisma.comboItem.deleteMany({ where: { comboId: id } });
-      if (validItems.length > 0) {
-        await prisma.comboItem.createMany({
-          data: validItems.map((ci) => ({
-            comboId: id,
-            productId: ci.productId,
-            quantity: ci.quantity,
-          })),
-        });
+      if (type === 'COMBO' || (existingProd && existingProd.type === 'COMBO')) {
+        updateData.stockQuantity = 0;
+      } else if (stockQuantity !== undefined) {
+        const qtyNum = Math.max(0, Number(stockQuantity));
+        updateData.stockQuantity = qtyNum;
+        updateData.isAvailable = qtyNum === 0 ? false : (isAvailable !== undefined ? Boolean(isAvailable) : true);
+      } else if (isAvailable !== undefined) {
+        updateData.isAvailable = Boolean(isAvailable);
       }
-    } else if (type === 'SINGLE') {
-      await prisma.comboItem.deleteMany({ where: { comboId: id } });
-    }
 
-    if (type === 'COMBO' || (existingProd && existingProd.type === 'COMBO')) {
-      updateData.stockQuantity = 0;
-    } else if (stockQuantity !== undefined) {
-      const qtyNum = Math.max(0, Number(stockQuantity));
-      updateData.stockQuantity = qtyNum;
-      updateData.isAvailable = qtyNum === 0 ? false : (isAvailable !== undefined ? Boolean(isAvailable) : true);
-    } else if (isAvailable !== undefined) {
-      updateData.isAvailable = Boolean(isAvailable);
-    }
-
-    const product = await prisma.product.update({
-      where: { id },
-      data: updateData,
-      include: {
-        category: true,
-        comboItems: {
-          include: {
-            product: true,
+      return await tx.product.update({
+        where: { id },
+        data: updateData,
+        include: {
+          category: true,
+          comboItems: {
+            include: {
+              product: true,
+            },
           },
         },
-      },
+      });
     });
+
+    try {
+      revalidatePath('/');
+      revalidatePath('/admin/products');
+      revalidatePath('/admin/inventory/stock');
+      revalidatePath('/admin/orders');
+    } catch (_) {}
 
     return NextResponse.json({ success: true, product });
   } catch (error: any) {

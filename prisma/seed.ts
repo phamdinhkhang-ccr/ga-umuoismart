@@ -4,31 +4,26 @@ import bcrypt from 'bcryptjs';
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('Seeding Gà Ủ Muối Smart database...');
+  console.log('Checking Gà Ủ Muối Smart database...');
 
-  // Clean existing data
-  await prisma.user.deleteMany();
-  await prisma.orderItem.deleteMany();
-  await prisma.order.deleteMany();
-  await prisma.product.deleteMany();
-  await prisma.category.deleteMany();
-  await prisma.shift.deleteMany();
-  await prisma.expense.deleteMany();
-  await prisma.inventoryTransaction.deleteMany();
-  await prisma.inventoryItem.deleteMany();
-  await prisma.staff.deleteMany();
-  await prisma.customer.deleteMany();
-  await prisma.setting.deleteMany();
-  await prisma.branch.deleteMany();
+  const userCount = await prisma.user.count();
+  const productCount = await prisma.product.count();
+
+  if (userCount > 0 || productCount > 0) {
+    console.log('Database already contains records. Skipping destructive seed to protect production data.');
+    return;
+  }
+
+  console.log('Seeding initial data for empty database...');
 
   // 0. Seed Branch Table
   const branchesSeedData = [
-    { id: 'cs1', code: 'CS1', name: 'Cơ Sở Cầu Giấy', city: 'Hà Nội', address: '12 Đường Cầu Giấy, Q. Cầu Giấy, Hà Nội', hotline: '0988.888.901' },
-    { id: 'cs2', code: 'CS2', name: 'Cơ Sở Đống Đa', city: 'Hà Nội', address: '88 Phố Xã Đàn, Q. Đống Đa, Hà Nội', hotline: '0988.888.902' },
-    { id: 'cs3', code: 'CS3', name: 'Cơ Sở Hai Bà Trưng', city: 'Hà Nội', address: '156 Phố Huế, Q. Hai Bà Trưng, Hà Nội', hotline: '0988.888.903' },
-    { id: 'cs4', code: 'CS4', name: 'Cơ Sở Thanh Xuân', city: 'Hà Nội', address: '45 Đường Nguyễn Trãi, Q. Thanh Xuân, Hà Nội', hotline: '0988.888.904' },
-    { id: 'cs5', code: 'CS5', name: 'Cơ Sở Tây Hồ', city: 'Hà Nội', address: '210 Đường Lạc Long Quân, Q. Tây Hồ, Hà Nội', hotline: '0988.888.905' },
-    { id: 'cs6', code: 'CS6', name: 'Cơ Sở Nam Từ Liêm', city: 'Hà Nội', address: '18 Đường Lê Đức Thọ, Q. Nam Từ Liêm, Hà Nội', hotline: '0988.888.906' },
+    { id: 'cs1', code: 'CS1', name: 'Cơ Sở Vin Smart city', city: 'Hà Nội', address: '6 - A20 Geleximco An Khánh - Tây Mỗ, Hoài Đức, Hà Nội', hotline: '0988.888.901' },
+    { id: 'cs2', code: 'CS2', name: 'Cơ Sở Trần Cung - Cầu Giấy', city: 'Hà Nội', address: '5 - 208 Trần Cung, Q. Cầu Giấy, Hà Nội', hotline: '0988.888.902' },
+    { id: 'cs3', code: 'CS3', name: 'Cơ Sở Bán Đảo Linh Đàm', city: 'Hà Nội', address: 'Kiot 4 Nơ 7B Bán Đảo Linh Đàm, Q. Hoàng Mai, Hà Nội', hotline: '0988.888.903' },
+    { id: 'cs4', code: 'CS4', name: 'Cơ Sở Hai Bà Trưng', city: 'Hà Nội', address: '51 Yên Lạc - Vĩnh Tuy, Q. Hai Bà Trưng, Hà Nội', hotline: '0988.888.904' },
+    { id: 'cs5', code: 'CS5', name: 'Cơ Sở Vin Ocean Park 1', city: 'Hà Nội', address: 'SP10.11 Hải Âu 9 - Vin Ocean Park 1, Gia Lâm, Hà Nội', hotline: '0988.888.905' },
+    { id: 'cs6', code: 'CS6', name: 'Cơ Sở Vũng Tàu - HCM', city: 'Bà Rịa - Vũng Tàu', address: 'Phú Mỹ - Vũng Tàu', hotline: '0988.888.906' },
   ];
 
   for (const b of branchesSeedData) {
