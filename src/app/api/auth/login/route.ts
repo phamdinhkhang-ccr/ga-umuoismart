@@ -19,6 +19,29 @@ export async function POST(request: Request) {
     // Ensure database tables are initialized
     await ensureDbInitialized();
 
+    // 0. Ensure at least one Branch exists to satisfy foreign key constraints
+    let defaultBranch: any = null;
+    try {
+      defaultBranch = await prisma.branch.findFirst();
+      if (!defaultBranch) {
+        defaultBranch = await prisma.branch.create({
+          data: {
+            id: 'cs1',
+            code: 'CS-HQ',
+            name: 'Cơ Sở Tổng Hệ Thống',
+            city: 'Hà Nội',
+            address: '6 - A20 Geleximco An Khánh - Tây Mỗ, Nam Từ Liêm, Hà Nội',
+            hotline: '0988.888.999',
+            isActive: true,
+            sortOrder: 1,
+          },
+        });
+        console.log('[AUTH] Default branch created to satisfy foreign keys:', defaultBranch.id);
+      }
+    } catch (branchErr: any) {
+      console.warn('[AUTH] Notice ensuring default branch:', branchErr.message);
+    }
+
     // 1. Check if admin user exists, auto-seed default admin account if not found
     try {
       const adminExists = await prisma.user.findFirst({
@@ -42,8 +65,8 @@ export async function POST(request: Request) {
             username: 'admin',
             password: hashedPassword,
             role: 'ADMIN',
-            branchId: 'cs1',
-            branchIds: JSON.stringify(['cs1', 'cs2', 'cs3', 'cs4', 'cs5', 'cs6']),
+            branchId: defaultBranch ? defaultBranch.id : null,
+            branchIds: defaultBranch ? JSON.stringify([defaultBranch.id]) : JSON.stringify([]),
             isActive: true,
           },
         });
@@ -80,8 +103,8 @@ export async function POST(request: Request) {
           username: 'admin',
           password: hashedPassword,
           role: 'ADMIN',
-          branchId: 'cs1',
-          branchIds: JSON.stringify(['cs1', 'cs2', 'cs3', 'cs4', 'cs5', 'cs6']),
+          branchId: defaultBranch ? defaultBranch.id : null,
+          branchIds: defaultBranch ? JSON.stringify([defaultBranch.id]) : JSON.stringify([]),
           isActive: true,
         },
       });
