@@ -5,11 +5,12 @@ import fs from 'fs';
 import os from 'os';
 
 function resolveDatabaseUrl(): string {
-  if (process.env.DATABASE_URL) {
-    return process.env.DATABASE_URL;
+  const envUrl = process.env.DATABASE_URL;
+  if (envUrl && !envUrl.startsWith('file:.')) {
+    return envUrl;
   }
 
-  // 1. Try local project paths first
+  // 1. Try local project paths
   const projectDbPaths = [
     path.resolve(process.cwd(), 'prisma', 'dev.db'),
     path.resolve(process.cwd(), 'dev.db'),
@@ -18,33 +19,16 @@ function resolveDatabaseUrl(): string {
   ];
 
   const existingLocalDb = projectDbPaths.find((p) => fs.existsSync(/*turbopackIgnore: true*/ p));
-
-  // 2. On Linux/Hostinger production environment, use /tmp/gaumuoismart_dev.db for guaranteed write permissions (777)
-  const isLinux = os.platform() === 'linux';
-  const tmpDir = os.tmpdir() || '/tmp';
-  const tmpDbPath = path.join(tmpDir, 'gaumuoismart_dev.db');
-
-  if (isLinux && fs.existsSync(/*turbopackIgnore: true*/ tmpDir)) {
-    try {
-      if (!fs.existsSync(/*turbopackIgnore: true*/ tmpDbPath) && existingLocalDb) {
-        console.log(`-> Copying database from ${existingLocalDb} to ${tmpDbPath}...`);
-        fs.copyFileSync(existingLocalDb, tmpDbPath);
-        try { fs.chmodSync(tmpDbPath, 0o777); } catch (e) {}
-      }
-      if (fs.existsSync(/*turbopackIgnore: true*/ tmpDbPath)) {
-        return `file:${tmpDbPath}`;
-      }
-    } catch (tmpErr: any) {
-      console.warn("Notice copying DB to /tmp:", tmpErr.message);
-    }
+  if (existingLocalDb) {
+    return `file:${existingLocalDb}`;
   }
 
-  // 3. Fallback to local project prisma/dev.db
+  // 2. Fallback to local project prisma/dev.db
   const defaultDir = path.resolve(process.cwd(), 'prisma');
   if (!fs.existsSync(/*turbopackIgnore: true*/ defaultDir)) {
     try { fs.mkdirSync(defaultDir, { recursive: true }); } catch (e) {}
   }
-  const defaultDbPath = existingLocalDb || path.join(defaultDir, 'dev.db');
+  const defaultDbPath = path.join(defaultDir, 'dev.db');
   return `file:${defaultDbPath}`;
 }
 

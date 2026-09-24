@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
-import { prisma } from '@/lib/prisma';
+import { prisma, ensureDbInitialized } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -34,14 +34,28 @@ export async function GET(req: Request) {
       where.isActive = false;
     }
 
-    const branches = await prisma.branch.findMany({
-      where,
-      orderBy: { sortOrder: 'asc' },
-    });
+    let branches;
+    try {
+      branches = await prisma.branch.findMany({
+        where,
+        orderBy: { sortOrder: 'asc' },
+      });
+    } catch (dbErr: any) {
+      if (dbErr?.code === 'P2021' || dbErr?.message?.includes('does not exist')) {
+        console.warn('Branch table missing in GET, running ensureDbInitialized() auto-recovery...');
+        await ensureDbInitialized();
+        branches = await prisma.branch.findMany({
+          where,
+          orderBy: { sortOrder: 'asc' },
+        });
+      } else {
+        throw dbErr;
+      }
+    }
 
-    const totalCount = await prisma.branch.count();
-    const activeCount = await prisma.branch.count({ where: { isActive: true } });
-    const closedCount = await prisma.branch.count({ where: { isActive: false } });
+    const totalCount = branches.length;
+    const activeCount = branches.filter((b) => b.isActive).length;
+    const closedCount = branches.filter((b) => !b.isActive).length;
 
     return NextResponse.json({
       success: true,
@@ -55,7 +69,7 @@ export async function GET(req: Request) {
   } catch (error: any) {
     console.error('API GET /api/branches error:', error);
     return NextResponse.json(
-      { success: false, message: 'Lỗi server khi tải danh sách cơ sở' },
+      { success: false, message: error?.message || 'Lỗi server khi tải danh sách cơ sở' },
       { status: 500 }
     );
   }
@@ -90,83 +104,100 @@ export async function POST(req: Request) {
       );
     }
 
-    // 1. Check for existing branch by Code or exact Name (Conflict / Upsert logic)
-    let existingBranch = null;
-    if (cleanCode || cleanName) {
-      existingBranch = await prisma.branch.findFirst({
-        where: {
-          OR: [
-            ...(cleanCode
-              ? [
-                  { code: cleanCode },
-                  { code: cleanCode.toLowerCase() },
-                  { code: cleanCode.toUpperCase() },
-                ]
-              : []),
-            ...(cleanName ? [{ name: cleanName }] : []),
-          ],
-        },
-      });
-    }
+    const executeSave = async () => {
+      // 1. Check for existing branch by Code or exact Name (Conflict / Upsert logic)
+      let existingBranch = null;
+      if (cleanCode || cleanName) {
+        existingBranch = await prisma.branch.findFirst({
+          where: {
+            OR: [
+              ...(cleanCode
+                ? [
+                    { code: cleanCode },
+                    { code: cleanCode.toLowerCase() },
+                    { code: cleanCode.toUpperCase() },
+                  ]
+                : []),
+              ...(cleanName ? [{ name: cleanName }] : []),
+            ],
+          },
+        });
+      }
 
-    const branchData = {
-      name: cleanName,
-      city: (city || '').trim() || 'Hà Nội',
-      address: cleanAddress,
-      hotline: cleanHotline,
-      openingHours: (openingHours || '').trim() || '08:00 - 22:30',
-      managerName: (managerName || '').trim() || 'Quản lý cơ sở',
-      googleMapsUrl: (googleMapsUrl || '').trim() || null,
-      image: image || imageUrl || null,
-      isActive: isActive !== undefined ? Boolean(isActive) : true,
-    };
+      const branchData = {
+        name: cleanName,
+        city: (city || '').trim() || 'Hà Nội',
+        address: cleanAddress,
+        hotline: cleanHotline,
+        openingHours: (openingHours || '').trim() || '08:00 - 22:30',
+        managerName: (managerName || '').trim() || 'Quản lý cơ sở',
+        googleMapsUrl: (googleMapsUrl || '').trim() || null,
+        image: image || imageUrl || null,
+        isActive: isActive !== undefined ? Boolean(isActive) : true,
+      };
 
-    let targetBranch;
+      let targetBranch;
 
-    if (existingBranch) {
-      // Update existing branch if code or name matched
-      targetBranch = await prisma.branch.update({
-        where: { id: existingBranch.id },
-        data: {
-          ...branchData,
-          code: cleanCode || existingBranch.code,
-        },
-      });
-    } else {
-      const count = await prisma.branch.count();
-      const finalCode = cleanCode || `cs${count + 1}`;
-      targetBranch = await prisma.branch.create({
-        data: {
-          ...branchData,
-          code: finalCode,
-          sortOrder: count + 1,
-        },
-      });
-    }
+      if (existingBranch) {
+        // Update existing branch if code or name matched
+        targetBranch = await prisma.branch.update({
+          where: { id: existingBranch.id },
+          data: {
+            ...branchData,
+            code: cleanCode || existingBranch.code,
+          },
+        });
+      } else {
+        const count = await prisma.branch.count();
+        const finalCode = cleanCode || `cs${count + 1}`;
+        targetBranch = await prisma.branch.create({
+          data: {
+            ...branchData,
+            code: finalCode,
+            sortOrder: count + 1,
+          },
+        });
+      }
 
-    // 2. Auto-initialize empty inventory (BranchInventory) for all existing products
-    try {
-      const products = await prisma.product.findMany({ select: { id: true } });
-      if (products && products.length > 0) {
-        for (const prod of products) {
-          await prisma.branchInventory.upsert({
-            where: {
-              productId_branchId: {
+      // 2. Auto-initialize empty inventory (BranchInventory) for all existing products
+      try {
+        const products = await prisma.product.findMany({ select: { id: true } });
+        if (products && products.length > 0) {
+          for (const prod of products) {
+            await prisma.branchInventory.upsert({
+              where: {
+                productId_branchId: {
+                  productId: prod.id,
+                  branchId: targetBranch.id,
+                },
+              },
+              update: {},
+              create: {
                 productId: prod.id,
                 branchId: targetBranch.id,
+                stock: 0,
               },
-            },
-            update: {},
-            create: {
-              productId: prod.id,
-              branchId: targetBranch.id,
-              stock: 0,
-            },
-          });
+            });
+          }
         }
+      } catch (invErr: any) {
+        console.warn('[BRANCH_INV] Notice creating initial branch inventories:', invErr?.message);
       }
-    } catch (invErr: any) {
-      console.warn('[BRANCH_INV] Notice creating initial branch inventories:', invErr?.message);
+
+      return { targetBranch, isUpdate: Boolean(existingBranch) };
+    };
+
+    let result;
+    try {
+      result = await executeSave();
+    } catch (saveErr: any) {
+      if (saveErr?.code === 'P2021' || saveErr?.message?.includes('does not exist')) {
+        console.warn('Branch table missing in POST, running ensureDbInitialized() auto-recovery...');
+        await ensureDbInitialized();
+        result = await executeSave();
+      } else {
+        throw saveErr;
+      }
     }
 
     try {
@@ -181,8 +212,8 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       success: true,
-      branch: targetBranch,
-      message: existingBranch ? 'Cập nhật thông tin cơ sở thành công' : 'Tạo cơ sở mới thành công',
+      branch: result.targetBranch,
+      message: result.isUpdate ? 'Cập nhật thông tin cơ sở thành công' : 'Tạo cơ sở mới thành công',
     });
   } catch (error: any) {
     console.error('API POST /api/branches error:', error);
