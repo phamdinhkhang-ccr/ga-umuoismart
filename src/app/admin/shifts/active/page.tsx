@@ -60,6 +60,7 @@ export default function ActiveShiftPage() {
   // Handover Receipt Modal
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [lastClosedShiftData, setLastClosedShiftData] = useState<any>(null);
+  const [previousShiftCash, setPreviousShiftCash] = useState<number>(1500000);
 
   const branchesList = branches.map((b) => ({
     id: b.id,
@@ -89,6 +90,18 @@ export default function ActiveShiftPage() {
       }
 
       if (dataShifts.success && Array.isArray(dataShifts.shifts)) {
+        const closedShifts = dataShifts.shifts.filter((s: any) => s.status === 'CLOSED');
+        const lastClosed = closedShifts.find((s: any) =>
+          s.branchId === selectedBranchId ||
+          (selectedBranchId && s.branchId?.toLowerCase() === selectedBranchId.toLowerCase())
+        );
+        if (lastClosed) {
+          const prevAmount = lastClosed.finalCashActual ?? lastClosed.finalCashExpected ?? lastClosed.initialCash ?? 1500000;
+          setPreviousShiftCash(prevAmount);
+        } else {
+          setPreviousShiftCash(1500000);
+        }
+
         const openMap: Record<string, any> = {};
         dataShifts.shifts.forEach((s: any) => {
           if (s.status === 'OPEN') {
@@ -601,19 +614,15 @@ export default function ActiveShiftPage() {
             </div>
             <div>
               <h2 className="font-extrabold text-lg text-slate-900 dark:text-[#FAFAF9]">Mở Ca Làm Việc Mới</h2>
-              <p className="text-xs text-slate-500 dark:text-neutral-400">
-                Phân định Thu Ngân Trưởng chịu trách nhiệm két & Đội ngũ nhân sự cùng trực tại cơ sở{' '}
-                {branchesList.find((b) => b.id === selectedBranchId)?.name}
-              </p>
             </div>
           </div>
 
           <form onSubmit={handleStartShift} className="space-y-6 text-xs">
-            {/* TRƯỜNG 1: Thu Ngân Trưởng / Người Giữ Két */}
+            {/* TRƯỜNG 1: Thu Ngân Trưởng */}
             <div className="space-y-2">
               <label className="block font-extrabold text-slate-800 dark:text-neutral-200 flex items-center gap-1.5">
                 <UserCheck className="w-4 h-4 text-amber-500" />
-                <span>Thu Ngân Trưởng / Người Giữ Két (*) (1 người duy nhất):</span>
+                <span>Thu Ngân Trưởng</span>
               </label>
               <select
                 value={selectedMainCashier}
@@ -628,11 +637,11 @@ export default function ActiveShiftPage() {
               </select>
             </div>
 
-            {/* TRƯỜNG 2: Nhân Sự Cùng Ca (Phụ ca / Bếp / Đóng gói) */}
+            {/* TRƯỜNG 2: Nhân Sự Cùng Ca */}
             <div className="space-y-2">
               <label className="block font-extrabold text-slate-800 dark:text-neutral-200 flex items-center gap-1.5">
                 <UserPlus className="w-4 h-4 text-amber-500" />
-                <span>Nhân Sự Cùng Ca (Phụ ca / Bếp / Giao nhận / Đóng gói):</span>
+                <span>Nhân Sự Cùng Ca</span>
               </label>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 bg-slate-50 dark:bg-[#0B0D11] p-3.5 rounded-xl border border-slate-200 dark:border-neutral-800">
                 {staffList
@@ -691,10 +700,10 @@ export default function ActiveShiftPage() {
               </div>
             </div>
 
-            {/* Số Tiền Mặt Đầu Ca (VNĐ) */}
+            {/* Số Tiền Mặt Ca Trước */}
             <div className="space-y-2">
               <label className="block font-bold text-slate-800 dark:text-neutral-200">
-                Số Tiền Mặt Đưa Trước Đầu Ca (VNĐ) (*):
+                Số tiền mặt ca trước
               </label>
               <div className="relative">
                 <input
@@ -709,77 +718,25 @@ export default function ActiveShiftPage() {
                 </span>
               </div>
 
-              {/* Quick Money Buttons */}
-              <div className="flex flex-wrap items-center gap-2 pt-1">
-                {[500000, 1000000, 1500000, 2000000].map((presetVal) => (
-                  <button
-                    key={presetVal}
-                    type="button"
-                    onClick={() => setInitialCash(presetVal)}
-                    className="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-[#0B0D11] hover:bg-amber-500/20 text-slate-700 dark:text-neutral-300 border border-slate-300 dark:border-neutral-800 font-bold text-[11px] transition cursor-pointer"
-                  >
-                    {formatCurrency(presetVal)}
-                  </button>
-                ))}
+              {/* Only 1 Button: Lấy tiền dư ca trước */}
+              <div className="pt-1">
                 <button
                   type="button"
-                  onClick={() => setInitialCash(1500000)}
-                  className="px-3 py-1.5 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30 font-bold text-[11px] hover:bg-amber-500/20 transition cursor-pointer"
+                  onClick={() => setInitialCash(previousShiftCash)}
+                  className="px-3.5 py-2 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30 font-bold text-xs hover:bg-amber-500/20 transition cursor-pointer flex items-center gap-1.5"
                 >
-                  Lấy tiền dư ca trước
+                  <span>⚡ Lấy tiền dư ca trước</span>
+                  <span className="text-[11px] opacity-80">({formatCurrency(previousShiftCash)})</span>
                 </button>
               </div>
             </div>
 
-            {/* KHỐI BÀN GIAO TỒN KHO ĐẦU CA */}
-            <div className="border border-slate-200 dark:border-neutral-800 rounded-xl overflow-hidden">
-              <button
-                type="button"
-                onClick={() => setShowInventory(!showInventory)}
-                className="w-full p-3.5 bg-slate-50 dark:bg-[#0B0D11] hover:bg-slate-100 dark:hover:bg-neutral-800/60 flex items-center justify-between font-bold text-xs text-slate-800 dark:text-neutral-200 transition cursor-pointer"
-              >
-                <div className="flex items-center gap-2">
-                  <PackageCheck className="w-4 h-4 text-amber-500" />
-                  <span>📦 Kiểm đếm & Ghi chú tồn kho bàn giao ca (Tùy chọn):</span>
-                </div>
-                {showInventory ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-              </button>
-
-              {showInventory && (
-                <div className="p-4 bg-white dark:bg-[#14171D] border-t border-slate-200 dark:border-neutral-800 space-y-2">
-                  <label className="block text-[11px] font-semibold text-slate-700 dark:text-neutral-300">
-                    Kiểm đếm & Ghi chú tồn kho bàn giao:
-                  </label>
-                  <textarea
-                    rows={3}
-                    placeholder="Nhập ghi chú tồn kho bàn giao (Ví dụ: Gà nguyên con 10, Gà nửa con 15, Chân gà 20kg...)"
-                    value={inventoryNote}
-                    onChange={(e) => setInventoryNote(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-slate-50 dark:bg-[#0B0D11] border border-slate-300 dark:border-neutral-800 rounded-xl text-xs text-slate-800 dark:text-neutral-200 focus:border-amber-500 focus:outline-none resize-none"
-                  />
-                </div>
-              )}
-            </div>
-
-            {/* Ghi chú mở ca */}
-            <div className="space-y-1.5">
-              <label className="block font-semibold text-slate-700 dark:text-neutral-300">
-                Ghi Chú Mở Ca:
-              </label>
-              <input
-                type="text"
-                placeholder="Ví dụ: Đã kiểm tra két tiền và phân công xong..."
-                value={openNote}
-                onChange={(e) => setOpenNote(e.target.value)}
-                className="w-full px-4 py-2.5 bg-slate-50 dark:bg-[#0B0D11] border border-slate-300 dark:border-neutral-800 rounded-xl text-xs text-slate-800 dark:text-neutral-200 focus:border-amber-500 focus:outline-none"
-              />
-            </div>
-
+            {/* Nút xác nhận */}
             <button
               type="submit"
-              className="w-full py-4 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-neutral-950 font-extrabold text-xs uppercase tracking-widest rounded-xl shadow-lg shadow-amber-500/20 transition cursor-pointer"
+              className="w-full py-4 bg-gradient-to-r from-amber-500 via-amber-600 to-orange-600 hover:from-amber-400 hover:to-amber-500 text-neutral-950 font-black text-xs uppercase tracking-widest rounded-xl shadow-lg shadow-amber-500/25 transition cursor-pointer flex items-center justify-center gap-2"
             >
-              🚀 XÁC NHẬN MỞ CA LÀM VIỆC POS
+              <span>⚡ XÁC NHẬN MỞ CA LÀM VIỆC POS</span>
             </button>
           </form>
         </div>
