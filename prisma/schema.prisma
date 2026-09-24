@@ -133,6 +133,8 @@ model Expense {
   paymentMethod String   @default("CASH") // CASH, BANK_TRANSFER
   paymentSource String   @default("CASH") // CASH, BANK_TRANSFER
   category      String
+  targetCategory String? @default("GENERAL") // GA_U_MUOI, NEM_NGUA, GENERAL
+  productId     String?  // Optional specific product ID
   creatorName   String?  @default("Quản trị viên")
   receiptPhoto  String?
   note          String?

@@ -17,6 +17,7 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search')?.trim();
     const paymentMethod = searchParams.get('paymentMethod')?.trim();
     const categoryParam = searchParams.get('category')?.trim();
+    const targetCategory = searchParams.get('targetCategory')?.trim();
     const branchId = searchParams.get('branchId')?.trim();
     const fromDate = searchParams.get('fromDate')?.trim();
     const toDate = searchParams.get('toDate')?.trim();
@@ -34,6 +35,10 @@ export async function GET(request: NextRequest) {
 
     if (paymentMethod && paymentMethod !== 'ALL') {
       whereClause.paymentMethod = paymentMethod;
+    }
+
+    if (targetCategory && targetCategory !== 'ALL') {
+      whereClause.targetCategory = targetCategory;
     }
 
     if (categoryParam && categoryParam !== 'ALL') {
@@ -114,6 +119,8 @@ export async function POST(request: NextRequest) {
       paymentMethod = 'CASH',
       paymentSource,
       category = 'CHICKEN',
+      targetCategory = 'GENERAL',
+      productId = null,
       branchId = 'cs1',
       note = '',
       creatorName = 'Quản trị viên',
@@ -158,6 +165,8 @@ export async function POST(request: NextRequest) {
         paymentMethod,
         paymentSource: effectiveSource,
         category,
+        targetCategory: targetCategory || 'GENERAL',
+        productId: productId || null,
         branchId: effectiveBranchId,
         shiftId: activeShift ? activeShift.id : null,
         note: note || title,

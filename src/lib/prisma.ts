@@ -239,6 +239,8 @@ export async function ensureDbInitialized() {
         paymentMethod TEXT DEFAULT 'CASH',
         paymentSource TEXT DEFAULT 'CASH',
         category TEXT NOT NULL,
+        targetCategory TEXT DEFAULT 'GENERAL',
+        productId TEXT,
         creatorName TEXT DEFAULT 'Quản trị viên',
         receiptPhoto TEXT,
         note TEXT,
@@ -248,6 +250,13 @@ export async function ensureDbInitialized() {
         createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
       );
     `);
+
+    try {
+      await prisma.$executeRawUnsafe(`ALTER TABLE Expense ADD COLUMN targetCategory TEXT DEFAULT 'GENERAL';`);
+    } catch (e) {}
+    try {
+      await prisma.$executeRawUnsafe(`ALTER TABLE Expense ADD COLUMN productId TEXT;`);
+    } catch (e) {}
 
     // 10. Create BranchInventory table if missing
     await prisma.$executeRawUnsafe(`

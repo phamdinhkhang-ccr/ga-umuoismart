@@ -33,6 +33,8 @@ interface ExpenseRecord {
   amount: number;
   paymentMethod: string; // CASH, BANK_TRANSFER
   category: string;
+  targetCategory?: string | null; // GA_U_MUOI, NEM_NGUA, GENERAL
+  productId?: string | null;
   creatorName: string | null;
   receiptPhoto: string | null;
   note: string | null;
@@ -49,12 +51,19 @@ const CATEGORIES = [
   '💼 Lương & Phụ Cấp',
 ];
 
+const TARGET_CATEGORIES = [
+  { id: 'GA_U_MUOI', label: '🍗 Dòng Gà Ủ Muối', color: 'amber' },
+  { id: 'NEM_NGUA', label: '🥩 Dòng Nem Ngựa', color: 'rose' },
+  { id: 'GENERAL', label: '🏢 Chi Phí Chung Hệ Thống', color: 'slate' },
+];
+
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function ExpensesManagementPage() {
   const { branches } = useBranches();
   const { user: currentUser } = useAuth();
   const [expenses, setExpenses] = useState<ExpenseRecord[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   const availableBranches = (currentUser?.role === 'MANAGER' && currentUser.branchIds && currentUser.branchIds.length > 0)
@@ -76,6 +85,7 @@ export default function ExpensesManagementPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [paymentFilter, setPaymentFilter] = useState('ALL');
   const [categoryFilter, setCategoryFilter] = useState('ALL');
+  const [targetCategoryFilter, setTargetCategoryFilter] = useState('ALL');
   const [branchFilter, setBranchFilter] = useState('ALL');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
@@ -94,6 +104,8 @@ export default function ExpensesManagementPage() {
   const [formPaymentMethod, setFormPaymentMethod] = useState('CASH'); // CASH, BANK_TRANSFER
   const [formAmountStr, setFormAmountStr] = useState('');
   const [formCategory, setFormCategory] = useState('🚚 Tiền Ship / Vận Chuyển');
+  const [formTargetCategory, setFormTargetCategory] = useState<'GA_U_MUOI' | 'NEM_NGUA' | 'GENERAL'>('GENERAL');
+  const [formProductId, setFormProductId] = useState<string>('');
   const [formTitle, setFormTitle] = useState('');
   const [formCreatorName, setFormCreatorName] = useState('Quản trị viên');
   const [formReceiptPhoto, setFormReceiptPhoto] = useState<string | null>(null);
@@ -105,7 +117,7 @@ export default function ExpensesManagementPage() {
     setTimeout(() => setToastMessage(''), 4000);
   };
 
-  // Fetch Expenses
+  // Fetch Expenses & Products
   const fetchExpenses = async () => {
     setLoading(true);
     try {
@@ -113,6 +125,7 @@ export default function ExpensesManagementPage() {
       if (searchTerm) params.append('search', searchTerm);
       if (paymentFilter !== 'ALL') params.append('paymentMethod', paymentFilter);
       if (categoryFilter !== 'ALL') params.append('category', categoryFilter);
+      if (targetCategoryFilter !== 'ALL') params.append('targetCategory', targetCategoryFilter);
       if (branchFilter !== 'ALL') params.append('branchId', branchFilter);
       if (fromDate) params.append('fromDate', fromDate);
       if (toDate) params.append('toDate', toDate);
@@ -174,8 +187,21 @@ export default function ExpensesManagementPage() {
     }
   };
 
+  const fetchProducts = async () => {
+    try {
+      const res = await fetch('/api/products?type=ALL', { cache: 'no-store' });
+      const data = await res.json();
+      if (data.success && data.products) {
+        setProducts(data.products);
+      }
+    } catch (e) {
+      console.error('Error fetching products list:', e);
+    }
+  };
+
   useEffect(() => {
     fetchExpenses();
+    fetchProducts();
   }, []);
 
   const handleApplyFilter = () => {
@@ -186,6 +212,7 @@ export default function ExpensesManagementPage() {
     setSearchTerm('');
     setPaymentFilter('ALL');
     setCategoryFilter('ALL');
+    setTargetCategoryFilter('ALL');
     setBranchFilter('ALL');
     setFromDate('');
     setToDate('');
@@ -215,6 +242,8 @@ export default function ExpensesManagementPage() {
     setFormPaymentMethod('CASH');
     setFormAmountStr('');
     setFormCategory('🚚 Tiền Ship / Vận Chuyển');
+    setFormTargetCategory('GENERAL');
+    setFormProductId('');
     setFormTitle('');
     setFormCreatorName('Quản trị viên');
     setFormReceiptPhoto(null);
@@ -239,6 +268,8 @@ export default function ExpensesManagementPage() {
     else if (c.includes('lương') || t.includes('lương')) catVal = '💼 Lương & Phụ Cấp';
     setFormCategory(catVal);
 
+    setFormTargetCategory((expense.targetCategory as any) || 'GENERAL');
+    setFormProductId(expense.productId || '');
     setFormTitle(expense.title || '');
     setFormCreatorName(expense.creatorName || 'Quản trị viên');
     setFormReceiptPhoto(expense.receiptPhoto || null);
@@ -295,6 +326,8 @@ export default function ExpensesManagementPage() {
             amount: numericAmount,
             paymentMethod: formPaymentMethod,
             category: formCategory,
+            targetCategory: formTargetCategory,
+            productId: formProductId || null,
             branchId: formBranchId,
             creatorName: formCreatorName,
             receiptPhoto: formReceiptPhoto,
@@ -319,6 +352,8 @@ export default function ExpensesManagementPage() {
             amount: numericAmount,
             paymentMethod: formPaymentMethod,
             category: formCategory,
+            targetCategory: formTargetCategory,
+            productId: formProductId || null,
             branchId: formBranchId,
             creatorName: formCreatorName,
             receiptPhoto: formReceiptPhoto,
@@ -407,7 +442,7 @@ export default function ExpensesManagementPage() {
 
       {/* 2. Multi-Dimensional Filter Bar */}
       <div className="p-4 rounded-2xl dark:bg-[#141820] bg-white border dark:border-neutral-800/80 border-stone-200/80 shadow-sm space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-3">
           {/* Search Input */}
           <div className="lg:col-span-2 relative">
             <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-3" />
@@ -419,6 +454,20 @@ export default function ExpensesManagementPage() {
               onKeyDown={(e) => e.key === 'Enter' && handleApplyFilter()}
               className="w-full pl-9 pr-3 py-2 rounded-xl dark:bg-neutral-900 bg-stone-50 border dark:border-neutral-700 border-stone-300 dark:text-white text-stone-900 text-xs font-medium focus:outline-none focus:border-amber-500"
             />
+          </div>
+
+          {/* Target Category Filter (Gà Ủ Muối / Nem Ngựa / Chung) */}
+          <div>
+            <select
+              value={targetCategoryFilter}
+              onChange={(e) => setTargetCategoryFilter(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl dark:bg-neutral-900 bg-stone-50 border dark:border-neutral-700 border-stone-300 dark:text-amber-400 text-stone-900 text-xs font-bold focus:outline-none focus:border-amber-500 cursor-pointer"
+            >
+              <option value="ALL">🎯 Tất Cả Nhóm Hàng</option>
+              <option value="GA_U_MUOI">🍗 Dòng Gà Ủ Muối</option>
+              <option value="NEM_NGUA">🥩 Dòng Nem Ngựa</option>
+              <option value="GENERAL">🏢 Chi Phí Chung Hệ Thống</option>
+            </select>
           </div>
 
           {/* Category Dropdown Filter */}
@@ -609,7 +658,7 @@ export default function ExpensesManagementPage() {
                   <th className="py-3.5 px-4">CỬA HÀNG</th>
                   <th className="py-3.5 px-4">SỐ TIỀN CHI</th>
                   <th className="py-3.5 px-4">LOẠI TIỀN</th>
-                  <th className="py-3.5 px-4">HẠNG MỤC & NỘI DUNG</th>
+                  <th className="py-3.5 px-4">PHÂN BỔ DÒNG HÀNG & HẠNG MỤC</th>
                   <th className="py-3.5 px-4">NGƯỜI GHI</th>
                   <th className="py-3.5 px-4">NGÀY CHI</th>
                   <th className="py-3.5 px-4 text-center">ẢNH BILL</th>
@@ -620,6 +669,7 @@ export default function ExpensesManagementPage() {
                 {expenses.map((expense) => {
                   const branchObj = branches.find((b) => b.id === expense.branchId || b.code === expense.branchId);
                   const branchName = branchObj ? `${branchObj.code ? branchObj.code.toUpperCase() + ' - ' : ''}${branchObj.name}` : (expense.branchId || 'Chi Nhánh POS');
+                  const matchedProduct = expense.productId ? products.find((p) => p.id === expense.productId) : null;
 
                   return (
                     <tr key={expense.id} className="dark:hover:bg-neutral-900/50 hover:bg-stone-50 transition-colors">
@@ -653,49 +703,74 @@ export default function ExpensesManagementPage() {
                         )}
                       </td>
 
-                      {/* Category & Content */}
-                      <td className="py-3.5 px-4 max-w-xs">
+                      {/* Target Category, OPEX Category & Content */}
+                      <td className="py-3.5 px-4 max-w-sm">
                         <div className="space-y-1">
-                          {(() => {
-                            const cat = (expense.category || '').toLowerCase();
-                            const title = (expense.title || '').toLowerCase();
-                            if (cat.includes('ship') || title.includes('ship') || title.includes('vận chuyển')) {
-                              return (
-                                <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30 inline-block">
-                                  🚚 Cước Ship
-                                </span>
-                              );
-                            }
-                            if (cat.includes('điện') || cat.includes('nước') || cat.includes('mặt bằng') || title.includes('điện') || title.includes('nước')) {
-                              return (
-                                <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 inline-block">
-                                  ⚡ Điện / Nước / Mặt Bằng
-                                </span>
-                              );
-                            }
-                            if (cat.includes('vật tư') || cat.includes('hộp') || cat.includes('túi') || title.includes('hộp') || title.includes('túi')) {
-                              return (
-                                <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 inline-block">
-                                  📦 Vật Tư Tiêu Hao
-                                </span>
-                              );
-                            }
-                            if (cat.includes('lương') || title.includes('lương')) {
-                              return (
-                                <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-500/30 inline-block">
-                                  💼 Lương & Phụ Cấp
-                                </span>
-                              );
-                            }
-                            return (
-                              <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-slate-500/15 text-slate-600 dark:text-slate-400 border border-slate-500/30 inline-block">
-                                ☕ Marketing & Khác
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {/* Target Category Badge */}
+                            {expense.targetCategory === 'GA_U_MUOI' ? (
+                              <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 inline-flex items-center gap-1">
+                                🍗 Gà Ủ Muối
                               </span>
-                            );
-                          })()}
+                            ) : expense.targetCategory === 'NEM_NGUA' ? (
+                              <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30 inline-flex items-center gap-1">
+                                🥩 Nem Ngựa
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-slate-500/15 text-slate-600 dark:text-slate-400 border border-slate-500/30 inline-flex items-center gap-1">
+                                🏢 Chi Chung
+                              </span>
+                            )}
+
+                            {/* OPEX Sub-category */}
+                            {(() => {
+                              const cat = (expense.category || '').toLowerCase();
+                              const title = (expense.title || '').toLowerCase();
+                              if (cat.includes('ship') || title.includes('ship') || title.includes('vận chuyển')) {
+                                return (
+                                  <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30 inline-block">
+                                    🚚 Cước Ship
+                                  </span>
+                                );
+                              }
+                              if (cat.includes('điện') || cat.includes('nước') || cat.includes('mặt bằng') || title.includes('điện') || title.includes('nước')) {
+                                return (
+                                  <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 inline-block">
+                                    ⚡ Điện/Nước
+                                  </span>
+                                );
+                              }
+                              if (cat.includes('vật tư') || cat.includes('hộp') || cat.includes('túi') || title.includes('hộp') || title.includes('túi')) {
+                                return (
+                                  <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 inline-block">
+                                    📦 Vật Tư
+                                  </span>
+                                );
+                              }
+                              if (cat.includes('lương') || title.includes('lương')) {
+                                return (
+                                  <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-500/30 inline-block">
+                                    💼 Lương
+                                  </span>
+                                );
+                              }
+                              return (
+                                <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-slate-500/15 text-slate-600 dark:text-slate-400 border border-slate-500/30 inline-block">
+                                  ☕ Khác
+                                </span>
+                              );
+                            })()}
+                          </div>
+
                           <span className="font-bold dark:text-white text-stone-900 block truncate">
                             {expense.title}
                           </span>
+
+                          {matchedProduct && (
+                            <span className="text-[11px] text-amber-500 font-semibold block">
+                              🎯 Món đích danh: {matchedProduct.name}
+                            </span>
+                          )}
                         </div>
                       </td>
 
@@ -809,6 +884,88 @@ export default function ExpensesManagementPage() {
                 </select>
               </div>
 
+              {/* Phân Bổ Chi Phí Cho Sản Phẩm / Nhóm Hàng */}
+              <div>
+                <label className="font-bold dark:text-neutral-300 text-stone-700 block mb-1">
+                  Phân Bổ Chi Phí Cho Sản Phẩm / Nhóm Hàng (*)
+                </label>
+                <div className="grid grid-cols-3 gap-2 mb-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFormTargetCategory('GA_U_MUOI');
+                    }}
+                    className={`py-2 px-1 rounded-xl text-[11px] font-bold transition border cursor-pointer flex flex-col items-center gap-1 text-center ${
+                      formTargetCategory === 'GA_U_MUOI'
+                        ? 'bg-amber-500/20 text-amber-500 border-amber-500 shadow-sm'
+                        : 'dark:bg-neutral-900 bg-stone-100 text-neutral-400 border-transparent'
+                    }`}
+                  >
+                    <span>🍗 Gà Ủ Muối</span>
+                    <span className="text-[9px] font-normal opacity-80">Dòng gà ủ muối</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFormTargetCategory('NEM_NGUA');
+                    }}
+                    className={`py-2 px-1 rounded-xl text-[11px] font-bold transition border cursor-pointer flex flex-col items-center gap-1 text-center ${
+                      formTargetCategory === 'NEM_NGUA'
+                        ? 'bg-rose-500/20 text-rose-500 border-rose-500 shadow-sm'
+                        : 'dark:bg-neutral-900 bg-stone-100 text-neutral-400 border-transparent'
+                    }`}
+                  >
+                    <span>🥩 Nem Ngựa</span>
+                    <span className="text-[9px] font-normal opacity-80">Dòng nem chua</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFormTargetCategory('GENERAL');
+                      setFormProductId('');
+                    }}
+                    className={`py-2 px-1 rounded-xl text-[11px] font-bold transition border cursor-pointer flex flex-col items-center gap-1 text-center ${
+                      formTargetCategory === 'GENERAL'
+                        ? 'bg-blue-500/20 text-blue-400 border-blue-500 shadow-sm'
+                        : 'dark:bg-neutral-900 bg-stone-100 text-neutral-400 border-transparent'
+                    }`}
+                  >
+                    <span>📦 Chi Tiêu Chung</span>
+                    <span className="text-[9px] font-normal opacity-80">Vận hành chung</span>
+                  </button>
+                </div>
+
+                {/* Optional Specific Product Dropdown */}
+                {formTargetCategory !== 'GENERAL' && (
+                  <div className="mt-2">
+                    <label className="text-[11px] font-semibold dark:text-neutral-400 text-stone-600 block mb-1">
+                      Chọn Sản Phẩm Đích Danh (Tùy chọn nếu chi riêng cho 1 món):
+                    </label>
+                    <select
+                      value={formProductId}
+                      onChange={(e) => setFormProductId(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl dark:bg-neutral-900 bg-stone-50 border dark:border-neutral-700 border-stone-300 font-medium dark:text-white text-stone-900 focus:outline-none focus:border-amber-500 cursor-pointer"
+                    >
+                      <option value="">-- Phân bổ cho toàn bộ dòng hàng (Mặc định) --</option>
+                      {products
+                        .filter((p) => {
+                          const pName = (p.name || '').toLowerCase();
+                          if (formTargetCategory === 'GA_U_MUOI') return pName.includes('gà') || p.type === 'SINGLE';
+                          if (formTargetCategory === 'NEM_NGUA') return pName.includes('nem');
+                          return true;
+                        })
+                        .map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name} ({p.price?.toLocaleString('vi-VN')} đ)
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+
               {/* Payment Method Radio */}
               <div>
                 <label className="font-bold dark:text-neutral-300 text-stone-700 block mb-1">
@@ -877,7 +1034,7 @@ export default function ExpensesManagementPage() {
               {/* Category Select */}
               <div>
                 <label className="font-bold dark:text-neutral-300 text-stone-700 block mb-1">
-                  Danh Mục Chi (*)
+                  Danh Mục Chi OPEX (*)
                 </label>
                 <select
                   value={formCategory}

@@ -334,7 +334,7 @@ export async function GET(request: NextRequest) {
       orderBy: { date: 'desc' },
     });
 
-    // Group expenses by category: Gà, Nem, Khác
+    // Group expenses by targetCategory / category: Gà, Nem, Khác / Chung
     const chickenExpensesList: any[] = [];
     const springRollExpensesList: any[] = [];
     const otherExpensesList: any[] = [];
@@ -343,17 +343,20 @@ export async function GET(request: NextRequest) {
     let expenseSpringRollTotal = 0;
     let expenseOtherTotal = 0;
 
-    expenses.forEach((e) => {
+    expenses.forEach((e: any) => {
       const catLower = (e.category || '').toLowerCase();
       const titleLower = (e.title || '' + ' ' + (e.note || '')).toLowerCase();
       const noteLower = (e.note || '').toLowerCase();
-      const bName = branchNameMap[e.branchId || 'cs1'] || 'Cơ Sở Cầu Giấy';
+      const bName = branchNameMap[e.branchId || 'cs1'] || 'Cơ Sở';
+      const targetCat = (e.targetCategory || '').toUpperCase();
 
       const expItem = {
         id: e.id,
         expenseCode: e.expenseCode || `EXP-${e.id.slice(-4).toUpperCase()}`,
         title: e.title,
         amount: e.amount,
+        targetCategory: e.targetCategory || 'GENERAL',
+        productId: e.productId || null,
         date: e.date.toISOString(),
         branchName: bName,
         creatorName: e.creatorName || 'Quản trị viên',
@@ -361,10 +364,10 @@ export async function GET(request: NextRequest) {
         note: e.note || '-',
       };
 
-      if (catLower.includes('nem') || titleLower.includes('nem') || noteLower.includes('nem') || catLower === 'spring_roll') {
+      if (targetCat === 'NEM_NGUA' || catLower.includes('nem') || titleLower.includes('nem') || noteLower.includes('nem') || catLower === 'spring_roll') {
         expenseSpringRollTotal += e.amount;
         springRollExpensesList.push(expItem);
-      } else if (catLower.includes('gà') || catLower.includes('chicken') || titleLower.includes('gà') || titleLower.includes('chicken') || noteLower.includes('gà')) {
+      } else if (targetCat === 'GA_U_MUOI' || catLower.includes('gà') || catLower.includes('chicken') || titleLower.includes('gà') || titleLower.includes('chicken') || noteLower.includes('gà')) {
         expenseChickenTotal += e.amount;
         chickenExpensesList.push(expItem);
       } else {
@@ -449,6 +452,13 @@ export async function GET(request: NextRequest) {
           matchingExpensesList = otherExpensesList;
         }
 
+        // Direct product-specific expenses check
+        const directProductExpenses = expenses.filter((e: any) => e.productId === item.id);
+        const directProductExpenseTotal = directProductExpenses.reduce((sum: number, e: any) => sum + e.amount, 0);
+        if (directProductExpenseTotal > 0) {
+          D_dedicated += directProductExpenseTotal;
+        }
+
         // General / Other Expense Allocation (by Net Revenue share or COGS share)
         let D_general = 0;
         if (totalNetRevenue_Sum > 0) {
@@ -460,6 +470,10 @@ export async function GET(request: NextRequest) {
         }
 
         const D_i = D_dedicated + D_general;
+
+        // Gross Profit per product = Revenue - COGS - Dedicated Category Expense
+        const grossProfit = B_i - C_i - D_dedicated;
+        const grossMarginPercent = B_i > 0 ? Number(((grossProfit / B_i) * 100).toFixed(1)) : 0;
 
         // (A_i) Final Net Profit
         const A_i = B_i - C_i - D_i;
@@ -484,6 +498,8 @@ export async function GET(request: NextRequest) {
           expense: D_i,
           dedicatedExpense: D_dedicated,
           generalExpense: D_general,
+          grossProfit,
+          grossMarginPercent,
           netProfit: A_i,
           marginPercent,
           comboBreakdown,
@@ -493,8 +509,50 @@ export async function GET(request: NextRequest) {
       })
       .sort((a, b) => b.netRevenue - a.netRevenue);
 
+    // Grouping summary by Category (Gà Ủ Muối, Nem Ngựa, Khác)
+    const categorySummary = [
+      {
+        key: 'GA_U_MUOI',
+        name: '🍗 Dòng Gà Ủ Muối',
+        revenue: productRows.filter((p) => p.categoryTag === 'CHICKEN').reduce((sum, p) => sum + p.netRevenue, 0),
+        cogs: productRows.filter((p) => p.categoryTag === 'CHICKEN').reduce((sum, p) => sum + p.cogs, 0),
+        dedicatedExpense: expenseChickenTotal,
+        totalDirectCost: productRows.filter((p) => p.categoryTag === 'CHICKEN').reduce((sum, p) => sum + p.cogs, 0) + expenseChickenTotal,
+        grossProfit: productRows.filter((p) => p.categoryTag === 'CHICKEN').reduce((sum, p) => sum + p.netRevenue, 0) - (productRows.filter((p) => p.categoryTag === 'CHICKEN').reduce((sum, p) => sum + p.cogs, 0) + expenseChickenTotal),
+        marginPercent: productRows.filter((p) => p.categoryTag === 'CHICKEN').reduce((sum, p) => sum + p.netRevenue, 0) > 0
+          ? Number((((productRows.filter((p) => p.categoryTag === 'CHICKEN').reduce((sum, p) => sum + p.netRevenue, 0) - (productRows.filter((p) => p.categoryTag === 'CHICKEN').reduce((sum, p) => sum + p.cogs, 0) + expenseChickenTotal)) / productRows.filter((p) => p.categoryTag === 'CHICKEN').reduce((sum, p) => sum + p.netRevenue, 0)) * 100).toFixed(1))
+          : 0,
+      },
+      {
+        key: 'NEM_NGUA',
+        name: '🥩 Dòng Nem Ngựa Smart',
+        revenue: productRows.filter((p) => p.categoryTag === 'SPRING_ROLL').reduce((sum, p) => sum + p.netRevenue, 0),
+        cogs: productRows.filter((p) => p.categoryTag === 'SPRING_ROLL').reduce((sum, p) => sum + p.cogs, 0),
+        dedicatedExpense: expenseSpringRollTotal,
+        totalDirectCost: productRows.filter((p) => p.categoryTag === 'SPRING_ROLL').reduce((sum, p) => sum + p.cogs, 0) + expenseSpringRollTotal,
+        grossProfit: productRows.filter((p) => p.categoryTag === 'SPRING_ROLL').reduce((sum, p) => sum + p.netRevenue, 0) - (productRows.filter((p) => p.categoryTag === 'SPRING_ROLL').reduce((sum, p) => sum + p.cogs, 0) + expenseSpringRollTotal),
+        marginPercent: productRows.filter((p) => p.categoryTag === 'SPRING_ROLL').reduce((sum, p) => sum + p.netRevenue, 0) > 0
+          ? Number((((productRows.filter((p) => p.categoryTag === 'SPRING_ROLL').reduce((sum, p) => sum + p.netRevenue, 0) - (productRows.filter((p) => p.categoryTag === 'SPRING_ROLL').reduce((sum, p) => sum + p.cogs, 0) + expenseSpringRollTotal)) / productRows.filter((p) => p.categoryTag === 'SPRING_ROLL').reduce((sum, p) => sum + p.netRevenue, 0)) * 100).toFixed(1))
+          : 0,
+      },
+      {
+        key: 'OTHER',
+        name: '📦 Nước Chấm & Sản Phẩm Khác',
+        revenue: productRows.filter((p) => p.categoryTag === 'OTHER').reduce((sum, p) => sum + p.netRevenue, 0),
+        cogs: productRows.filter((p) => p.categoryTag === 'OTHER').reduce((sum, p) => sum + p.cogs, 0),
+        dedicatedExpense: 0,
+        totalDirectCost: productRows.filter((p) => p.categoryTag === 'OTHER').reduce((sum, p) => sum + p.cogs, 0),
+        grossProfit: productRows.filter((p) => p.categoryTag === 'OTHER').reduce((sum, p) => sum + p.netRevenue, 0) - productRows.filter((p) => p.categoryTag === 'OTHER').reduce((sum, p) => sum + p.cogs, 0),
+        marginPercent: productRows.filter((p) => p.categoryTag === 'OTHER').reduce((sum, p) => sum + p.netRevenue, 0) > 0
+          ? Number((((productRows.filter((p) => p.categoryTag === 'OTHER').reduce((sum, p) => sum + p.netRevenue, 0) - productRows.filter((p) => p.categoryTag === 'OTHER').reduce((sum, p) => sum + p.cogs, 0)) / productRows.filter((p) => p.categoryTag === 'OTHER').reduce((sum, p) => sum + p.netRevenue, 0)) * 100).toFixed(1))
+          : 0,
+      },
+    ];
+
     // Summary Totals
-    const totalNetProfit_Sum = totalNetRevenue_Sum - totalCOGS_Sum - totalExpenses_Sum;
+    const totalGrossProfit_Sum = categorySummary.reduce((sum, c) => sum + c.grossProfit, 0);
+    const generalOperatingExpenses = expenseOtherTotal;
+    const totalNetProfit_Sum = totalGrossProfit_Sum - generalOperatingExpenses;
     const overallMarginPercent =
       totalNetRevenue_Sum > 0 ? Number(((totalNetProfit_Sum / totalNetRevenue_Sum) * 100).toFixed(1)) : 0;
 
@@ -509,10 +567,14 @@ export async function GET(request: NextRequest) {
       summary: {
         totalNetRevenue: totalNetRevenue_Sum,
         totalCOGS: totalCOGS_Sum,
+        totalDedicatedExpenses: expenseChickenTotal + expenseSpringRollTotal,
+        totalGrossProfit: totalGrossProfit_Sum,
+        generalOperatingExpenses,
         totalExpenses: totalExpenses_Sum,
         totalNetProfit: totalNetProfit_Sum,
         overallMarginPercent,
       },
+      categorySummary,
       products: productRows,
     });
   } catch (error: any) {
