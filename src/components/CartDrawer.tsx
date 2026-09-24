@@ -24,39 +24,45 @@ interface CartDrawerProps {
 const FALLBACK_BRANCH_MAPPINGS = [
   {
     id: 'cs6',
+    code: 'CS6',
     name: 'Cơ sở 06 - Nam Từ Liêm (18 Lê Đức Thọ)',
     shortName: 'Cơ sở 06 - Nam Từ Liêm / Smart City',
     keywords: ['smart city', 'vinsmart', 'vin smart', 'tây mỗ', 'đại mỗ', 'nam từ liêm', 'lê đức thọ', 'mễ trì', 'phú đô', 'hàm nghi', 'nguyễn cơ thạch'],
   },
   {
     id: 'cs1',
+    code: 'CS1',
     name: 'Cơ sở 01 - Cầu Giấy (12 Cầu Giấy)',
     shortName: 'Cơ sở 01 - Cầu Giấy',
     keywords: ['cầu giấy', 'dịch vọng', 'nghĩa tân', 'xuân thủy', 'trần duy hưng', 'trung hòa', 'mỹ đình', 'bắc từ liêm', 'phạm văn đồng', 'trần thái tông'],
   },
   {
     id: 'cs2',
+    code: 'CS2',
     name: 'Cơ sở 02 - Đống Đa (88 Xã Đàn)',
     shortName: 'Cơ sở 02 - Đống Đa',
     keywords: ['đống đa', 'xã đàn', 'chùa bộc', 'thái hà', 'tôn đức thắng', 'láng hạ', 'ô chợ dừa', 'khâm thiên', 'hàng bột', 'nguyên hồng'],
   },
   {
     id: 'cs3',
+    code: 'CS3',
     name: 'Cơ sở 03 - Hai Bà Trưng (156 Phố Huế)',
     shortName: 'Cơ sở 03 - Hai Bà Trưng',
-    keywords: ['hai bà trưng', 'phố huế', 'bạch mai', 'minh khai', 'lê thanh nghị', 'đại la', 'trần khát chân', 'hoàn kiếm', 'tràng tiền', 'bà triệu'],
+    keywords: ['hai bà trưng', 'phố huế', 'bạch mai', 'minh khai', 'lê thanh nghị', 'đại la', 'trần khát chân', 'hoàn kiếm', 'tràng tiền', 'bà triệu', 'times city'],
   },
   {
     id: 'cs4',
+    code: 'CS4',
     name: 'Cơ sở 04 - Thanh Xuân (45 Nguyễn Trãi)',
     shortName: 'Cơ sở 04 - Thanh Xuân',
-    keywords: ['thanh xuân', 'nguyễn trãi', 'đại thanh', 'thanh trì', 'hà đông', 'linh đàm', 'hoàng mai', 'giải phóng', 'khương trung', 'kim giang'],
+    keywords: ['thanh xuân', 'nguyễn trãi', 'trần phú', 'đại thanh', 'thanh trì', 'hà đông', 'văn quán', 'mộ lao', 'quang trung', 'linh đàm', 'hoàng mai', 'giải phóng', 'khương trung', 'kim giang'],
   },
   {
     id: 'cs5',
+    code: 'CS5',
     name: 'Cơ sở 05 - Tây Hồ (210 Lạc Long Quân)',
     shortName: 'Cơ sở 05 - Tây Hồ',
-    keywords: ['tây hồ', 'lạc long quân', 'thụy khuê', 'hoàng hoa thám', 'võ chí công', 'ba đình', 'đội cấn', 'yên phụ', 'nhật tân'],
+    keywords: ['tây hồ', 'lạc long quân', 'thụy khuê', 'hoàng hoa thám', 'võ chí công', 'ba đình', 'đội cấn', 'yên phụ', 'nhật tân', 'ciputra'],
   },
 ];
 
@@ -83,12 +89,18 @@ export default function CartDrawer({
   const { branches } = useBranches();
 
   const activeBranchMappings = branches.length > 0
-    ? branches.map((b) => ({
-        id: b.id,
-        name: b.name,
-        shortName: b.code ? `${b.code} - ${b.name}` : b.name,
-        keywords: b.keywords || [b.name.toLowerCase(), (b.address || '').toLowerCase()],
-      }))
+    ? branches.map((b) => {
+        const fallback = FALLBACK_BRANCH_MAPPINGS.find(
+          (fb) => fb.id.toLowerCase() === b.id.toLowerCase() || fb.id.toLowerCase() === b.code?.toLowerCase()
+        );
+        return {
+          id: b.id,
+          code: b.code,
+          name: b.name,
+          shortName: b.code ? `${b.code.toUpperCase()} - ${b.name}` : b.name,
+          keywords: b.keywords || fallback?.keywords || [b.name.toLowerCase(), (b.address || '').toLowerCase()],
+        };
+      })
     : FALLBACK_BRANCH_MAPPINGS;
 
   const [customerName, setCustomerName] = useState('');
@@ -161,9 +173,19 @@ export default function CartDrawer({
             nearestBranchId: data.nearestBranchId,
           });
 
-          // Auto select nearest store if user hasn't explicitly chosen one
-          if (!selectedStore && data.nearestBranch) {
-            setSelectedStore(data.nearestBranch);
+          // Match branch in activeBranchMappings by ID or code or name
+          const matchedBranch = activeBranchMappings.find(
+            (b) =>
+              b.id === data.nearestBranchId ||
+              b.code?.toLowerCase() === data.nearestBranchId?.toLowerCase() ||
+              data.nearestBranch?.toLowerCase().includes(b.name.toLowerCase())
+          );
+
+          if (matchedBranch) {
+            setSelectedStore(matchedBranch.id);
+            setSuggestedBranch({ name: matchedBranch.name, shortName: matchedBranch.shortName });
+          } else if (data.nearestBranchId) {
+            setSelectedStore(data.nearestBranchId);
           }
         }
       } catch (err) {
@@ -175,6 +197,45 @@ export default function CartDrawer({
 
     return () => clearTimeout(timer);
   }, [deliveryAddress]);
+
+  const handleBranchChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newBranchId = e.target.value;
+    setSelectedStore(newBranchId);
+    const chosen = activeBranchMappings.find((b) => b.id === newBranchId);
+    if (chosen) {
+      setSuggestedBranch({ name: chosen.name, shortName: chosen.shortName });
+    } else {
+      setSuggestedBranch(null);
+    }
+
+    // If customer has entered address, recalculate distance and fee for the chosen branch
+    if (deliveryAddress && deliveryAddress.trim().length >= 5 && newBranchId) {
+      setIsCalculatingDistance(true);
+      try {
+        const res = await fetch('/api/shipping/calculate-distance', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            customerAddress: deliveryAddress,
+            branchId: newBranchId,
+          }),
+        });
+        const data = await res.json();
+        if (data.success && data.distanceKm) {
+          setDistanceResult({
+            distanceKm: data.distanceKm,
+            estimatedFee: data.estimatedFee,
+            nearestBranch: data.nearestBranch || (chosen?.shortName || chosen?.name || 'Cơ sở'),
+            nearestBranchId: newBranchId,
+          });
+        }
+      } catch (err) {
+        console.error('Error recalculating distance for chosen branch:', err);
+      } finally {
+        setIsCalculatingDistance(false);
+      }
+    }
+  };
 
   // Financial calculations
   const subtotal = cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
@@ -199,7 +260,7 @@ export default function CartDrawer({
             setDeliveryAddress(data.customer.address);
             const detected = detectBranch(data.customer.address, activeBranchMappings);
             if (detected) {
-              setSelectedStore(detected.name);
+              setSelectedStore(detected.id);
               setSuggestedBranch({ name: detected.name, shortName: detected.shortName });
             }
           }
@@ -225,10 +286,8 @@ export default function CartDrawer({
     setDeliveryAddress(addr);
     const detected = detectBranch(addr, activeBranchMappings);
     if (detected) {
-      setSelectedStore(detected.name);
+      setSelectedStore(detected.id);
       setSuggestedBranch({ name: detected.name, shortName: detected.shortName });
-    } else {
-      setSuggestedBranch(null);
     }
   };
 
@@ -243,7 +302,15 @@ export default function CartDrawer({
       return;
     }
 
-    const combinedNote = selectedStore ? `[Cơ sở chọn: ${selectedStore}] ${note}` : note;
+    // Validation: Auto-assign valid branchId if still empty
+    const finalBranchId =
+      selectedStore && selectedStore !== ''
+        ? selectedStore
+        : distanceResult?.nearestBranchId || activeBranchMappings[0]?.id || 'cs1';
+
+    const branchObj = activeBranchMappings.find((b) => b.id === finalBranchId);
+    const branchDisplayName = branchObj ? branchObj.shortName || branchObj.name : finalBranchId;
+    const combinedNote = branchDisplayName ? `[Cơ sở chọn: ${branchDisplayName}] ${note}` : note;
 
     setLoading(true);
     try {
@@ -256,6 +323,7 @@ export default function CartDrawer({
           deliveryAddress,
           note: combinedNote,
           paymentMethod,
+          branchId: finalBranchId,
           totalAmount: finalTotalAmount,
           discountAmount: 0,
           shippingFee: 0,
@@ -516,20 +584,33 @@ export default function CartDrawer({
 
                   {/* Branch Select */}
                   <div>
-                    <label className="block text-[11px] font-semibold text-neutral-300 mb-1">
-                      Cơ Sở Giao Hàng Phục Vụ
+                    <label className="block text-[11px] font-semibold text-neutral-300 mb-1 flex items-center justify-between">
+                      <span>Cơ Sở Giao Hàng Phục Vụ</span>
+                      {selectedStore && distanceResult && (
+                        <span className="text-[10px] text-amber-400 font-normal">
+                          (Đã chọn chi nhánh tối ưu)
+                        </span>
+                      )}
                     </label>
                     <select
                       value={selectedStore}
-                      onChange={(e) => setSelectedStore(e.target.value)}
+                      onChange={handleBranchChange}
                       className="w-full px-3.5 py-2.5 bg-[#0B0D11] border border-neutral-800 rounded-xl text-xs font-medium text-amber-300 focus:border-amber-500 focus:outline-none transition-colors cursor-pointer"
                     >
-                      <option value="" className="bg-neutral-900 text-neutral-400">-- Tự động chọn cơ sở gần nhất --</option>
-                      {activeBranchMappings.map((b) => (
-                        <option key={b.id} value={b.name} className="bg-neutral-900 text-neutral-100">
-                          {b.name}
-                        </option>
-                      ))}
+                      <option value="" className="bg-neutral-900 text-neutral-400">
+                        {isCalculatingDistance ? '-- ⏳ Đang tìm cơ sở gần bạn nhất... --' : '-- Tự động chọn cơ sở gần nhất --'}
+                      </option>
+                      {activeBranchMappings.map((b) => {
+                        const isNearest =
+                          distanceResult?.nearestBranchId === b.id ||
+                          (distanceResult?.nearestBranch &&
+                            distanceResult.nearestBranch.toLowerCase().includes(b.name.toLowerCase()));
+                        return (
+                          <option key={b.id} value={b.id} className="bg-neutral-900 text-neutral-100 font-medium">
+                            {b.shortName || b.name} {isNearest && distanceResult?.distanceKm ? `⚡ Gần nhất (~${distanceResult.distanceKm} km)` : ''}
+                          </option>
+                        );
+                      })}
                     </select>
                   </div>
 

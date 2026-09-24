@@ -69,6 +69,7 @@ const KNOWN_COORDINATES: Record<string, { lat: number; lng: number }> = {
   'vo chi cong': { lat: 21.068, lng: 105.805 },
   'ciputra': { lat: 21.075, lng: 105.795 },
   'ha dong': { lat: 20.970, lng: 105.775 },
+  'tran phu': { lat: 20.982, lng: 105.788 },
   'quang trung': { lat: 20.965, lng: 105.768 },
   'van quan': { lat: 20.980, lng: 105.790 },
   'mo lao': { lat: 20.985, lng: 105.786 },
@@ -129,6 +130,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const customerAddress = body.customerAddress || body.address || '';
+    const targetBranchId = body.branchId || body.targetBranchId || '';
 
     if (!customerAddress || typeof customerAddress !== 'string' || customerAddress.trim().length < 3) {
       return NextResponse.json(
@@ -150,6 +152,44 @@ export async function POST(request: NextRequest) {
         estimatedFee: 21000,
         nearestBranch: 'Cơ Sở Cầu Giấy',
         nearestBranchId: 'cs1',
+      });
+    }
+
+    const targetBranch = targetBranchId
+      ? branches.find(
+          (b) =>
+            b.id === targetBranchId ||
+            b.code?.toLowerCase() === targetBranchId.toLowerCase() ||
+            b.name === targetBranchId
+        )
+      : null;
+
+    if (targetBranch) {
+      const customerCoords = findCoordinates(customerAddress);
+      const branchCoords =
+        KNOWN_COORDINATES[targetBranch.code?.toLowerCase() || ''] ||
+        KNOWN_COORDINATES[targetBranch.id?.toLowerCase() || ''] ||
+        findCoordinates(targetBranch.address || targetBranch.name);
+
+      const dist = calculateHaversineKm(
+        customerCoords.lat,
+        customerCoords.lng,
+        branchCoords.lat,
+        branchCoords.lng
+      );
+
+      const distKm = Math.max(1.0, Math.round(dist * 10) / 10);
+      const rawFee = distKm * 7000;
+      const estimatedFee = Math.round(rawFee / 1000) * 1000;
+
+      return NextResponse.json({
+        success: true,
+        distanceKm: distKm,
+        estimatedFee,
+        nearestBranch: targetBranch.code
+          ? `${targetBranch.code.toUpperCase()} - ${targetBranch.name}`
+          : targetBranch.name,
+        nearestBranchId: targetBranch.id,
       });
     }
 
