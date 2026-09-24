@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { X, Trash2, Plus, Minus, ShoppingCart, CheckCircle2, MapPin, Sparkles, UserCheck, CreditCard, ShieldCheck, QrCode, PhoneCall } from 'lucide-react';
+import { X, Trash2, Plus, Minus, ShoppingCart, CheckCircle2, MapPin, Sparkles, UserCheck, CreditCard, ShieldCheck, QrCode, PhoneCall, Loader2 } from 'lucide-react';
 import { Product } from './MenuSection';
 
 import { useBranches, detectBranchIdFromText } from '../hooks/useBranches';
@@ -102,6 +102,14 @@ export default function CartDrawer({
   const [existingCustomer, setExistingCustomer] = useState<{ name: string; totalOrders: number } | null>(null);
   const [isLookingUpPhone, setIsLookingUpPhone] = useState(false);
 
+  const [isCalculatingDistance, setIsCalculatingDistance] = useState(false);
+  const [distanceResult, setDistanceResult] = useState<{
+    distanceKm: number;
+    estimatedFee: number;
+    nearestBranch: string;
+    nearestBranchId?: string;
+  } | null>(null);
+
   const [loading, setLoading] = useState(false);
   const [createdOrderCode, setCreatedOrderCode] = useState<string | null>(null);
 
@@ -128,6 +136,45 @@ export default function CartDrawer({
       })
       .catch(console.error);
   }, [selectedStore]);
+
+  // AI-powered distance & dynamic shipping calculation effect (debounce 800ms)
+  useEffect(() => {
+    if (!deliveryAddress || deliveryAddress.trim().length < 5) {
+      setDistanceResult(null);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setIsCalculatingDistance(true);
+      try {
+        const res = await fetch('/api/shipping/calculate-distance', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ customerAddress: deliveryAddress }),
+        });
+        const data = await res.json();
+        if (data.success && data.distanceKm) {
+          setDistanceResult({
+            distanceKm: data.distanceKm,
+            estimatedFee: data.estimatedFee,
+            nearestBranch: data.nearestBranch,
+            nearestBranchId: data.nearestBranchId,
+          });
+
+          // Auto select nearest store if user hasn't explicitly chosen one
+          if (!selectedStore && data.nearestBranch) {
+            setSelectedStore(data.nearestBranch);
+          }
+        }
+      } catch (err) {
+        console.error('Error calculating distance:', err);
+      } finally {
+        setIsCalculatingDistance(false);
+      }
+    }, 800);
+
+    return () => clearTimeout(timer);
+  }, [deliveryAddress]);
 
   // Financial calculations
   const subtotal = cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
@@ -424,27 +471,47 @@ export default function CartDrawer({
                     />
                   </div>
 
-                  {/* Delivery Address Input with Smart Branch Detection */}
+                  {/* Delivery Address Input with Smart Branch Detection & AI Distance */}
                   <div>
                     <label className="block text-[11px] font-semibold text-neutral-300 mb-1">
                       Địa Chỉ Nhận Hàng Chi Tiết (*)
                     </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Ví dụ: 12 Đường Cầu Giấy, Q. Cầu Giấy, Hà Nội"
-                      value={deliveryAddress}
-                      onChange={handleAddressChange}
-                      className="w-full px-3.5 py-2.5 bg-[#0B0D11] border border-neutral-800 rounded-xl text-xs font-medium text-[#FAFAF9] focus:border-amber-500 focus:outline-none transition-colors"
-                    />
-                    {suggestedBranch && (
+                    <div className="relative">
+                      <input
+                        type="text"
+                        required
+                        placeholder="Ví dụ: 12 Đường Cầu Giấy, Q. Cầu Giấy, Hà Nội"
+                        value={deliveryAddress}
+                        onChange={handleAddressChange}
+                        className="w-full px-3.5 py-2.5 bg-[#0B0D11] border border-neutral-800 rounded-xl text-xs font-medium text-[#FAFAF9] focus:border-amber-500 focus:outline-none transition-colors"
+                      />
+                      {isCalculatingDistance && (
+                        <div className="absolute right-3 top-2.5 flex items-center gap-1.5 text-[10px] text-amber-400 font-medium animate-pulse">
+                          <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
+                          <span>Đang đo khoảng cách...</span>
+                        </div>
+                      )}
+                    </div>
+                    {distanceResult ? (
+                      <div className="mt-1.5 p-2 bg-emerald-950/40 border border-emerald-500/30 rounded-lg flex items-center justify-between text-emerald-400 text-[11px] font-semibold animate-in fade-in duration-200">
+                        <div className="flex items-center gap-1.5">
+                          <MapPin className="w-3.5 h-3.5 shrink-0 text-emerald-400" />
+                          <span>
+                            🎯 Gần nhất: <strong className="text-amber-300">{distanceResult.nearestBranch}</strong>
+                          </span>
+                        </div>
+                        <span className="text-amber-300 font-bold bg-amber-500/15 px-2 py-0.5 rounded border border-amber-500/30">
+                          ~{distanceResult.distanceKm} km ({distanceResult.estimatedFee.toLocaleString('vi-VN')} đ)
+                        </span>
+                      </div>
+                    ) : suggestedBranch ? (
                       <div className="mt-1.5 p-2 bg-emerald-950/40 border border-emerald-500/30 rounded-lg flex items-center gap-1.5 text-emerald-400 text-[11px] font-semibold animate-in fade-in duration-200">
                         <MapPin className="w-3.5 h-3.5 shrink-0 text-emerald-400" />
                         <span>
                           🎯 Đã chọn: <strong className="text-amber-300">{suggestedBranch.shortName}</strong> (Gần bạn nhất • Giao hỏa tốc 25-35 phút)
                         </span>
                       </div>
-                    )}
+                    ) : null}
                   </div>
 
                   {/* Branch Select */}
@@ -556,11 +623,32 @@ export default function CartDrawer({
                     <span className="font-semibold text-neutral-200">{subtotal.toLocaleString('vi-VN')} đ</span>
                   </div>
                   <div className="flex flex-col gap-0.5 text-neutral-400">
-                    <div className="flex justify-between">
+                    <div className="flex justify-between items-center">
                       <span>Phí vận chuyển dự kiến:</span>
-                      <span className="font-semibold text-neutral-300">Đang tính theo địa chỉ... (~7.000đ/km)</span>
+                      {isCalculatingDistance ? (
+                        <span className="text-[11px] text-amber-400 font-semibold flex items-center gap-1.5 animate-pulse">
+                          <Loader2 className="w-3 h-3 animate-spin text-amber-400" />
+                          Đang đo khoảng cách từ cơ sở gần nhất...
+                        </span>
+                      ) : distanceResult ? (
+                        <span className="font-bold text-amber-300 text-sm">
+                          {distanceResult.estimatedFee.toLocaleString('vi-VN')} đ
+                        </span>
+                      ) : (
+                        <span className="font-semibold text-neutral-300">
+                          Đang tính theo địa chỉ... (~7.000đ/km)
+                        </span>
+                      )}
                     </div>
-                    <span className="text-[10px] text-neutral-500">(Số km theo Google Maps x 7.000 vnđ • ~7.000đ/km từ cơ sở gần nhất)</span>
+                    {distanceResult ? (
+                      <span className="text-[10px] text-emerald-400 font-medium">
+                        (~{distanceResult.distanceKm} km từ {distanceResult.nearestBranch} • 7.000đ/km)
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-neutral-500">
+                        (Số km theo Google Maps x 7.000 vnđ • ~7.000đ/km từ cơ sở gần nhất)
+                      </span>
+                    )}
                   </div>
                   {isFreeship ? (
                     <div className="flex items-center justify-between text-emerald-400 font-semibold bg-emerald-950/40 p-2 rounded-lg border border-emerald-500/20 text-[11px]">
