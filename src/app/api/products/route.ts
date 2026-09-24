@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
-import { prisma } from '@/lib/prisma';
+import { prisma, ensureDbInitialized } from '@/lib/prisma';
+import { normalizeImageUrl } from '@/lib/image-helper';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -213,6 +214,7 @@ export async function POST(request: Request) {
 
     const stockQtyNum = type === 'COMBO' ? 0 : (Number(stockQuantity) >= 0 ? Number(stockQuantity) : 0);
     const availableState = type === 'COMBO' ? true : (stockQtyNum === 0 ? false : Boolean(isAvailable));
+    const cleanImage = normalizeImageUrl(image) || 'https://images.unsplash.com/photo-1517701604599-bb29b565090c?w=500&q=80';
 
     let calculatedCostPrice = Number(costPrice) || 0;
     const validComboItems: { productId: string; quantity: number }[] = [];
@@ -233,40 +235,63 @@ export async function POST(request: Request) {
       }
     }
 
-    const product = await prisma.product.create({
-      data: {
-        name,
-        type: type === 'COMBO' ? 'COMBO' : 'SINGLE',
-        description: description || '',
-        price: Number(price),
-        costPrice: type === 'COMBO' ? calculatedCostPrice : Number(costPrice) || 0,
-        image: image || 'https://images.unsplash.com/photo-1517701604599-bb29b565090c?w=500&q=80',
-        isAvailable: availableState,
-        isBestSeller: Boolean(isBestSeller),
-        categoryId: categoryId || null,
-        expiryDate: expiryDate ? new Date(expiryDate) : null,
-        batchCode: batchCode || null,
-        aiKeywords: aiKeywords || null,
-        stockQuantity: stockQtyNum,
-        unit: type === 'COMBO' ? 'Combo' : (unit || 'Phần'),
-        ...(type === 'COMBO' && validComboItems.length > 0 && {
-          comboItems: {
-            create: validComboItems.map((ci) => ({
-              productId: ci.productId,
-              quantity: ci.quantity,
-            })),
-          },
-        }),
-      },
-      include: {
-        category: true,
+    const createProductData = {
+      name,
+      type: type === 'COMBO' ? 'COMBO' : 'SINGLE',
+      description: description || '',
+      price: Number(price),
+      costPrice: type === 'COMBO' ? calculatedCostPrice : Number(costPrice) || 0,
+      image: cleanImage,
+      isAvailable: availableState,
+      isBestSeller: Boolean(isBestSeller),
+      categoryId: categoryId || null,
+      expiryDate: expiryDate ? new Date(expiryDate) : null,
+      batchCode: batchCode || null,
+      aiKeywords: aiKeywords || null,
+      stockQuantity: stockQtyNum,
+      unit: type === 'COMBO' ? 'Combo' : (unit || 'Phần'),
+      ...(type === 'COMBO' && validComboItems.length > 0 && {
         comboItems: {
-          include: {
-            product: true,
+          create: validComboItems.map((ci) => ({
+            productId: ci.productId,
+            quantity: ci.quantity,
+          })),
+        },
+      }),
+    };
+
+    let product;
+    try {
+      product = await prisma.product.create({
+        data: createProductData,
+        include: {
+          category: true,
+          comboItems: {
+            include: {
+              product: true,
+            },
           },
         },
-      },
-    });
+      });
+    } catch (err: any) {
+      if (err?.code === 'P2021' || err?.message?.includes('does not exist')) {
+        console.warn('Product table missing, running ensureDbInitialized() auto-recovery...');
+        await ensureDbInitialized();
+        product = await prisma.product.create({
+          data: createProductData,
+          include: {
+            category: true,
+            comboItems: {
+              include: {
+                product: true,
+              },
+            },
+          },
+        });
+      } else {
+        throw err;
+      }
+    }
 
     // Direction 1: Auto-sync to InventoryItem
     try {
@@ -292,10 +317,24 @@ export async function POST(request: Request) {
       console.error('Auto sync product to inventory failed:', e);
     }
 
+    try {
+      revalidatePath('/');
+      revalidatePath('/admin/products');
+      revalidatePath('/admin/inventory/stock');
+    } catch (_) {}
+
     return NextResponse.json({ success: true, product });
   } catch (error: any) {
     console.error('API POST /api/products error:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json(
+      {
+        success: false,
+        error: error?.code === 'P2021'
+          ? 'Hệ thống đang tự động khởi tạo bảng dữ liệu, vui lòng thử lại sau vài giây.'
+          : (error.message || 'Lỗi khi tạo món ăn'),
+      },
+      { status: 500 }
+    );
   }
 }
 
@@ -333,7 +372,7 @@ export async function PUT(request: Request) {
     if (description !== undefined) updateData.description = description;
     if (price !== undefined) updateData.price = Number(price);
     if (costPrice !== undefined) updateData.costPrice = Number(costPrice);
-    if (image !== undefined) updateData.image = image;
+    if (image !== undefined) updateData.image = normalizeImageUrl(image);
     if (isBestSeller !== undefined) updateData.isBestSeller = Boolean(isBestSeller);
     if (categoryId) updateData.categoryId = categoryId;
     if (expiryDate !== undefined) updateData.expiryDate = expiryDate ? new Date(expiryDate) : null;

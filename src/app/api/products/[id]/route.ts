@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
+import { normalizeImageUrl } from '@/lib/image-helper';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -57,7 +58,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     if (body.description !== undefined) updateData.description = body.description;
     if (body.price !== undefined) updateData.price = Number(body.price);
     if (body.costPrice !== undefined) updateData.costPrice = Number(body.costPrice);
-    if (body.image !== undefined) updateData.image = body.image;
+    if (body.image !== undefined) updateData.image = normalizeImageUrl(body.image);
     if (body.isBestSeller !== undefined) updateData.isBestSeller = Boolean(body.isBestSeller);
     if (body.categoryId) updateData.categoryId = body.categoryId;
     if (body.expiryDate !== undefined) updateData.expiryDate = body.expiryDate ? new Date(body.expiryDate) : null;
