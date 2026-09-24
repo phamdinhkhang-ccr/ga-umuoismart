@@ -334,62 +334,57 @@ export default function ClientStorefront({ categories, products, settings }: Cli
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {storeList.map((store) => (
                 <div
                   key={store.id}
-                  className="dark:bg-neutral-900/70 bg-white backdrop-blur-xl border dark:border-neutral-800 border-stone-200/90 rounded-2xl overflow-hidden group dark:hover:border-amber-500/50 hover:border-amber-500/60 shadow-xs hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between"
+                  className="dark:bg-[#18181b] bg-white border dark:border-neutral-800 border-stone-200/90 rounded-xl p-5 dark:hover:border-amber-500/50 hover:border-amber-500/60 shadow-xs hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between space-y-4 group"
                 >
-                  <div className="relative h-48 sm:h-52 overflow-hidden">
-                    <img
-                      src={store.image}
-                      alt={store.name}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                    />
-                    <div className="absolute inset-0 dark:bg-gradient-to-t dark:from-neutral-900 dark:via-neutral-900/60 bg-gradient-to-t from-stone-900/80 via-stone-900/40 to-transparent" />
+                  {/* Top Badges: Store Badge + Open Status */}
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="bg-amber-500/15 border border-amber-500/30 text-amber-400 font-bold text-xs px-3 py-1 rounded-full shadow-xs tracking-wider">
+                      {store.badge}
+                    </span>
 
-                    <div className="absolute top-3 left-3 z-10">
-                      <span className="bg-amber-500/20 backdrop-blur-md border border-amber-500/40 text-amber-300 font-bold text-xs px-3 py-1 rounded-full shadow-md tracking-wider">
-                        {store.badge}
+                    <span className="inline-flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-1 rounded-full text-[11px] text-emerald-400 font-medium">
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                       </span>
-                    </div>
-
-                    <div className="absolute top-3 right-3 z-10">
-                      <span className="inline-flex items-center gap-1.5 bg-black/60 backdrop-blur-md border border-emerald-500/30 px-2.5 py-1 rounded-full text-[11px] text-emerald-400 font-medium shadow-md">
-                        <span className="relative flex h-2 w-2">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                        </span>
-                        <span>Đang mở cửa</span>
-                      </span>
-                    </div>
-
-                    <div className="absolute bottom-3 left-4 right-4 z-10">
-                      <span className="text-[11px] text-amber-400 font-semibold tracking-wider uppercase">
-                        {store.district}
-                      </span>
-                      <h3 className="text-lg font-bold text-white group-hover:text-amber-400 transition-colors tracking-tight">
-                        {store.name}
-                      </h3>
-                    </div>
+                      <span>Đang mở cửa</span>
+                    </span>
                   </div>
 
-                  <div className="p-5 space-y-3.5 flex-1">
-                    <div className="flex items-start gap-2.5 text-xs dark:text-neutral-300 text-stone-700 font-normal leading-relaxed">
+                  {/* Title & District */}
+                  <div className="space-y-1">
+                    {store.district && (
+                      <span className="text-[11px] text-amber-400 font-semibold tracking-wider uppercase block">
+                        {store.district}
+                      </span>
+                    )}
+                    <h3 className="text-lg font-bold dark:text-white text-stone-900 group-hover:text-amber-400 transition-colors tracking-tight">
+                      {store.name}
+                    </h3>
+                  </div>
+
+                  {/* Address & Hours */}
+                  <div className="space-y-3 pt-2 border-t dark:border-neutral-800/80 border-stone-100 flex-1">
+                    <div className="flex items-start gap-2.5 text-xs dark:text-neutral-300 text-stone-600 leading-relaxed">
                       <MapPin className="w-4 h-4 dark:text-amber-400 text-amber-600 shrink-0 mt-0.5 stroke-[1.75]" />
                       <span>{store.address}</span>
                     </div>
 
-                    <div className="flex items-center justify-between text-xs dark:text-neutral-400 text-stone-600 pt-1 border-t dark:border-neutral-800/60 border-stone-200">
+                    <div className="flex items-center justify-between text-xs dark:text-neutral-400 text-stone-500 pt-1">
                       <span className="flex items-center gap-1.5">
                         <Clock className="w-3.5 h-3.5 text-amber-500 stroke-[1.75]" />
-                        <span>Giờ mở cửa: <strong className="dark:text-neutral-200 text-stone-800 font-medium">{store.hours}</strong></span>
+                        <span>Giờ mở cửa: <strong className="dark:text-neutral-200 text-stone-700 font-medium">{store.hours}</strong></span>
                       </span>
                       <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold">Giao 30 phút</span>
                     </div>
                   </div>
 
-                  <div className="px-5 pb-5 pt-2 flex items-center gap-3">
+                  {/* Action Buttons */}
+                  <div className="pt-2 flex items-center gap-3">
                     <a
                       href={`tel:${store.phone}`}
                       className="flex-1 py-2.5 dark:bg-neutral-800/80 dark:hover:bg-neutral-700 dark:text-neutral-200 dark:border-neutral-700 bg-stone-100 hover:bg-stone-200 text-stone-800 border border-stone-300 text-xs font-semibold rounded-xl transition-all flex items-center justify-center gap-1.5"
