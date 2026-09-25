@@ -176,6 +176,9 @@ export default function CentralizedOrdersPage() {
   const [copiedBillLink, setCopiedBillLink] = useState(false);
   const [copiedZaloMsg, setCopiedZaloMsg] = useState(false);
   const [confirmPaidOrderModal, setConfirmPaidOrderModal] = useState<{ id: string; targetStatus: string } | null>(null);
+  const [debtCollectOrder, setDebtCollectOrder] = useState<OrderRecord | null>(null);
+  const [debtPaymentMethod, setDebtPaymentMethod] = useState<'COD' | 'BANK_TRANSFER'>('COD');
+  const [submittingDebt, setSubmittingDebt] = useState(false);
 
   // Shipping Modal State
   const [shippingModalOrder, setShippingModalOrder] = useState<OrderRecord | null>(null);
@@ -437,7 +440,11 @@ export default function CentralizedOrdersPage() {
       if (branchFilter !== 'ALL') params.append('branchId', branchFilter);
       if (fromDate) params.append('fromDate', fromDate);
       if (toDate) params.append('toDate', toDate);
-      if (statusTab !== 'ALL') params.append('status', statusTab);
+      if (statusTab === 'UNPAID') {
+        params.append('paymentStatus', 'UNPAID');
+      } else if (statusTab !== 'ALL') {
+        params.append('status', statusTab);
+      }
       params.append('_t', Date.now().toString());
 
       const res = await fetch(`/api/orders?${params.toString()}`, {
@@ -515,6 +522,55 @@ export default function CentralizedOrdersPage() {
 
     if (cleanPhone) {
       window.open(`https://zalo.me/${cleanPhone}`, '_blank');
+    }
+  };
+
+  // Debt Reminder handler (Zalo/SMS with Dynamic VietQR Link)
+  const handleRemindDebt = (ord: OrderRecord) => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://gaumuoismart.vn';
+    const billLink = `${origin}/don-hang/${ord.orderCode || ord.id}`;
+    const cleanPhone = (ord.customerPhone || '').replace(/\D/g, '');
+    
+    let debtAmount = ord.totalAmount;
+    if (ord.paymentMethod === 'SPLIT' && (ord.cashAmount || 0) > 0) {
+      debtAmount = Math.max(0, ord.transferAmount !== undefined && ord.transferAmount !== null ? ord.transferAmount : (ord.totalAmount - (ord.cashAmount || 0)));
+    }
+
+    const reminderMsg = `Gà Ủ Muối Smart xin chào anh/chị ${ord.customerName || 'Quý khách'}, đơn hàng #${ord.orderCode} của anh/chị còn số tiền ${debtAmount.toLocaleString('vi-VN')}đ chưa thanh toán. Anh/chị vui lòng quét mã VietQR tại link sau để hoàn tất: ${billLink} - Trân trọng cảm ơn!`;
+
+    navigator.clipboard.writeText(reminderMsg);
+    showToast(`📲 Đã sao chép tin nhắn nhắc nợ đơn #${ord.orderCode}!`);
+
+    if (cleanPhone) {
+      window.open(`https://zalo.me/${cleanPhone}`, '_blank');
+    }
+  };
+
+  // Confirm Debt Collected handler
+  const handleConfirmCollectDebt = async () => {
+    if (!debtCollectOrder) return;
+    setSubmittingDebt(true);
+    try {
+      const res = await fetch(`/api/orders/${debtCollectOrder.id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          paymentStatus: 'PAID',
+          paymentMethod: debtPaymentMethod,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setDebtCollectOrder(null);
+        fetchOrders();
+        showToast(`💵 Đã xác nhận thu nợ thành công cho đơn #${debtCollectOrder.orderCode}!`);
+      } else {
+        alert(data.error || 'Lỗi khi xác nhận thu nợ');
+      }
+    } catch (err: any) {
+      alert('Lỗi kết nối máy chủ');
+    } finally {
+      setSubmittingDebt(false);
     }
   };
 
@@ -975,6 +1031,21 @@ export default function CentralizedOrdersPage() {
 
   const pendingCount = useMemo(() => orders.filter((o) => o.status === 'PENDING').length, [orders]);
 
+  const unpaidOrdersCount = useMemo(() => {
+    return orders.filter((o) => o.paymentStatus === 'UNPAID' && o.status !== 'CANCELLED').length;
+  }, [orders]);
+
+  const totalUnpaidDebtAmount = useMemo(() => {
+    return orders
+      .filter((o) => o.paymentStatus === 'UNPAID' && o.status !== 'CANCELLED')
+      .reduce((sum, ord) => {
+        if (ord.paymentMethod === 'SPLIT' && (ord.cashAmount || 0) > 0) {
+          return sum + Math.max(0, ord.transferAmount !== undefined && ord.transferAmount !== null ? ord.transferAmount : (ord.totalAmount - (ord.cashAmount || 0)));
+        }
+        return sum + ord.totalAmount;
+      }, 0);
+  }, [orders]);
+
   return (
     <div className="space-y-6 max-w-[1600px] mx-auto pb-12 relative">
       {/* Toast Banner */}
@@ -1150,15 +1221,16 @@ export default function CentralizedOrdersPage() {
         </div>
       </div>
 
-      {/* 3. Dãy Tab trạng thái nhanh (Quick Filter Pills - 5 Order Lifecycle Steps) */}
+      {/* 3. Dãy Tab trạng thái nhanh (Quick Filter Pills - 5 Order Lifecycle Steps + Unpaid Debt) */}
       <div className="flex items-center gap-2 overflow-x-auto scrollbar-none pb-1">
         {[
-          { key: 'ALL', label: 'Tất cả đơn', count: orders.length },
-          { key: 'PENDING', label: '🟡 Chờ xác nhận', count: orders.filter((o) => o.status === 'PENDING').length },
-          { key: 'CONFIRMED', label: '🔵 Đã xác nhận (Bếp làm)', count: orders.filter((o) => o.status === 'CONFIRMED').length },
-          { key: 'DELIVERING', label: '🟣 Đang giao hàng', count: orders.filter((o) => o.status === 'DELIVERING').length },
-          { key: 'COMPLETED', label: '🟢 Thành công', count: orders.filter((o) => o.status === 'COMPLETED').length },
-          { key: 'CANCELLED', label: '🔴 Đã hủy', count: orders.filter((o) => o.status === 'CANCELLED').length },
+          { key: 'ALL', label: 'Tất cả đơn', count: orders.length, isDebt: false },
+          { key: 'UNPAID', label: '🚨 Chưa Thanh Toán (Cần Thu Nợ)', count: unpaidOrdersCount, isDebt: true },
+          { key: 'PENDING', label: '🟡 Chờ xác nhận', count: orders.filter((o) => o.status === 'PENDING').length, isDebt: false },
+          { key: 'CONFIRMED', label: '🔵 Đã xác nhận (Bếp làm)', count: orders.filter((o) => o.status === 'CONFIRMED').length, isDebt: false },
+          { key: 'DELIVERING', label: '🟣 Đang giao hàng', count: orders.filter((o) => o.status === 'DELIVERING').length, isDebt: false },
+          { key: 'COMPLETED', label: '🟢 Thành công', count: orders.filter((o) => o.status === 'COMPLETED').length, isDebt: false },
+          { key: 'CANCELLED', label: '🔴 Đã hủy', count: orders.filter((o) => o.status === 'CANCELLED').length, isDebt: false },
         ].map((tab) => {
           const isActive = statusTab === tab.key;
           return (
@@ -1170,18 +1242,74 @@ export default function CentralizedOrdersPage() {
               }}
               className={`px-4 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap flex items-center gap-2 cursor-pointer border ${
                 isActive
-                  ? 'bg-amber-500 text-stone-950 border-amber-500 shadow-md font-black'
+                  ? tab.isDebt
+                    ? 'bg-gradient-to-r from-rose-600 to-red-600 text-white border-rose-500 shadow-lg shadow-rose-500/25 font-black ring-2 ring-rose-400/50'
+                    : 'bg-amber-500 text-stone-950 border-amber-500 shadow-md font-black'
+                  : tab.isDebt
+                  ? 'dark:bg-rose-950/30 bg-rose-50 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/40 border-rose-300/60 dark:border-rose-800/60 font-bold'
                   : 'dark:bg-[#141820] bg-white dark:text-neutral-300 text-stone-700 hover:bg-stone-100 dark:hover:bg-neutral-800 border-stone-200 dark:border-neutral-800'
               }`}
             >
               <span>{tab.label}</span>
-              <span className={`px-2 py-0.5 rounded-full text-[10px] ${isActive ? 'bg-stone-950 text-amber-400 font-extrabold' : 'dark:bg-neutral-800 bg-stone-100 text-neutral-500'}`}>
+              <span
+                className={`px-2 py-0.5 rounded-full text-[10px] ${
+                  isActive
+                    ? 'bg-stone-950 text-white font-extrabold'
+                    : tab.isDebt
+                    ? 'bg-rose-500/20 text-rose-500 font-black'
+                    : 'dark:bg-neutral-800 bg-stone-100 text-neutral-500'
+                }`}
+              >
                 {tab.count}
               </span>
             </button>
           );
         })}
       </div>
+
+      {/* Summary Metric Bar when UNPAID Filter is Active */}
+      {statusTab === 'UNPAID' && (
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-rose-500/15 via-red-500/10 to-amber-500/10 border border-rose-500/30 dark:border-rose-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-rose-500 text-white shadow-md shadow-rose-500/20">
+              <AlertTriangle className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-black dark:text-white text-stone-900 tracking-tight">
+                  DANH SÁCH ĐƠN HÀNG CÔNG NỢ & CHƯA THANH TOÁN
+                </span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/40">
+                  Cần đối soát & thu nợ
+                </span>
+              </div>
+              <p className="text-xs dark:text-neutral-400 text-stone-600 mt-0.5">
+                Bao gồm các đơn giao thành công chưa nhận tiền, đơn đang giao và đơn thanh toán hỗn hợp còn nợ.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4 bg-white/90 dark:bg-neutral-900/90 px-4 py-2.5 rounded-xl border border-rose-200 dark:border-rose-900/40 shrink-0 shadow-xs">
+            <div className="text-right">
+              <span className="block text-[11px] font-semibold text-neutral-500 dark:text-neutral-400">
+                Tổng Số Đơn Chưa Thu:
+              </span>
+              <span className="text-sm font-black text-rose-600 dark:text-rose-400">
+                {unpaidOrdersCount} đơn
+              </span>
+            </div>
+            <div className="h-8 w-px bg-stone-200 dark:bg-neutral-800" />
+            <div className="text-right">
+              <span className="block text-[11px] font-semibold text-neutral-500 dark:text-neutral-400">
+                Tổng Tiền Nợ Cần Thu:
+              </span>
+              <span className="text-base font-black text-rose-600 dark:text-rose-400 drop-shadow-xs">
+                {totalUnpaidDebtAmount.toLocaleString('vi-VN')} đ
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 4. Bảng Danh Sách Đơn Hàng (Orders Table with Interactive Status & Payment Selects) */}
       <div className="rounded-2xl dark:bg-[#141820] bg-white border dark:border-neutral-800/80 border-stone-200/80 shadow-md overflow-hidden">
@@ -1413,7 +1541,37 @@ export default function CentralizedOrdersPage() {
 
                       {/* Fast Actions: Smart VietQR Bill, Edit, K80 Print & Detail View */}
                       <td className="py-3.5 px-4 text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end gap-1.5">
+                        <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                          {/* Fast Debt Reminder & Debt Collect for Unpaid Orders */}
+                          {order.paymentStatus === 'UNPAID' && order.status !== 'CANCELLED' && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handleRemindDebt(order)}
+                                className="px-2.5 py-1.5 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white font-bold rounded-lg text-[11px] flex items-center gap-1 transition shadow-xs cursor-pointer"
+                                title="Gửi link VietQR nhắc nợ qua Zalo / SMS"
+                              >
+                                <Share2 className="w-3.5 h-3.5 stroke-[2]" />
+                                <span>Nhắc Nợ</span>
+                              </button>
+
+                              {canEditPaymentStatus && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setDebtCollectOrder(order);
+                                    setDebtPaymentMethod(order.paymentMethod === 'BANK_TRANSFER' ? 'BANK_TRANSFER' : 'COD');
+                                  }}
+                                  className="px-2.5 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/40 font-bold rounded-lg text-[11px] flex items-center gap-1 transition shadow-xs cursor-pointer"
+                                  title="Xác nhận đã thu đủ tiền công nợ"
+                                >
+                                  <CheckCircle2 className="w-3.5 h-3.5 stroke-[2]" />
+                                  <span>Đã Thu</span>
+                                </button>
+                              )}
+                            </>
+                          )}
+
                           {/* Smart Dynamic VietQR Bill Button */}
                           <button
                             onClick={() => setSmartBillOrder(order)}
@@ -2965,6 +3123,122 @@ export default function CentralizedOrdersPage() {
               >
                 <MessageSquare className="w-4 h-4" />
                 <span>{copiedZaloMsg ? '✓ Đã Copy & Mở Zalo!' : '💬 Gửi Zalo / SMS Cho Khách'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 8. Modal Xác Nhận Đã Thu Tiền / Hoàn Tất Công Nợ */}
+      {debtCollectOrder && (
+        <div className="fixed inset-0 z-50 bg-neutral-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-md dark:bg-[#141820] bg-white rounded-2xl border dark:border-neutral-800 border-stone-200 shadow-2xl p-6 relative animate-in fade-in zoom-in-95 duration-200">
+            <button
+              onClick={() => setDebtCollectOrder(null)}
+              className="absolute top-4 right-4 p-1.5 text-neutral-400 hover:text-white rounded-lg dark:hover:bg-neutral-800 hover:bg-stone-100 transition cursor-pointer"
+            >
+              <X className="w-5 h-5 stroke-[1.5]" />
+            </button>
+
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-3 rounded-2xl bg-emerald-500/20 text-emerald-500 border border-emerald-500/30">
+                <CheckCircle2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-extrabold dark:text-white text-stone-900">
+                  Xác Nhận Đã Thu Tiền Đơn Hàng
+                </h3>
+                <p className="text-xs text-neutral-400">
+                  Đơn hàng #{debtCollectOrder.orderCode}
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-stone-50 dark:bg-neutral-900 border border-stone-200 dark:border-neutral-800 space-y-2 mb-4 text-xs">
+              <div className="flex justify-between">
+                <span className="text-neutral-400">Khách hàng:</span>
+                <span className="font-bold dark:text-white text-stone-900">
+                  {debtCollectOrder.customerName} ({debtCollectOrder.customerPhone})
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-neutral-400">Địa chỉ giao:</span>
+                <span className="font-medium dark:text-neutral-300 text-stone-700 text-right truncate max-w-[200px]">
+                  {debtCollectOrder.deliveryAddress}
+                </span>
+              </div>
+              <div className="flex justify-between pt-2 border-t dark:border-neutral-800 border-stone-200">
+                <span className="text-neutral-400 font-semibold">Số tiền cần thu:</span>
+                <span className="text-sm font-black text-rose-500">
+                  {(
+                    debtCollectOrder.paymentMethod === 'SPLIT' && (debtCollectOrder.cashAmount || 0) > 0
+                      ? Math.max(
+                          0,
+                          debtCollectOrder.transferAmount !== undefined && debtCollectOrder.transferAmount !== null
+                            ? debtCollectOrder.transferAmount
+                            : debtCollectOrder.totalAmount - (debtCollectOrder.cashAmount || 0)
+                        )
+                      : debtCollectOrder.totalAmount
+                  ).toLocaleString('vi-VN')}{' '}
+                  đ
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-3 mb-6">
+              <label className="block text-xs font-bold dark:text-neutral-300 text-stone-700">
+                Hình thức thực tế đã nhận tiền:
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setDebtPaymentMethod('COD')}
+                  className={`p-3 rounded-xl border text-left text-xs font-bold transition cursor-pointer ${
+                    debtPaymentMethod === 'COD'
+                      ? 'bg-amber-500/20 border-amber-500 text-amber-500 ring-2 ring-amber-500/30'
+                      : 'dark:bg-neutral-900 bg-stone-50 dark:border-neutral-800 border-stone-200 dark:text-neutral-400 text-stone-600'
+                  }`}
+                >
+                  <span className="block text-sm mb-1">💵 Tiền mặt</span>
+                  <span className="text-[10px] font-normal opacity-80">Cộng két tiền ca trực</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDebtPaymentMethod('BANK_TRANSFER')}
+                  className={`p-3 rounded-xl border text-left text-xs font-bold transition cursor-pointer ${
+                    debtPaymentMethod === 'BANK_TRANSFER'
+                      ? 'bg-blue-500/20 border-blue-500 text-blue-400 ring-2 ring-blue-500/30'
+                      : 'dark:bg-neutral-900 bg-stone-50 dark:border-neutral-800 border-stone-200 dark:text-neutral-400 text-stone-600'
+                  }`}
+                >
+                  <span className="block text-sm mb-1">📱 Chuyển khoản</span>
+                  <span className="text-[10px] font-normal opacity-80">Tài khoản ngân hàng</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 justify-end">
+              <button
+                type="button"
+                onClick={() => setDebtCollectOrder(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold dark:bg-neutral-800 bg-stone-200 dark:text-neutral-300 text-stone-700 hover:opacity-80 transition cursor-pointer"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                disabled={submittingDebt}
+                onClick={handleConfirmCollectDebt}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition flex items-center gap-1.5 shadow-lg shadow-emerald-600/20 cursor-pointer disabled:opacity-50"
+              >
+                {submittingDebt ? (
+                  <span>Đang lưu...</span>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Xác Nhận Đã Thu Đủ</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

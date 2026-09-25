@@ -19,6 +19,7 @@ export async function GET(request: NextRequest) {
     const orderCode = searchParams.get('orderCode')?.trim();
     const status = searchParams.get('status')?.trim();
     const paymentMethod = searchParams.get('paymentMethod')?.trim();
+    const paymentStatus = searchParams.get('paymentStatus')?.trim();
     const branchId = searchParams.get('branchId')?.trim();
     const fromDate = searchParams.get('fromDate')?.trim();
     const toDate = searchParams.get('toDate')?.trim();
@@ -38,6 +39,13 @@ export async function GET(request: NextRequest) {
 
     if (status && status !== 'ALL') {
       whereCondition.status = status;
+    }
+
+    if (paymentStatus && paymentStatus !== 'ALL') {
+      whereCondition.paymentStatus = paymentStatus;
+      if (paymentStatus === 'UNPAID' && (!status || status === 'ALL')) {
+        whereCondition.status = { not: 'CANCELLED' };
+      }
     }
 
     if (paymentMethod && paymentMethod !== 'ALL') {
