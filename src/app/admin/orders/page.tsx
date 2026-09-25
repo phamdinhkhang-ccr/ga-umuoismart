@@ -1271,20 +1271,43 @@ export default function CentralizedOrdersPage() {
                         {order.sellerName || 'Thu ngân POS'}
                       </td>
 
-                      {/* Interactive Payment Status Select */}
+                      {/* Interactive Payment Status Select & Method Badge */}
                       <td className="py-3.5 px-4 whitespace-nowrap">
-                        <select
-                          value={order.paymentStatus || 'UNPAID'}
-                          onChange={(e) => handleUpdatePaymentStatus(order.id, e.target.value)}
-                          className={`px-2 py-1 rounded text-[10px] font-extrabold focus:outline-none cursor-pointer border ${
-                            order.paymentStatus === 'PAID'
-                              ? 'bg-emerald-500/20 text-emerald-500 border-emerald-500/40'
-                              : 'bg-amber-500/10 text-amber-500 border-amber-500/30'
-                          }`}
-                        >
-                          <option value="UNPAID">❌ Chưa thanh toán</option>
-                          <option value="PAID">✅ Đã nhận tiền</option>
-                        </select>
+                        <div className="space-y-1.5">
+                          <select
+                            value={order.paymentStatus || 'UNPAID'}
+                            onChange={(e) => handleUpdatePaymentStatus(order.id, e.target.value)}
+                            className={`px-2 py-1 rounded text-[10px] font-extrabold focus:outline-none cursor-pointer border ${
+                              order.paymentStatus === 'PAID'
+                                ? 'bg-emerald-500/20 text-emerald-500 border-emerald-500/40'
+                                : 'bg-amber-500/10 text-amber-500 border-amber-500/30'
+                            }`}
+                          >
+                            <option value="UNPAID">❌ Chưa thanh toán</option>
+                            <option value="PAID">✅ Đã nhận tiền</option>
+                          </select>
+
+                          {/* Payment Method Badge */}
+                          <div className="text-[10px] font-medium">
+                            {order.paymentMethod === 'SPLIT' ? (
+                              <div className="px-2 py-1 bg-purple-500/15 border border-purple-500/30 rounded-lg text-purple-300 flex flex-col gap-0.5 shadow-2xs">
+                                <span className="font-extrabold flex items-center gap-1 text-[10px] text-purple-300">
+                                  🔀 Hỗn hợp:
+                                </span>
+                                <span className="text-[9px] text-amber-400 font-semibold">
+                                  💵 TM: {(order.cashAmount || 0).toLocaleString('vi-VN')}đ
+                                </span>
+                                <span className="text-[9px] text-blue-400 font-semibold">
+                                  🏦 CK: {(order.transferAmount || 0).toLocaleString('vi-VN')}đ
+                                </span>
+                              </div>
+                            ) : order.paymentMethod === 'BANK_TRANSFER' ? (
+                              <span className="text-blue-400 font-bold flex items-center gap-1">📱 Chuyển khoản QR</span>
+                            ) : (
+                              <span className="text-amber-500 font-bold flex items-center gap-1">💵 Tiền mặt</span>
+                            )}
+                          </div>
+                        </div>
                       </td>
 
                       {/* Fast Actions: Edit, K80 Print & Detail View */}
@@ -2204,11 +2227,27 @@ export default function CentralizedOrdersPage() {
               ))}
             </div>
 
-            <div className="flex justify-between items-center pt-2 border-t dark:border-neutral-800 border-stone-200">
-              <span className="font-bold text-xs dark:text-neutral-400 text-stone-600">Tổng Tiền Thanh Toán:</span>
-              <span className="font-black text-xl text-emerald-500">
-                {selectedOrder.totalAmount.toLocaleString('vi-VN')} đ
-              </span>
+            <div className="flex flex-col gap-1.5 pt-2 border-t dark:border-neutral-800 border-stone-200">
+              <div className="flex justify-between items-center">
+                <span className="font-bold text-xs dark:text-neutral-400 text-stone-600">Tổng Tiền Thanh Toán:</span>
+                <span className="font-black text-xl text-emerald-500">
+                  {selectedOrder.totalAmount.toLocaleString('vi-VN')} đ
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-xs">
+                <span className="dark:text-neutral-400 text-stone-600 font-medium">Hình thức thanh toán:</span>
+                <span className="font-bold dark:text-white text-stone-900">
+                  {selectedOrder.paymentMethod === 'SPLIT' ? (
+                    <span className="text-purple-400">
+                      🔀 Hỗn hợp (💵 TM: {(selectedOrder.cashAmount || 0).toLocaleString('vi-VN')}đ + 📱 CK: {(selectedOrder.transferAmount || 0).toLocaleString('vi-VN')}đ)
+                    </span>
+                  ) : selectedOrder.paymentMethod === 'BANK_TRANSFER' ? (
+                    <span className="text-blue-400">📱 Chuyển khoản QR</span>
+                  ) : (
+                    <span className="text-amber-500">💵 Tiền mặt</span>
+                  )}
+                </span>
+              </div>
             </div>
 
             {/* Quick Status Change Action Buttons inside Detail Modal */}
@@ -2352,18 +2391,47 @@ export default function CentralizedOrdersPage() {
                 <span>TỔNG THÀNH TIỀN:</span>
                 <span className="text-amber-700">{printBillOrder.totalAmount.toLocaleString('vi-VN')} đ</span>
               </div>
-              <div className="flex justify-between text-[10px] text-stone-600">
-                <span>Hình thức:</span>
-                <span className="font-bold">{printBillOrder.paymentMethod === 'COD' ? 'Tiền mặt (COD)' : 'Chuyển khoản QR'}</span>
+              <div className="flex flex-col gap-1 text-[10px] text-stone-600">
+                <div className="flex justify-between">
+                  <span>Hình thức:</span>
+                  <span className="font-bold">
+                    {printBillOrder.paymentMethod === 'COD'
+                      ? 'Tiền mặt (COD)'
+                      : printBillOrder.paymentMethod === 'BANK_TRANSFER'
+                      ? 'Chuyển khoản QR'
+                      : 'Hỗn hợp (Tiền mặt + Chuyển khoản)'}
+                  </span>
+                </div>
+                {printBillOrder.paymentMethod === 'SPLIT' && (
+                  <div className="p-1.5 bg-stone-100 rounded text-stone-800 space-y-0.5">
+                    <div className="flex justify-between">
+                      <span>• Tiền mặt thu:</span>
+                      <span className="font-bold text-amber-800">
+                        {(printBillOrder.cashAmount || 0).toLocaleString('vi-VN')} đ
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>• Chuyển khoản QR:</span>
+                      <span className="font-bold text-blue-800">
+                        {(printBillOrder.transferAmount || 0).toLocaleString('vi-VN')} đ
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Bank Transfer QR Code if Bank Transfer */}
-            {printBillOrder.paymentMethod === 'BANK_TRANSFER' && (
+            {/* Bank Transfer QR Code if Bank Transfer or Split with transferAmount > 0 */}
+            {(printBillOrder.paymentMethod === 'BANK_TRANSFER' ||
+              (printBillOrder.paymentMethod === 'SPLIT' && (printBillOrder.transferAmount || 0) > 0)) && (
               <div className="my-3 text-center space-y-1 bg-amber-50 p-2 rounded-lg border border-amber-200">
-                <p className="text-[10px] font-bold text-amber-800">QUÉT MÃ QR CHUYỂN KHOẢN HỎA TỐC</p>
+                <p className="text-[10px] font-bold text-amber-800">
+                  {printBillOrder.paymentMethod === 'SPLIT'
+                    ? `QUÉT MÃ QR THANH TOÁN PHẦN CK (${(printBillOrder.transferAmount || 0).toLocaleString('vi-VN')} đ)`
+                    : 'QUÉT MÃ QR CHUYỂN KHOẢN HỎA TỐC'}
+                </p>
                 <img
-                  src={`https://img.vietqr.io/image/${paymentConfig.bankId || 'MB'}-${paymentConfig.accountNumber || '0988888888'}-${paymentConfig.qrTemplate || 'compact2'}.png?amount=${printBillOrder.totalAmount}&addInfo=${encodeURIComponent((paymentConfig.transferSyntax || 'GUM [Mã_Đơn]').replace('[Mã_Đơn]', printBillOrder.orderCode).replace('[SĐT]', printBillOrder.customerPhone || ''))}&accountName=${encodeURIComponent(paymentConfig.accountName || 'GA U MUOI SMART')}`}
+                  src={`https://img.vietqr.io/image/${paymentConfig.bankId || 'MB'}-${paymentConfig.accountNumber || '0988888888'}-${paymentConfig.qrTemplate || 'compact2'}.png?amount=${printBillOrder.paymentMethod === 'SPLIT' ? (printBillOrder.transferAmount || 0) : printBillOrder.totalAmount}&addInfo=${encodeURIComponent((paymentConfig.transferSyntax || 'GUM [Mã_Đơn]').replace('[Mã_Đơn]', printBillOrder.orderCode).replace('[SĐT]', printBillOrder.customerPhone || ''))}&accountName=${encodeURIComponent(paymentConfig.accountName || 'GA U MUOI SMART')}`}
                   alt="VietQR"
                   className="w-32 h-32 mx-auto rounded border border-amber-300 object-contain bg-white"
                 />

@@ -109,7 +109,9 @@ export default function CartDrawer({
   const [selectedStore, setSelectedStore] = useState('');
   const [suggestedBranch, setSuggestedBranch] = useState<{ name: string; shortName: string } | null>(null);
   const [note, setNote] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<'COD' | 'BANK_TRANSFER'>('COD');
+  const [paymentMethod, setPaymentMethod] = useState<'COD' | 'BANK_TRANSFER' | 'SPLIT'>('COD');
+  const [splitCashAmount, setSplitCashAmount] = useState<number>(0);
+  const [splitTransferAmount, setSplitTransferAmount] = useState<number>(0);
 
   const [existingCustomer, setExistingCustomer] = useState<{ name: string; totalOrders: number } | null>(null);
   const [isLookingUpPhone, setIsLookingUpPhone] = useState(false);
@@ -242,6 +244,37 @@ export default function CartDrawer({
   const isFreeship = subtotal >= 355000;
   const finalTotalAmount = subtotal; // Quán chỉ thu tiền món, ship trả riêng cho tài xế
 
+  const handlePaymentMethodSelect = (method: 'COD' | 'BANK_TRANSFER' | 'SPLIT') => {
+    setPaymentMethod(method);
+    if (method === 'SPLIT') {
+      const half = Math.round(finalTotalAmount / 2);
+      setSplitCashAmount(half);
+      setSplitTransferAmount(finalTotalAmount - half);
+    }
+  };
+
+  const handleSplitCashChange = (val: number) => {
+    const cash = Math.max(0, Math.min(finalTotalAmount, isNaN(val) ? 0 : val));
+    setSplitCashAmount(cash);
+    setSplitTransferAmount(Math.max(0, finalTotalAmount - cash));
+  };
+
+  const handleSplitTransferChange = (val: number) => {
+    const transfer = Math.max(0, Math.min(finalTotalAmount, isNaN(val) ? 0 : val));
+    setSplitTransferAmount(transfer);
+    setSplitCashAmount(Math.max(0, finalTotalAmount - transfer));
+  };
+
+  useEffect(() => {
+    if (paymentMethod === 'SPLIT') {
+      if (splitCashAmount + splitTransferAmount !== finalTotalAmount) {
+        const cash = Math.min(splitCashAmount, finalTotalAmount);
+        setSplitCashAmount(cash);
+        setSplitTransferAmount(Math.max(0, finalTotalAmount - cash));
+      }
+    }
+  }, [finalTotalAmount, paymentMethod]);
+
   if (!isOpen) return null;
 
   const handlePhoneChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -312,6 +345,13 @@ export default function CartDrawer({
     const branchDisplayName = branchObj ? branchObj.shortName || branchObj.name : finalBranchId;
     const combinedNote = branchDisplayName ? `[Cơ sở chọn: ${branchDisplayName}] ${note}` : note;
 
+    const paymentPayload =
+      paymentMethod === 'COD'
+        ? { paymentMethod: 'CASH', cashAmount: finalTotalAmount, transferAmount: 0 }
+        : paymentMethod === 'BANK_TRANSFER'
+        ? { paymentMethod: 'BANK_TRANSFER', cashAmount: 0, transferAmount: finalTotalAmount }
+        : { paymentMethod: 'SPLIT', cashAmount: splitCashAmount, transferAmount: splitTransferAmount };
+
     setLoading(true);
     try {
       const res = await fetch('/api/orders', {
@@ -322,7 +362,7 @@ export default function CartDrawer({
           customerPhone,
           deliveryAddress,
           note: combinedNote,
-          paymentMethod,
+          ...paymentPayload,
           branchId: finalBranchId,
           totalAmount: finalTotalAmount,
           discountAmount: 0,
@@ -359,7 +399,8 @@ export default function CartDrawer({
   const dynamicSyntax = (paymentConfig.transferSyntax || 'GUM [Mã_Đơn]')
     .replace('[Mã_Đơn]', cleanPhoneForQR)
     .replace('[SĐT]', cleanPhoneForQR);
-  const vietQRUrl = `https://img.vietqr.io/image/${paymentConfig.bankId || 'MB'}-${paymentConfig.accountNumber || '0988888888'}-${paymentConfig.qrTemplate || 'compact2'}.png?amount=${finalTotalAmount}&addInfo=${encodeURIComponent(dynamicSyntax)}&accountName=${encodeURIComponent(paymentConfig.accountName || 'GA U MUOI SMART')}`;
+  const qrAmount = paymentMethod === 'SPLIT' ? splitTransferAmount : finalTotalAmount;
+  const vietQRUrl = `https://img.vietqr.io/image/${paymentConfig.bankId || 'MB'}-${paymentConfig.accountNumber || '0988888888'}-${paymentConfig.qrTemplate || 'compact2'}.png?amount=${qrAmount}&addInfo=${encodeURIComponent(dynamicSyntax)}&accountName=${encodeURIComponent(paymentConfig.accountName || 'GA U MUOI SMART')}`;
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden bg-neutral-950/80 backdrop-blur-sm flex justify-end">
@@ -633,31 +674,113 @@ export default function CartDrawer({
                     <label className="block text-[11px] font-semibold text-neutral-300 mb-1">
                       Phương Thức Thanh Toán
                     </label>
-                    <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="grid grid-cols-3 gap-1.5 text-xs">
                       <button
                         type="button"
-                        onClick={() => setPaymentMethod('COD')}
-                        className={`py-2.5 px-3 rounded-xl font-semibold border flex items-center justify-center gap-1.5 transition ${
+                        onClick={() => handlePaymentMethodSelect('COD')}
+                        className={`py-2 px-1.5 rounded-xl font-semibold border flex items-center justify-center gap-1 transition text-[11px] ${
                           paymentMethod === 'COD'
                             ? 'bg-amber-500/10 border-amber-500 text-amber-300'
                             : 'bg-[#0B0D11] border-neutral-800 text-neutral-400'
                         }`}
                       >
-                        💵 Thanh toán khi nhận
+                        💵 Tiền mặt
                       </button>
                       <button
                         type="button"
-                        onClick={() => setPaymentMethod('BANK_TRANSFER')}
-                        className={`py-2.5 px-3 rounded-xl font-semibold border flex items-center justify-center gap-1.5 transition ${
+                        onClick={() => handlePaymentMethodSelect('BANK_TRANSFER')}
+                        className={`py-2 px-1.5 rounded-xl font-semibold border flex items-center justify-center gap-1 transition text-[11px] ${
                           paymentMethod === 'BANK_TRANSFER'
                             ? 'bg-amber-500/10 border-amber-500 text-amber-300'
                             : 'bg-[#0B0D11] border-neutral-800 text-neutral-400'
                         }`}
                       >
-                        🏦 Thanh toán trước
+                        🏦 Chuyển khoản
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handlePaymentMethodSelect('SPLIT')}
+                        className={`py-2 px-1.5 rounded-xl font-semibold border flex items-center justify-center gap-1 transition text-[11px] ${
+                          paymentMethod === 'SPLIT'
+                            ? 'bg-purple-500/15 border-purple-500 text-purple-300'
+                            : 'bg-[#0B0D11] border-neutral-800 text-neutral-400'
+                        }`}
+                      >
+                        🔀 Hỗn hợp
                       </button>
                     </div>
                   </div>
+
+                  {/* Split Payment Input Section */}
+                  {paymentMethod === 'SPLIT' && (
+                    <div className="p-3 bg-[#0B0D11] border border-purple-500/30 rounded-xl space-y-3 animate-in fade-in duration-300">
+                      <div className="text-[11px] font-bold text-purple-300 flex items-center justify-between">
+                        <span>🔀 Phân Bổ Tiền Mặt & Chuyển Khoản</span>
+                        <span className="text-neutral-400 font-normal">
+                          Tổng: <strong className="text-amber-400">{finalTotalAmount.toLocaleString('vi-VN')} đ</strong>
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-[10px] font-medium text-amber-400 mb-1">
+                            💵 Tiền mặt (đ)
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            max={finalTotalAmount}
+                            value={splitCashAmount || ''}
+                            onChange={(e) => handleSplitCashChange(Number(e.target.value))}
+                            placeholder="0"
+                            className="w-full px-2.5 py-1.5 bg-neutral-900 border border-neutral-700 rounded-lg text-xs font-bold text-amber-300 focus:border-amber-500 focus:outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-medium text-blue-400 mb-1">
+                            🏦 Chuyển khoản (đ)
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            max={finalTotalAmount}
+                            value={splitTransferAmount || ''}
+                            onChange={(e) => handleSplitTransferChange(Number(e.target.value))}
+                            placeholder="0"
+                            className="w-full px-2.5 py-1.5 bg-neutral-900 border border-neutral-700 rounded-lg text-xs font-bold text-blue-300 focus:border-blue-500 focus:outline-none"
+                          />
+                        </div>
+                      </div>
+
+                      {splitTransferAmount > 0 && (
+                        <div className="pt-2 border-t border-neutral-800 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold text-emerald-400 flex items-center gap-1">
+                              <QrCode className="w-3.5 h-3.5 text-emerald-400" />
+                              Mã QR Chuyển Khoản ({splitTransferAmount.toLocaleString('vi-VN')} đ)
+                            </span>
+                            <span className="text-[10px] text-emerald-400 font-semibold">{paymentConfig.bankName || paymentConfig.bankId || 'MB Bank'}</span>
+                          </div>
+
+                          <div className="flex items-center gap-3">
+                            <div className="bg-white p-1.5 rounded-lg shrink-0 shadow-md">
+                              <img
+                                src={vietQRUrl}
+                                alt="VietQR Chuyển Khoản Gà Ủ Muối Smart"
+                                className="w-24 h-24 object-contain"
+                              />
+                            </div>
+                            <div className="text-[11px] space-y-1 text-neutral-300 flex-1">
+                              <p className="text-neutral-400">Ngân hàng: <strong className="text-white">{paymentConfig.bankName || paymentConfig.bankId}</strong></p>
+                              <p className="text-neutral-400">Số tài khoản: <strong className="text-amber-400 font-mono">{paymentConfig.accountNumber}</strong></p>
+                              <p className="text-neutral-400">Số tiền QR: <strong className="text-emerald-400 font-mono">{splitTransferAmount.toLocaleString('vi-VN')} đ</strong></p>
+                              <p className="text-neutral-400">Cú pháp CK: <strong className="text-amber-300 font-mono">{dynamicSyntax}</strong></p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* VietQR Display Box when Bank Transfer selected */}
                   {paymentMethod === 'BANK_TRANSFER' && (
