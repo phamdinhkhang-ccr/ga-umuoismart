@@ -525,6 +525,37 @@ export default function CentralizedOrdersPage() {
     }
   };
 
+  // Quick Zalo Research and Phone Copy Helpers
+  const normalizePhoneNumber = (rawPhone?: string | null): string => {
+    if (!rawPhone) return '';
+    let clean = rawPhone.replace(/\D/g, '');
+    if (clean.startsWith('84') && clean.length > 9) {
+      clean = '0' + clean.slice(2);
+    }
+    return clean;
+  };
+
+  const handleOpenZaloByPhone = (rawPhone?: string | null, custName?: string | null) => {
+    const clean = normalizePhoneNumber(rawPhone);
+    if (!clean) {
+      showToast('⚠️ Không tìm thấy số điện thoại hợp lệ!');
+      return;
+    }
+    navigator.clipboard.writeText(clean);
+    showToast(`💬 Đã sao chép SĐT [${clean}] & đang mở Zalo...`);
+    window.open(`https://zalo.me/${clean}`, '_blank');
+  };
+
+  const handleCopyPhoneOnly = (rawPhone?: string | null) => {
+    const clean = normalizePhoneNumber(rawPhone);
+    if (!clean) {
+      showToast('⚠️ Không tìm thấy số điện thoại!');
+      return;
+    }
+    navigator.clipboard.writeText(clean);
+    showToast(`📋 Đã sao chép SĐT [${clean}]!`);
+  };
+
   // Debt Reminder handler (Zalo/SMS with Dynamic VietQR Link)
   const handleRemindDebt = (ord: OrderRecord) => {
     const origin = typeof window !== 'undefined' ? window.location.origin : 'https://gaumuoismart.vn';
@@ -1594,6 +1625,19 @@ export default function CentralizedOrdersPage() {
                             </button>
                           )}
 
+                          {/* Quick Zalo Research & Contact Button */}
+                          {order.customerPhone && (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenZaloByPhone(order.customerPhone, order.customerName)}
+                              className="px-2.5 py-1.5 bg-blue-600/15 hover:bg-blue-600/30 text-blue-400 border border-blue-500/30 font-bold rounded-lg text-[11px] flex items-center gap-1 transition shadow-xs cursor-pointer"
+                              title={`Mở Zalo khách & tự động copy SĐT (${order.customerPhone})`}
+                            >
+                              <MessageSquare className="w-3.5 h-3.5 stroke-[2]" />
+                              <span>Zalo</span>
+                            </button>
+                          )}
+
                           {/* Fast K80 Print Button */}
                           <button
                             onClick={() => setPrintBillOrder(order)}
@@ -2533,6 +2577,29 @@ export default function CentralizedOrdersPage() {
                 <span>🧾 Gửi Bill VietQR Tự Động</span>
               </button>
 
+              {/* Zalo Quick Actions */}
+              {selectedOrder.customerPhone && (
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => handleOpenZaloByPhone(selectedOrder.customerPhone, selectedOrder.customerName)}
+                    className="px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-md transition cursor-pointer"
+                    title={`Mở Zalo khách & tự động copy SĐT (${selectedOrder.customerPhone})`}
+                  >
+                    <MessageSquare className="w-3.5 h-3.5" />
+                    <span>💬 Tìm Zalo</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleCopyPhoneOnly(selectedOrder.customerPhone)}
+                    className="p-2 bg-stone-200 dark:bg-neutral-800 hover:bg-stone-300 dark:hover:bg-neutral-700 text-stone-700 dark:text-neutral-300 font-bold rounded-xl text-xs flex items-center gap-1 transition cursor-pointer"
+                    title="Sao chép số điện thoại"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+
               {selectedOrder.status === 'PENDING' && (
                 <button
                   onClick={() => {
@@ -2614,10 +2681,36 @@ export default function CentralizedOrdersPage() {
                 <span>Khách hàng:</span>
                 <span className="font-bold">{printBillOrder.customerName}</span>
               </div>
-              <div className="flex justify-between">
+              <div className="flex justify-between items-center">
                 <span>SĐT:</span>
-                <span>{printBillOrder.customerPhone}</span>
+                <span className="font-bold font-mono">{printBillOrder.customerPhone}</span>
               </div>
+
+              {/* Zalo Customer QR Code for Shipper / Staff Instant Chat */}
+              {(() => {
+                const cleanPhone = (printBillOrder.customerPhone || '').replace(/\D/g, '');
+                if (!cleanPhone) return null;
+                const zaloQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=https://zalo.me/${cleanPhone}`;
+                return (
+                  <div className="my-1.5 p-1.5 bg-blue-50/80 border border-blue-200 rounded-lg flex items-center justify-between gap-2">
+                    <div className="space-y-0.5 text-[9px]">
+                      <div className="flex items-center gap-1 font-bold text-blue-900">
+                        <span>💬 ZALO KHÁCH:</span>
+                        <span className="font-mono text-blue-700">{printBillOrder.customerPhone}</span>
+                      </div>
+                      <p className="text-stone-500 font-sans leading-tight text-[8.5px]">
+                        Shipper / NV quét QR để kết bạn & chat Zalo ngay
+                      </p>
+                    </div>
+                    <img
+                      src={zaloQrUrl}
+                      alt="Zalo QR"
+                      className="w-11 h-11 rounded border border-blue-300 bg-white object-contain shrink-0"
+                    />
+                  </div>
+                );
+              })()}
+
               <div className="text-[10px] text-stone-700 line-clamp-2">
                 <span>Đ/C: </span>
                 <span>{printBillOrder.deliveryAddress}</span>
@@ -2731,8 +2824,8 @@ export default function CentralizedOrdersPage() {
               <p className="text-[9px] text-stone-500">Website: gaumuoismart.vn • Hotline: 0988.888.901</p>
             </div>
 
-            {/* 3 Bottom Action Buttons */}
-            <div className="mt-4 flex items-center justify-between gap-2 pt-3 border-t border-stone-200">
+            {/* Bottom Action Buttons */}
+            <div className="mt-4 flex items-center justify-between gap-2 pt-3 border-t border-stone-200 flex-wrap">
               {/* Button 1 (Left): Close */}
               <button
                 type="button"
@@ -2742,14 +2835,37 @@ export default function CentralizedOrdersPage() {
                 Đóng
               </button>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {/* Zalo Quick Actions */}
+                {printBillOrder.customerPhone && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyPhoneOnly(printBillOrder.customerPhone)}
+                      className="p-2 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-xl font-bold text-xs flex items-center gap-1 cursor-pointer transition border border-stone-300"
+                      title="Sao chép số điện thoại"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenZaloByPhone(printBillOrder.customerPhone, printBillOrder.customerName)}
+                      className="px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-md transition"
+                      title="Mở Zalo khách & copy SĐT"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5" />
+                      <span>💬 Tìm Zalo</span>
+                    </button>
+                  </>
+                )}
+
                 {/* Button 2 (Right): Print K80 */}
                 <button
                   type="button"
                   onClick={() => window.print()}
                   className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-md cursor-pointer transition"
                 >
-                  <Printer className="w-4 h-4" />
+                  <Printer className="w-3.5 h-3.5" />
                   <span>In K80</span>
                 </button>
 
@@ -2761,7 +2877,7 @@ export default function CentralizedOrdersPage() {
                     className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-xl text-xs flex items-center gap-1.5 shadow-lg shadow-emerald-600/30 cursor-pointer transition"
                   >
                     <Check className="w-4 h-4 stroke-[3]" />
-                    <span>✓ Xác Nhận Đơn</span>
+                    <span>✓ Xác Nhận</span>
                   </button>
                 )}
               </div>

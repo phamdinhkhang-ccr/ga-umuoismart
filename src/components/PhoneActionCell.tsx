@@ -22,13 +22,35 @@ export default function PhoneActionCell({
 }: PhoneActionCellProps) {
   const [copiedPhone, setCopiedPhone] = useState(false);
   const [copiedAddress, setCopiedAddress] = useState(false);
+  const [openedZalo, setOpenedZalo] = useState(false);
+
+  const normalizePhone = (p?: string | null) => {
+    if (!p) return '';
+    let clean = p.replace(/\D/g, '');
+    if (clean.startsWith('84') && clean.length > 9) {
+      clean = '0' + clean.slice(2);
+    }
+    return clean;
+  };
 
   const handleCopyPhone = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!phone) return;
-    navigator.clipboard.writeText(phone);
+    const clean = normalizePhone(phone);
+    navigator.clipboard.writeText(clean || phone);
     setCopiedPhone(true);
     setTimeout(() => setCopiedPhone(false), 1500);
+  };
+
+  const handleOpenZalo = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!phone) return;
+    const clean = normalizePhone(phone);
+    if (!clean) return;
+    navigator.clipboard.writeText(clean);
+    setOpenedZalo(true);
+    setTimeout(() => setOpenedZalo(false), 2000);
+    window.open(`https://zalo.me/${clean}`, '_blank');
   };
 
   const handleCopyAddress = (e: React.MouseEvent) => {
@@ -48,10 +70,10 @@ export default function PhoneActionCell({
         </span>
       )}
 
-      {/* Line 2: Phone + Copy Button (Aligned vertically with Address line) */}
+      {/* Line 2: Phone + Copy Button + Zalo Quick Button */}
       {phone ? (
         <div className="flex items-center gap-1.5 text-xs text-emerald-500 dark:text-emerald-400 font-mono">
-          <div className="flex items-center gap-1.5 w-[145px]">
+          <div className="flex items-center gap-1.5 w-[140px]">
             <Phone className="shrink-0" size={13} />
             <a
               href={`tel:${phone}`}
@@ -73,6 +95,15 @@ export default function PhoneActionCell({
             ) : (
               <Copy size={13} />
             )}
+          </button>
+          <button
+            type="button"
+            onClick={handleOpenZalo}
+            className="px-1.5 py-0.5 rounded bg-blue-600/15 hover:bg-blue-600/30 text-blue-500 dark:text-blue-400 border border-blue-500/30 text-[10px] font-bold flex items-center gap-0.5 transition cursor-pointer shrink-0"
+            title="Tìm Zalo & Tự động copy SĐT"
+          >
+            <span>💬</span>
+            <span>{openedZalo ? 'Đang mở' : 'Zalo'}</span>
           </button>
         </div>
       ) : (
