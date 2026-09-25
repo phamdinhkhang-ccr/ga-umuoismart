@@ -62,8 +62,7 @@ export async function PATCH(
       if (paymentStatus === 'PAID') {
         updateData.paidAt = existingOrder.paidAt || new Date();
       }
-    }
-    if (autoMarkPaid) {
+    } else if (autoMarkPaid) {
       updateData.paymentStatus = 'PAID';
       updateData.paidAt = existingOrder.paidAt || new Date();
     }

@@ -469,7 +469,11 @@ export default function CentralizedOrdersPage() {
   };
 
   // Update Status & Payment Status Handler
-  const handleUpdateOrderStatus = async (id: string, newStatus: string, autoMarkPaid: boolean = false) => {
+  const handleUpdateOrderStatus = async (
+    id: string,
+    newStatus: string,
+    paymentStatusChoice?: 'PAID' | 'UNPAID' | string
+  ) => {
     // If selecting DELIVERING, open Shipping Info Modal
     if (newStatus === 'DELIVERING') {
       const targetOrd = orders.find((o) => o.id === id) || (selectedOrder?.id === id ? selectedOrder : null);
@@ -483,25 +487,35 @@ export default function CentralizedOrdersPage() {
       return;
     }
 
-    // If selecting COMPLETED and autoMarkPaid is not specified yet, trigger confirmation popup
-    if (newStatus === 'COMPLETED' && !autoMarkPaid) {
+    // If selecting COMPLETED and paymentStatusChoice is not decided yet, trigger confirmation popup
+    if (newStatus === 'COMPLETED' && paymentStatusChoice === undefined) {
       setConfirmPaidOrderModal({ id, targetStatus: 'COMPLETED' });
       return;
     }
 
     try {
+      const payload: any = {
+        status: newStatus,
+      };
+      if (paymentStatusChoice) {
+        payload.paymentStatus = paymentStatusChoice;
+      }
+
       const res = await fetch(`/api/orders/${id}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          status: newStatus,
-          autoMarkPaid,
-        }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (data.success) {
         fetchOrders();
-        showToast(`Đã cập nhật trạng thái đơn hàng thành công!`);
+        showToast(
+          `Đã cập nhật đơn hàng sang "${
+            newStatus === 'COMPLETED'
+              ? `Hoàn thành (${paymentStatusChoice === 'PAID' ? 'Đã nhận tiền' : 'Chờ thanh toán'})`
+              : newStatus
+          }"!`
+        );
         if (selectedOrder && selectedOrder.id === id) {
           setSelectedOrder(data.order);
         }
@@ -2503,24 +2517,26 @@ export default function CentralizedOrdersPage() {
               Khách hàng đã thanh toán tiền cho đơn hàng này chưa?
             </p>
 
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-2.5">
               <button
+                type="button"
                 onClick={() => {
-                  const modalObj = confirmPaidOrderModal;
+                  const targetId = confirmPaidOrderModal.id;
                   setConfirmPaidOrderModal(null);
-                  handleUpdateOrderStatus(modalObj.id, 'COMPLETED', true);
+                  handleUpdateOrderStatus(targetId, 'COMPLETED', 'PAID');
                 }}
-                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs shadow-md cursor-pointer transition"
+                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs shadow-md cursor-pointer transition flex items-center justify-center gap-1.5"
               >
                 ✅ Có, Đã Nhận Đủ Tiền (PAID)
               </button>
               <button
+                type="button"
                 onClick={() => {
-                  const modalObj = confirmPaidOrderModal;
+                  const targetId = confirmPaidOrderModal.id;
                   setConfirmPaidOrderModal(null);
-                  handleUpdateOrderStatus(modalObj.id, 'COMPLETED', false);
+                  handleUpdateOrderStatus(targetId, 'COMPLETED', 'UNPAID');
                 }}
-                className="w-full py-2 bg-stone-200 dark:bg-neutral-800 hover:bg-stone-300 dark:hover:bg-neutral-700 dark:text-neutral-300 text-stone-700 font-semibold rounded-xl text-xs cursor-pointer transition"
+                className="w-full py-2.5 bg-rose-600/10 hover:bg-rose-600/20 text-rose-500 border border-rose-500/30 font-bold rounded-xl text-xs cursor-pointer transition flex items-center justify-center gap-1.5"
               >
                 ❌ Chưa, Vẫn Chờ Thanh Toán (UNPAID)
               </button>
