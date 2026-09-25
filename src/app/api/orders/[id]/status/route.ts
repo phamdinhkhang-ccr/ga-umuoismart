@@ -45,6 +45,36 @@ export async function PATCH(
       return NextResponse.json({ success: false, error: 'Không tìm thấy đơn hàng' }, { status: 404 });
     }
 
+    const userRole = (userPayload?.role || '').toUpperCase();
+    const isKitchen = userRole === 'KITCHEN' || userRole === 'CHEF' || userRole === 'BEP';
+    const isTelesales = userRole === 'TELESALES' || userRole === 'CS' || userRole === 'TONG_DAI';
+
+    // RBAC validation for Kitchen role
+    if (isKitchen) {
+      if (status === 'CANCELLED') {
+        return NextResponse.json(
+          { success: false, error: 'Nhân viên Bếp không có quyền hủy đơn hàng!' },
+          { status: 403 }
+        );
+      }
+      if (paymentStatus !== undefined || autoMarkPaid) {
+        return NextResponse.json(
+          { success: false, error: 'Nhân viên Bếp không có quyền can thiệp trạng thái thanh toán!' },
+          { status: 403 }
+        );
+      }
+    }
+
+    // RBAC validation for Telesales role
+    if (isTelesales) {
+      if (paymentStatus !== undefined || autoMarkPaid) {
+        return NextResponse.json(
+          { success: false, error: 'Nhân viên Tổng Đài không có quyền can thiệp trạng thái thanh toán!' },
+          { status: 403 }
+        );
+      }
+    }
+
     const updateData: any = {};
 
     if (status) {

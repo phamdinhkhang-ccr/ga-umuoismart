@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import prisma from '@/lib/prisma';
+import { verifyJWT } from '@/lib/auth';
 
 export async function GET(
   request: Request,
@@ -33,6 +35,20 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get('auth_token')?.value;
+    const userPayload = token ? await verifyJWT(token) : null;
+    const userRole = (userPayload?.role || '').toUpperCase();
+    const isKitchen = userRole === 'KITCHEN' || userRole === 'CHEF' || userRole === 'BEP';
+    const isTelesales = userRole === 'TELESALES' || userRole === 'CS' || userRole === 'TONG_DAI';
+
+    if (isKitchen) {
+      return NextResponse.json(
+        { success: false, error: 'Nhân viên Bếp không có quyền chỉnh sửa thông tin đơn hàng!' },
+        { status: 403 }
+      );
+    }
+
     const { id } = await params;
     const body = await request.json();
 
@@ -50,6 +66,13 @@ export async function PUT(
 
     if (!oldOrder) {
       return NextResponse.json({ success: false, error: 'Không tìm thấy đơn hàng' }, { status: 404 });
+    }
+
+    if (isTelesales && body.paymentStatus && body.paymentStatus !== oldOrder.paymentStatus) {
+      return NextResponse.json(
+        { success: false, error: 'Nhân viên Tổng Đài không có quyền thay đổi trạng thái thanh toán!' },
+        { status: 403 }
+      );
     }
 
     // 2. TÍNH TOÁN LẠI TỔNG TIỀN MỚI
@@ -174,6 +197,37 @@ export async function PATCH(
 
     if (!existingOrder) {
       return NextResponse.json({ success: false, error: 'Không tìm thấy đơn hàng' }, { status: 404 });
+    }
+
+    const cookieStore = await cookies();
+    const token = cookieStore.get('auth_token')?.value;
+    const userPayload = token ? await verifyJWT(token) : null;
+    const userRole = (userPayload?.role || '').toUpperCase();
+    const isKitchen = userRole === 'KITCHEN' || userRole === 'CHEF' || userRole === 'BEP';
+    const isTelesales = userRole === 'TELESALES' || userRole === 'CS' || userRole === 'TONG_DAI';
+
+    if (isKitchen) {
+      if (status === 'CANCELLED') {
+        return NextResponse.json(
+          { success: false, error: 'Nhân viên Bếp không có quyền hủy đơn hàng!' },
+          { status: 403 }
+        );
+      }
+      if (paymentStatus !== undefined || autoMarkPaid) {
+        return NextResponse.json(
+          { success: false, error: 'Nhân viên Bếp không có quyền thay đổi trạng thái thanh toán!' },
+          { status: 403 }
+        );
+      }
+    }
+
+    if (isTelesales) {
+      if (paymentStatus !== undefined || autoMarkPaid) {
+        return NextResponse.json(
+          { success: false, error: 'Nhân viên Tổng Đài không có quyền thay đổi trạng thái thanh toán!' },
+          { status: 403 }
+        );
+      }
     }
 
     const updateData: any = {};

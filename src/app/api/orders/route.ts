@@ -44,13 +44,18 @@ export async function GET(request: NextRequest) {
       whereCondition.paymentMethod = paymentMethod;
     }
 
-    if (userPayload && userPayload.role === 'MANAGER' && userPayload.branchIds && userPayload.branchIds.length > 0) {
+    const userRole = (userPayload?.role || '').toUpperCase();
+    if (userPayload && userRole === 'MANAGER' && userPayload.branchIds && userPayload.branchIds.length > 0) {
       if (branchId && branchId !== 'ALL' && userPayload.branchIds.includes(branchId)) {
         whereCondition.branchId = branchId;
       } else {
         whereCondition.branchId = { in: userPayload.branchIds };
       }
-    } else if (userPayload && (userPayload.role === 'STAFF' || userPayload.role === 'CASHIER') && userPayload.branchId) {
+    } else if (
+      userPayload &&
+      (userRole === 'STAFF' || userRole === 'CASHIER' || userRole === 'KITCHEN' || userRole === 'CHEF' || userRole === 'BEP') &&
+      userPayload.branchId
+    ) {
       whereCondition.branchId = userPayload.branchId;
     } else if (branchId && branchId !== 'ALL') {
       whereCondition.branchId = branchId;

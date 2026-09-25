@@ -21,6 +21,11 @@ import {
   Check,
   ChevronDown,
   Pencil,
+  QrCode,
+  Share2,
+  Copy,
+  MessageSquare,
+  ExternalLink,
 } from 'lucide-react';
 import PhoneActionCell from '@/components/PhoneActionCell';
 import * as XLSX from 'xlsx';
@@ -45,7 +50,7 @@ interface OrderRecord {
   note: string | null;
   status: string; // PENDING, CONFIRMED, DELIVERING, COMPLETED, CANCELLED
   paymentStatus: string; // UNPAID, PAID
-  paymentMethod: string; // COD, BANK_TRANSFER
+  paymentMethod: string; // COD, BANK_TRANSFER, SPLIT
   totalAmount: number;
   cashAmount?: number | null;
   transferAmount?: number | null;
@@ -112,7 +117,7 @@ export default function CentralizedOrdersPage() {
     accountNumber: '0988888888',
     accountName: 'NGUYEN VAN KHANG',
     qrTemplate: 'compact2',
-    transferSyntax: 'GUM [Mã_Đơn]'
+    transferSyntax: 'GMS [Mã_Đơn]'
   });
 
   const fetchPaymentConfigForBranch = useCallback(async (bId?: string) => {
@@ -142,14 +147,34 @@ export default function CentralizedOrdersPage() {
   const { user: currentUser } = useAuth();
   const { branches } = useBranches();
 
-  const availableBranches = (currentUser?.role === 'MANAGER' && currentUser.branchIds && currentUser.branchIds.length > 0)
+  // Role matrix definitions
+  const userRole = (currentUser?.role || '').toUpperCase();
+  const isKitchen = userRole === 'KITCHEN' || userRole === 'CHEF' || userRole === 'BEP';
+  const isTelesales = userRole === 'TELESALES' || userRole === 'CS' || userRole === 'TONG_DAI';
+  const canEditPaymentStatus = userRole === 'ADMIN' || userRole === 'MANAGER' || userRole === 'CASHIER' || userRole === 'THU_NGAN' || userRole === 'STAFF';
+  const canEditOrder = userRole === 'ADMIN' || userRole === 'MANAGER' || isTelesales;
+  const canCreateOrder = !isKitchen;
+  const canCancelOrder = userRole === 'ADMIN' || userRole === 'MANAGER' || isTelesales;
+
+  const availableBranches = isKitchen && currentUser?.branchId
+    ? branches.filter((b) => b.id === currentUser.branchId || b.code === currentUser.branchId)
+    : (currentUser?.role === 'MANAGER' && currentUser.branchIds && currentUser.branchIds.length > 0)
     ? branches.filter((b) => currentUser.branchIds!.includes(b.id) || currentUser.branchIds!.includes(b.code))
     : branches;
+
+  useEffect(() => {
+    if (isKitchen && currentUser?.branchId) {
+      setBranchFilter(currentUser.branchId);
+    }
+  }, [isKitchen, currentUser?.branchId]);
 
   // Modals State
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<OrderRecord | null>(null);
   const [printBillOrder, setPrintBillOrder] = useState<OrderRecord | null>(null);
+  const [smartBillOrder, setSmartBillOrder] = useState<OrderRecord | null>(null);
+  const [copiedBillLink, setCopiedBillLink] = useState(false);
+  const [copiedZaloMsg, setCopiedZaloMsg] = useState(false);
   const [confirmPaidOrderModal, setConfirmPaidOrderModal] = useState<{ id: string; targetStatus: string } | null>(null);
 
   // Shipping Modal State
@@ -468,12 +493,50 @@ export default function CentralizedOrdersPage() {
     }, 50);
   };
 
+  const handleCopyBillLink = (ord: OrderRecord) => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://gaumuoismart.vn';
+    const link = `${origin}/don-hang/${ord.orderCode || ord.id}`;
+    navigator.clipboard.writeText(link);
+    setCopiedBillLink(true);
+    showToast('📋 Đã sao chép link hóa đơn điện tử!');
+    setTimeout(() => setCopiedBillLink(false), 2500);
+  };
+
+  const handleShareZalo = (ord: OrderRecord) => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://gaumuoismart.vn';
+    const billLink = `${origin}/don-hang/${ord.orderCode || ord.id}`;
+    const cleanPhone = (ord.customerPhone || '').replace(/\D/g, '');
+    const zaloMsg = `🍗 GÀ Ủ MUỐI SMART - HÓA ĐƠN BÁN HÀNG #${ord.orderCode}\n\n👤 Khách hàng: ${ord.customerName} - ${ord.customerPhone}\n📍 Giao đến: ${ord.deliveryAddress}\n🛒 Số lượng: ${ord.items.reduce((s, i) => s + i.quantity, 0)} món\n💰 Tổng thanh toán: ${ord.totalAmount.toLocaleString('vi-VN')} đ\n\n👉 Quý khách vui lòng xem chi tiết hóa đơn & quét mã VietQR tự động tại link sau:\n${billLink}\n\n🙏 Trân trọng cảm ơn quý khách đã ủng hộ Gà Ủ Muối Smart!`;
+
+    navigator.clipboard.writeText(zaloMsg);
+    setCopiedZaloMsg(true);
+    showToast('💬 Đã sao chép tin nhắn hóa đơn kèm link VietQR!');
+    setTimeout(() => setCopiedZaloMsg(false), 2500);
+
+    if (cleanPhone) {
+      window.open(`https://zalo.me/${cleanPhone}`, '_blank');
+    }
+  };
+
   // Update Status & Payment Status Handler
   const handleUpdateOrderStatus = async (
     id: string,
     newStatus: string,
     paymentStatusChoice?: 'PAID' | 'UNPAID' | string
   ) => {
+    if (isKitchen && newStatus === 'CANCELLED') {
+      alert('Nhân viên Bếp không có quyền hủy đơn hàng!');
+      return;
+    }
+
+    let cancelReason: string | null = null;
+    if (newStatus === 'CANCELLED') {
+      cancelReason = prompt('Vui lòng nhập lý do hủy đơn hàng:');
+      if (cancelReason === null) {
+        return;
+      }
+    }
+
     // If selecting DELIVERING, open Shipping Info Modal
     if (newStatus === 'DELIVERING') {
       const targetOrd = orders.find((o) => o.id === id) || (selectedOrder?.id === id ? selectedOrder : null);
@@ -487,8 +550,9 @@ export default function CentralizedOrdersPage() {
       return;
     }
 
-    // If selecting COMPLETED and paymentStatusChoice is not decided yet, trigger confirmation popup
-    if (newStatus === 'COMPLETED' && paymentStatusChoice === undefined) {
+    // If selecting COMPLETED:
+    // Only ask payment status popup if user has permission to edit payment status (ADMIN / CASHIER)
+    if (newStatus === 'COMPLETED' && canEditPaymentStatus && paymentStatusChoice === undefined) {
       setConfirmPaidOrderModal({ id, targetStatus: 'COMPLETED' });
       return;
     }
@@ -497,8 +561,11 @@ export default function CentralizedOrdersPage() {
       const payload: any = {
         status: newStatus,
       };
-      if (paymentStatusChoice) {
+      if (canEditPaymentStatus && paymentStatusChoice) {
         payload.paymentStatus = paymentStatusChoice;
+      }
+      if (cancelReason) {
+        payload.note = cancelReason;
       }
 
       const res = await fetch(`/api/orders/${id}/status`, {
@@ -512,7 +579,9 @@ export default function CentralizedOrdersPage() {
         showToast(
           `Đã cập nhật đơn hàng sang "${
             newStatus === 'COMPLETED'
-              ? `Hoàn thành (${paymentStatusChoice === 'PAID' ? 'Đã nhận tiền' : 'Chờ thanh toán'})`
+              ? `Hoàn thành${paymentStatusChoice ? ` (${paymentStatusChoice === 'PAID' ? 'Đã nhận tiền' : 'Chờ thanh toán'})` : ''}`
+              : newStatus === 'CANCELLED'
+              ? 'Đã hủy đơn'
               : newStatus
           }"!`
         );
@@ -521,6 +590,9 @@ export default function CentralizedOrdersPage() {
         }
         if (printBillOrder && printBillOrder.id === id) {
           setPrintBillOrder(data.order);
+        }
+        if (smartBillOrder && smartBillOrder.id === id) {
+          setSmartBillOrder(data.order);
         }
       } else {
         alert(data.error || 'Lỗi khi cập nhật trạng thái');
@@ -971,13 +1043,15 @@ export default function CentralizedOrdersPage() {
           </div>
 
           {/* Prominent Action Button: Create New Order */}
-          <button
-            onClick={handleOpenCreateModal}
-            className="px-4 py-2.5 bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 hover:from-amber-600 hover:to-amber-800 text-stone-950 font-black rounded-xl text-xs flex items-center gap-2 transition shadow-lg shadow-amber-500/20 cursor-pointer"
-          >
-            <Plus className="w-4 h-4 stroke-[2.5]" />
-            <span>+ Tạo Đơn Hàng Mới</span>
-          </button>
+          {canCreateOrder && (
+            <button
+              onClick={handleOpenCreateModal}
+              className="px-4 py-2.5 bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 hover:from-amber-600 hover:to-amber-800 text-stone-950 font-black rounded-xl text-xs flex items-center gap-2 transition shadow-lg shadow-amber-500/20 cursor-pointer"
+            >
+              <Plus className="w-4 h-4 stroke-[2.5]" />
+              <span>+ Tạo Đơn Hàng Mới</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -1014,11 +1088,12 @@ export default function CentralizedOrdersPage() {
           <div>
             <select
               value={branchFilter}
+              disabled={isKitchen && !!currentUser?.branchId}
               onChange={(e) => setBranchFilter(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl dark:bg-neutral-900 bg-stone-50 border dark:border-neutral-700 border-stone-300 dark:text-white text-stone-900 text-xs font-medium focus:outline-none focus:border-amber-500 cursor-pointer"
+              className="w-full px-3 py-2 rounded-xl dark:bg-neutral-900 bg-stone-50 border dark:border-neutral-700 border-stone-300 dark:text-white text-stone-900 text-xs font-medium focus:outline-none focus:border-amber-500 cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed"
             >
-              {currentUser?.role !== 'MANAGER' && <option value="ALL">🏢 Cửa Hàng: Tất Cả ({branches.length}) Cơ Sở</option>}
-              {currentUser?.role === 'MANAGER' && <option value="ALL">🏢 Các cơ sở phụ trách ({availableBranches.length})</option>}
+              {!isKitchen && currentUser?.role !== 'MANAGER' && <option value="ALL">🏢 Cửa Hàng: Tất Cả ({branches.length}) Cơ Sở</option>}
+              {!isKitchen && currentUser?.role === 'MANAGER' && <option value="ALL">🏢 Các cơ sở phụ trách ({availableBranches.length})</option>}
               {availableBranches.map((b) => (
                 <option key={b.id} value={b.id}>
                   📍 {b.code ? `${b.code.toUpperCase()} – ${b.name}` : b.name}
@@ -1182,11 +1257,11 @@ export default function CentralizedOrdersPage() {
                                 : 'bg-rose-500/20 text-rose-500 border-rose-500/40'
                             }`}
                           >
-                            <option value="PENDING">🟡 Chờ xác nhận</option>
+                            {!isKitchen && <option value="PENDING">🟡 Chờ xác nhận</option>}
                             <option value="CONFIRMED">🔵 Đã xác nhận (Bếp làm)</option>
                             <option value="DELIVERING">🟣 Đang giao hàng</option>
                             <option value="COMPLETED">🟢 Thành công</option>
-                            <option value="CANCELLED">🔴 Đã hủy đơn</option>
+                            {!isKitchen && <option value="CANCELLED">🔴 Đã hủy đơn</option>}
                           </select>
                           <span className="block text-[9px] font-semibold text-neutral-400">
                             {order.sourceTag || 'Đơn Mới Web'}
@@ -1288,18 +1363,30 @@ export default function CentralizedOrdersPage() {
                       {/* Interactive Payment Status Select & Method Badge */}
                       <td className="py-3.5 px-4 whitespace-nowrap">
                         <div className="space-y-1.5">
-                          <select
-                            value={order.paymentStatus || 'UNPAID'}
-                            onChange={(e) => handleUpdatePaymentStatus(order.id, e.target.value)}
-                            className={`px-2 py-1 rounded text-[10px] font-extrabold focus:outline-none cursor-pointer border ${
-                              order.paymentStatus === 'PAID'
-                                ? 'bg-emerald-500/20 text-emerald-500 border-emerald-500/40'
-                                : 'bg-amber-500/10 text-amber-500 border-amber-500/30'
-                            }`}
-                          >
-                            <option value="UNPAID">❌ Chưa thanh toán</option>
-                            <option value="PAID">✅ Đã nhận tiền</option>
-                          </select>
+                          {canEditPaymentStatus ? (
+                            <select
+                              value={order.paymentStatus || 'UNPAID'}
+                              onChange={(e) => handleUpdatePaymentStatus(order.id, e.target.value)}
+                              className={`px-2 py-1 rounded text-[10px] font-extrabold focus:outline-none cursor-pointer border ${
+                                order.paymentStatus === 'PAID'
+                                  ? 'bg-emerald-500/20 text-emerald-500 border-emerald-500/40'
+                                  : 'bg-amber-500/10 text-amber-500 border-amber-500/30'
+                              }`}
+                            >
+                              <option value="UNPAID">❌ Chưa thanh toán</option>
+                              <option value="PAID">✅ Đã nhận tiền</option>
+                            </select>
+                          ) : (
+                            <span
+                              className={`inline-block px-2.5 py-1 rounded text-[10px] font-extrabold border ${
+                                order.paymentStatus === 'PAID'
+                                  ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
+                                  : 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                              }`}
+                            >
+                              {order.paymentStatus === 'PAID' ? '✅ Đã nhận tiền' : '❌ Chưa thanh toán'}
+                            </span>
+                          )}
 
                           {/* Payment Method Badge */}
                           <div className="text-[10px] font-medium">
@@ -1324,18 +1411,30 @@ export default function CentralizedOrdersPage() {
                         </div>
                       </td>
 
-                      {/* Fast Actions: Edit, K80 Print & Detail View */}
+                      {/* Fast Actions: Smart VietQR Bill, Edit, K80 Print & Detail View */}
                       <td className="py-3.5 px-4 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-1.5">
-                          {/* Edit Order Button */}
+                          {/* Smart Dynamic VietQR Bill Button */}
                           <button
-                            onClick={() => handleOpenEditModal(order)}
-                            className="px-2.5 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-500 border border-amber-500/40 font-bold rounded-lg text-[11px] flex items-center gap-1 transition shadow-xs cursor-pointer"
-                            title="Chỉnh sửa đơn hàng"
+                            onClick={() => setSmartBillOrder(order)}
+                            className="px-2.5 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-lg text-[11px] flex items-center gap-1 transition shadow-xs cursor-pointer"
+                            title="Gửi Bill Thanh Toán Tự Động (VietQR)"
                           >
-                            <Pencil className="w-3.5 h-3.5 stroke-[2]" />
-                            <span>Sửa</span>
+                            <QrCode className="w-3.5 h-3.5 stroke-[2]" />
+                            <span>Bill QR</span>
                           </button>
+
+                          {/* Edit Order Button (Telesales & Admin only) */}
+                          {canEditOrder && (
+                            <button
+                              onClick={() => handleOpenEditModal(order)}
+                              className="px-2.5 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-500 border border-amber-500/40 font-bold rounded-lg text-[11px] flex items-center gap-1 transition shadow-xs cursor-pointer"
+                              title="Chỉnh sửa đơn hàng"
+                            >
+                              <Pencil className="w-3.5 h-3.5 stroke-[2]" />
+                              <span>Sửa</span>
+                            </button>
+                          )}
 
                           {/* Fast K80 Print Button */}
                           <button
@@ -2266,6 +2365,16 @@ export default function CentralizedOrdersPage() {
 
             {/* Quick Status Change Action Buttons inside Detail Modal */}
             <div className="pt-2 flex items-center justify-end gap-2 flex-wrap">
+              {/* Smart Dynamic VietQR Bill Button */}
+              <button
+                type="button"
+                onClick={() => setSmartBillOrder(selectedOrder)}
+                className="px-3.5 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-md transition cursor-pointer mr-auto"
+              >
+                <QrCode className="w-4 h-4" />
+                <span>🧾 Gửi Bill VietQR Tự Động</span>
+              </button>
+
               {selectedOrder.status === 'PENDING' && (
                 <button
                   onClick={() => {
@@ -2296,10 +2405,10 @@ export default function CentralizedOrdersPage() {
                   🟢 Hoàn Thành Đơn
                 </button>
               )}
-              {selectedOrder.status !== 'CANCELLED' && selectedOrder.status !== 'COMPLETED' && (
+              {canCancelOrder && selectedOrder.status !== 'CANCELLED' && selectedOrder.status !== 'COMPLETED' && (
                 <button
                   onClick={() => handleUpdateOrderStatus(selectedOrder.id, 'CANCELLED')}
-                  className="px-3 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl text-xs"
+                  className="px-3 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl text-xs cursor-pointer"
                 >
                   Hủy Đơn
                 </button>
@@ -2685,6 +2794,179 @@ export default function CentralizedOrdersPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* 10. Modal "Hóa Đơn Điện Tử & Mã VietQR Tự Động (Smart Dynamic Bill)" */}
+      {smartBillOrder && (
+        <div className="fixed inset-0 z-50 bg-neutral-950/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+          <div className="w-full max-w-lg dark:bg-[#141820] bg-white rounded-3xl border border-blue-500/40 shadow-2xl p-6 relative my-6 animate-in fade-in zoom-in-95 duration-200 space-y-4">
+            <button
+              type="button"
+              onClick={() => setSmartBillOrder(null)}
+              className="absolute top-4 right-4 text-neutral-400 hover:text-white p-1.5 rounded-xl hover:bg-neutral-800 transition cursor-pointer"
+            >
+              <X className="w-5 h-5 stroke-[1.5]" />
+            </button>
+
+            {/* Header */}
+            <div className="flex items-center gap-3 border-b dark:border-neutral-800 border-stone-200 pb-4">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-500 text-stone-950 flex items-center justify-center text-2xl shadow-lg shrink-0">
+                🍗
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-extrabold text-base dark:text-white text-stone-900">
+                    Hóa Đơn Điện Tử & Mã VietQR Tự Động
+                  </h3>
+                  <span className="px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 text-[10px] font-extrabold border border-blue-500/30">
+                    Napas 247
+                  </span>
+                </div>
+                <p className="text-xs text-amber-500 font-mono font-bold mt-0.5">
+                  Đơn Hàng: #{smartBillOrder.orderCode} • {formatOrderDateTime(smartBillOrder.createdAt)}
+                </p>
+              </div>
+            </div>
+
+            {/* Customer & Delivery Summary */}
+            <div className="p-3.5 rounded-2xl dark:bg-neutral-900 bg-stone-50 border dark:border-neutral-800 border-stone-200 text-xs space-y-1.5 dark:text-neutral-300 text-stone-700">
+              <div className="flex justify-between items-center">
+                <span className="font-bold dark:text-white text-stone-900 text-sm">
+                  {smartBillOrder.customerName}
+                </span>
+                <span className="font-mono text-amber-500 font-bold">
+                  {smartBillOrder.customerPhone}
+                </span>
+              </div>
+              <p className="text-neutral-400">
+                <strong className="dark:text-neutral-300 text-stone-700">Địa chỉ:</strong> {smartBillOrder.deliveryAddress}
+              </p>
+              {smartBillOrder.note && (
+                <p className="text-amber-400 italic bg-amber-500/10 p-2 rounded-xl border border-amber-500/20 mt-1">
+                  <strong>Ghi chú:</strong> {smartBillOrder.note}
+                </p>
+              )}
+            </div>
+
+            {/* Items Breakdown */}
+            <div className="rounded-2xl border dark:border-neutral-800 border-stone-200 overflow-hidden text-xs">
+              <div className="dark:bg-neutral-900 bg-stone-100 p-2.5 font-bold uppercase tracking-wider text-[10px] text-neutral-400 flex justify-between">
+                <span>Danh Sách Món ({smartBillOrder.items.length} món)</span>
+                <span>Thành Tiền</span>
+              </div>
+              <div className="divide-y dark:divide-neutral-800 divide-stone-200 p-2 space-y-1">
+                {smartBillOrder.items.map((item, idx) => (
+                  <div key={idx} className="flex justify-between items-center py-1.5 px-2">
+                    <div>
+                      <span className="font-bold dark:text-white text-stone-900 block">{item.productName}</span>
+                      <span className="text-[11px] text-neutral-400">
+                        {item.quantity} x {item.price.toLocaleString('vi-VN')} đ
+                      </span>
+                    </div>
+                    <span className="font-bold text-amber-500 font-mono">
+                      {item.subtotal.toLocaleString('vi-VN')} đ
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div className="p-3 bg-stone-50 dark:bg-neutral-900/60 border-t dark:border-neutral-800 border-stone-200 space-y-1">
+                <div className="flex justify-between text-neutral-400 text-[11px]">
+                  <span>Phí vận chuyển:</span>
+                  <span>{(smartBillOrder.shippingFee || 0).toLocaleString('vi-VN')} đ</span>
+                </div>
+                <div className="flex justify-between text-neutral-400 text-[11px]">
+                  <span>Giảm giá:</span>
+                  <span>-{(smartBillOrder.discountAmount || 0).toLocaleString('vi-VN')} đ</span>
+                </div>
+                <div className="flex justify-between items-center pt-2 border-t dark:border-neutral-800 border-stone-200 text-sm font-black">
+                  <span className="dark:text-white text-stone-900">TỔNG THANH TOÁN:</span>
+                  <span className="text-xl font-black text-emerald-500 font-mono">
+                    {smartBillOrder.totalAmount.toLocaleString('vi-VN')} đ
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Dynamic Napas VietQR Card */}
+            {(() => {
+              const qrPayAmount =
+                smartBillOrder.paymentMethod === 'SPLIT' && (smartBillOrder.transferAmount || 0) > 0
+                  ? smartBillOrder.transferAmount || smartBillOrder.totalAmount
+                  : smartBillOrder.totalAmount;
+              const transferSyntax = (paymentConfig.transferSyntax || 'GMS [Mã_Đơn]')
+                .replace('[Mã_Đơn]', smartBillOrder.orderCode)
+                .replace('[SĐT]', smartBillOrder.customerPhone || '');
+              const qrUrl = `https://img.vietqr.io/image/${paymentConfig.bankId || 'MB'}-${paymentConfig.accountNumber || '0988888888'}-${paymentConfig.qrTemplate || 'compact2'}.png?amount=${qrPayAmount}&addInfo=${encodeURIComponent(transferSyntax)}&accountName=${encodeURIComponent(paymentConfig.accountName || 'GA U MUOI SMART')}`;
+
+              return (
+                <div className="p-4 rounded-2xl bg-gradient-to-br from-blue-950/40 via-indigo-950/30 to-purple-950/40 border-2 border-blue-500/40 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-blue-400 flex items-center gap-1.5">
+                      <QrCode className="w-4 h-4" />
+                      <span>MÃ VIETQR ĐỘNG TỰ ĐIỀN TIỀN & NỘI DUNG</span>
+                    </span>
+                    <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/20 px-2 py-0.5 rounded-full">
+                      Khớp lệnh tức thì
+                    </span>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row items-center gap-3.5 bg-white/5 p-3 rounded-xl border border-blue-500/20">
+                    <div className="bg-white p-2 rounded-xl shrink-0 shadow-lg">
+                      <img
+                        src={qrUrl}
+                        alt="VietQR Gà Ủ Muối Smart"
+                        className="w-28 h-28 object-contain"
+                      />
+                    </div>
+                    <div className="text-xs space-y-1 text-neutral-300 flex-1 w-full font-medium">
+                      <p className="flex justify-between border-b dark:border-neutral-800 border-stone-200 pb-0.5">
+                        <span className="text-neutral-400">Ngân hàng:</span>
+                        <strong className="text-white">{paymentConfig.bankName || paymentConfig.bankId}</strong>
+                      </p>
+                      <p className="flex justify-between border-b dark:border-neutral-800 border-stone-200 pb-0.5">
+                        <span className="text-neutral-400">Số tài khoản:</span>
+                        <strong className="text-amber-400 font-mono">{paymentConfig.accountNumber}</strong>
+                      </p>
+                      <p className="flex justify-between border-b dark:border-neutral-800 border-stone-200 pb-0.5">
+                        <span className="text-neutral-400">Chủ tài khoản:</span>
+                        <strong className="text-white uppercase">{paymentConfig.accountName}</strong>
+                      </p>
+                      <p className="flex justify-between border-b dark:border-neutral-800 border-stone-200 pb-0.5">
+                        <span className="text-neutral-400">Số tiền QR:</span>
+                        <strong className="text-emerald-400 font-mono font-bold">{qrPayAmount.toLocaleString('vi-VN')} đ</strong>
+                      </p>
+                      <p className="flex justify-between pt-0.5">
+                        <span className="text-neutral-400">Cú pháp CK:</span>
+                        <strong className="text-amber-300 font-mono font-extrabold">{transferSyntax}</strong>
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Action Buttons: Copy Link & Share Zalo */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2 border-t dark:border-neutral-800 border-stone-200">
+              <button
+                type="button"
+                onClick={() => handleCopyBillLink(smartBillOrder)}
+                className="py-3 px-4 rounded-xl dark:bg-neutral-800 bg-stone-200 hover:bg-stone-300 dark:hover:bg-neutral-700 text-stone-900 dark:text-white font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer"
+              >
+                <Copy className="w-4 h-4 text-blue-400" />
+                <span>{copiedBillLink ? '✓ Đã Sao Chép Link!' : '📋 Sao Chép Link Bill'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleShareZalo(smartBillOrder)}
+                className="py-3 px-4 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-black text-xs flex items-center justify-center gap-2 shadow-lg transition cursor-pointer"
+              >
+                <MessageSquare className="w-4 h-4" />
+                <span>{copiedZaloMsg ? '✓ Đã Copy & Mở Zalo!' : '💬 Gửi Zalo / SMS Cho Khách'}</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

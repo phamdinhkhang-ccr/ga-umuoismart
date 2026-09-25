@@ -36,6 +36,8 @@ interface OrderRecord {
   paymentStatus: string;
   paymentMethod: string;
   totalAmount: number;
+  cashAmount?: number | null;
+  transferAmount?: number | null;
   discountAmount?: number | null;
   shippingFee?: number | null;
   branchId?: string | null;
@@ -55,6 +57,14 @@ export default function OrderTrackingPage() {
   const [order, setOrder] = useState<OrderRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [paymentConfig, setPaymentConfig] = useState<any>({
+    bankId: 'MB',
+    bankName: 'MBBank',
+    accountNumber: '0988888888',
+    accountName: 'NGUYEN VAN KHANG',
+    qrTemplate: 'compact2',
+    transferSyntax: 'GMS [Mã_Đơn]'
+  });
 
   const fetchOrderDetails = async () => {
     if (!id) return;
@@ -65,6 +75,14 @@ export default function OrderTrackingPage() {
       const data = await res.json();
       if (data.success && data.order) {
         setOrder(data.order);
+        if (data.order.branchId) {
+          fetch(`/api/settings/payment?branchId=${data.order.branchId}`)
+            .then((r) => r.json())
+            .then((pData) => {
+              if (pData.config) setPaymentConfig(pData.config);
+            })
+            .catch(() => {});
+        }
       } else {
         setError(data.error || 'Không tìm thấy thông tin đơn hàng này!');
       }
@@ -396,6 +414,69 @@ export default function OrderTrackingPage() {
                 </div>
               </div>
             </div>
+
+            {/* Dynamic VietQR Payment Box if Unpaid */}
+            {order.paymentStatus !== 'PAID' && (
+              <div className="bg-[#121419] rounded-2xl border-2 border-amber-500/40 overflow-hidden shadow-2xl p-5 space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="font-extrabold text-amber-400 uppercase tracking-wider text-xs flex items-center gap-1.5">
+                    <span>⚡ QUÉT MÃ VIETQR THANH TOÁN TỰ ĐỘNG</span>
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-bold">
+                    Napas 247 • Khớp lệnh tức thì
+                  </span>
+                </div>
+
+                {(() => {
+                  const qrPayAmount =
+                    order.paymentMethod === 'SPLIT' && (order.transferAmount || 0) > 0
+                      ? order.transferAmount || order.totalAmount
+                      : order.totalAmount;
+                  const transferSyntax = (paymentConfig.transferSyntax || 'GMS [Mã_Đơn]')
+                    .replace('[Mã_Đơn]', order.orderCode)
+                    .replace('[SĐT]', order.customerPhone || '');
+                  const qrUrl = `https://img.vietqr.io/image/${paymentConfig.bankId || 'MB'}-${paymentConfig.accountNumber || '0988888888'}-${paymentConfig.qrTemplate || 'compact2'}.png?amount=${qrPayAmount}&addInfo=${encodeURIComponent(transferSyntax)}&accountName=${encodeURIComponent(paymentConfig.accountName || 'GA U MUOI SMART')}`;
+
+                  return (
+                    <div className="flex flex-col sm:flex-row items-center gap-4 bg-white/5 p-4 rounded-xl border border-neutral-800">
+                      <div className="bg-white p-2 rounded-xl shrink-0 shadow-lg">
+                        <img
+                          src={qrUrl}
+                          alt="VietQR Gà Ủ Muối Smart"
+                          className="w-36 h-36 object-contain"
+                        />
+                      </div>
+                      <div className="text-xs space-y-1.5 text-neutral-300 flex-1 w-full">
+                        <p className="flex justify-between border-b border-neutral-800/80 pb-1">
+                          <span className="text-neutral-400">Ngân hàng:</span>
+                          <strong className="text-white">{paymentConfig.bankName || paymentConfig.bankId}</strong>
+                        </p>
+                        <p className="flex justify-between border-b border-neutral-800/80 pb-1">
+                          <span className="text-neutral-400">Số tài khoản:</span>
+                          <strong className="text-amber-400 font-mono text-sm">{paymentConfig.accountNumber}</strong>
+                        </p>
+                        <p className="flex justify-between border-b border-neutral-800/80 pb-1">
+                          <span className="text-neutral-400">Chủ tài khoản:</span>
+                          <strong className="text-white uppercase">{paymentConfig.accountName}</strong>
+                        </p>
+                        <p className="flex justify-between border-b border-neutral-800/80 pb-1">
+                          <span className="text-neutral-400">Số tiền QR:</span>
+                          <strong className="text-emerald-400 font-mono text-sm">{qrPayAmount.toLocaleString('vi-VN')} đ</strong>
+                        </p>
+                        <p className="flex justify-between pt-0.5">
+                          <span className="text-neutral-400">Cú pháp CK:</span>
+                          <strong className="text-amber-300 font-mono font-bold">{transferSyntax}</strong>
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                <p className="text-[11px] text-center text-amber-300/80 italic">
+                  💡 Sau khi chuyển khoản thành công, hệ thống ngân hàng sẽ tự động báo cho Bếp để ưu tiên xuất đơn ngay!
+                </p>
+              </div>
+            )}
           </>
         )}
       </main>
