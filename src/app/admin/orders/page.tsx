@@ -26,6 +26,8 @@ import {
   Copy,
   MessageSquare,
   ExternalLink,
+  MoreVertical,
+  MoreHorizontal,
 } from 'lucide-react';
 import PhoneActionCell from '@/components/PhoneActionCell';
 import * as XLSX from 'xlsx';
@@ -179,6 +181,13 @@ export default function CentralizedOrdersPage() {
   const [debtCollectOrder, setDebtCollectOrder] = useState<OrderRecord | null>(null);
   const [debtPaymentMethod, setDebtPaymentMethod] = useState<'COD' | 'BANK_TRANSFER'>('COD');
   const [submittingDebt, setSubmittingDebt] = useState(false);
+  const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleClickOutside = () => setOpenActionMenuId(null);
+    window.addEventListener('click', handleClickOutside);
+    return () => window.removeEventListener('click', handleClickOutside);
+  }, []);
 
   // Shipping Modal State
   const [shippingModalOrder, setShippingModalOrder] = useState<OrderRecord | null>(null);
@@ -1362,18 +1371,14 @@ export default function CentralizedOrdersPage() {
             <table className="w-full text-left text-xs">
               <thead className="dark:bg-neutral-900/90 bg-stone-100 dark:text-neutral-400 text-stone-600 font-semibold border-b dark:border-neutral-800 border-stone-200 uppercase text-[10px] tracking-wider">
                 <tr>
-                  <th className="py-3.5 px-4"># MÃ ĐƠN</th>
-                  <th className="py-3.5 px-4">TRẠNG THÁI (LIFECYCLE)</th>
-                  <th className="py-3.5 px-4">CỬA HÀNG</th>
-                  <th className="py-3.5 px-4">SẢN PHẨM</th>
-                  <th className="py-3.5 px-4 min-w-[220px] max-w-[260px]">KHÁCH HÀNG & ĐỊA CHỈ GIAO</th>
-                  <th className="py-3.5 px-4 text-center">SL</th>
-                  <th className="py-3.5 px-4">TIỀN HÀNG</th>
-                  <th className="py-3.5 px-4">GIẢM GIÁ</th>
-                  <th className="py-3.5 px-4">THÀNH TIỀN</th>
-                  <th className="py-3.5 px-4">NGƯỜI BÁN</th>
-                  <th className="py-3.5 px-4">THANH TOÁN</th>
-                  <th className="py-3.5 px-4 text-right">THAO TÁC</th>
+                  <th className="py-2.5 px-3"># MÃ ĐƠN</th>
+                  <th className="py-2.5 px-3">TRẠNG THÁI</th>
+                  <th className="py-2.5 px-3">CỬA HÀNG</th>
+                  <th className="py-2.5 px-3">SẢN PHẨM & SL</th>
+                  <th className="py-2.5 px-3 min-w-[200px] max-w-[240px]">KHÁCH HÀNG & ĐỊA CHỈ</th>
+                  <th className="py-2.5 px-3">TỔNG TIỀN</th>
+                  <th className="py-2.5 px-3">THANH TOÁN</th>
+                  <th className="py-2.5 px-3 text-right">THAO TÁC</th>
                 </tr>
               </thead>
               <tbody className="divide-y dark:divide-neutral-800/60 divide-stone-200 font-medium">
@@ -1382,29 +1387,28 @@ export default function CentralizedOrdersPage() {
                   const branchName = branchObj ? `${branchObj.code ? branchObj.code.toUpperCase() + ' - ' : ''}${branchObj.name}` : (order.branchId || 'Chi Nhánh POS');
 
                   const totalQty = order.items.reduce((acc, item) => acc + item.quantity, 0);
-                  const subtotalAmount = order.items.reduce((acc, item) => acc + item.subtotal, 0);
 
                   return (
-                    <tr key={order.id} className="dark:hover:bg-neutral-900/50 hover:bg-stone-50 transition-colors">
-                      {/* Order Code & Creation Date Time */}
-                      <td className="py-3.5 px-4 whitespace-nowrap">
+                    <tr key={order.id} className="dark:hover:bg-neutral-800/60 hover:bg-stone-50 transition-colors">
+                      {/* 1. Mã Đơn & Ngày Giờ */}
+                      <td className="py-2.5 px-3 whitespace-nowrap align-middle">
                         <div className="flex flex-col">
-                          <span className="font-mono font-bold text-amber-500">
+                          <span className="font-mono font-extrabold text-amber-500 text-xs">
                             #{order.orderCode}
                           </span>
-                          <span className="text-[11px] text-neutral-400 font-medium mt-0.5">
+                          <span className="text-[10px] text-neutral-400 font-medium">
                             {formatOrderDateTime(order.createdAt)}
                           </span>
                         </div>
                       </td>
 
-                      {/* Interactive Status Select Dropdown */}
-                      <td className="py-3.5 px-4 whitespace-nowrap">
-                        <div className="space-y-1">
+                      {/* 2. Trạng Thái Vận Hành (Lifecycle) */}
+                      <td className="py-2.5 px-3 whitespace-nowrap align-middle">
+                        <div className="flex flex-col gap-0.5">
                           <select
                             value={order.status}
                             onChange={(e) => handleUpdateOrderStatus(order.id, e.target.value)}
-                            className={`px-2.5 py-1 rounded-xl text-[11px] font-extrabold focus:outline-none cursor-pointer border ${
+                            className={`h-7 px-2 rounded-lg text-[11px] font-bold focus:outline-none cursor-pointer border ${
                               order.status === 'PENDING'
                                 ? 'bg-amber-500/20 text-amber-500 border-amber-500/40'
                                 : order.status === 'CONFIRMED'
@@ -1422,12 +1426,9 @@ export default function CentralizedOrdersPage() {
                             <option value="COMPLETED">🟢 Thành công</option>
                             {!isKitchen && <option value="CANCELLED">🔴 Đã hủy đơn</option>}
                           </select>
-                          <span className="block text-[9px] font-semibold text-neutral-400">
-                            {order.sourceTag || 'Đơn Mới Web'}
-                          </span>
 
                           {order.status === 'DELIVERING' && (
-                            <div className="mt-1 flex items-center gap-1">
+                            <div className="flex items-center gap-1">
                               <button
                                 type="button"
                                 onClick={() => {
@@ -1437,31 +1438,18 @@ export default function CentralizedOrdersPage() {
                                   setShippingDriverPhone(order.driverPhone || '');
                                   setShippingTrackingUrl(order.trackingUrl || '');
                                 }}
-                                className={`px-2 py-0.5 border rounded-lg text-[10px] font-bold flex items-center gap-1 transition cursor-pointer ${
-                                  (order.carrierName || '').toLowerCase().includes('be')
-                                    ? 'bg-amber-500/20 hover:bg-amber-500/30 border-amber-500/40 text-amber-400'
-                                    : (order.carrierName || '').toLowerCase().includes('xanh')
-                                    ? 'bg-teal-500/20 hover:bg-teal-500/30 border-teal-500/40 text-teal-300'
-                                    : 'bg-emerald-500/20 hover:bg-emerald-500/30 border-emerald-500/40 text-emerald-400'
-                                }`}
-                                title={`Đơn vị: ${order.carrierName || 'GrabExpress'} | Tài xế: ${order.driverName || 'Chưa có'} ${order.driverPhone ? `(${order.driverPhone})` : ''}`}
+                                className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 truncate max-w-[100px] cursor-pointer"
+                                title={`Đơn vị: ${order.carrierName || 'GrabExpress'} | Tài xế: ${order.driverName || 'Chưa có'}`}
                               >
-                                <span>
-                                  {(order.carrierName || '').toLowerCase().includes('be')
-                                    ? '🟡'
-                                    : (order.carrierName || '').toLowerCase().includes('xanh')
-                                    ? '🌿'
-                                    : '🟢'}
-                                </span>
-                                <span className="truncate max-w-[90px]">{order.carrierName || 'GrabExpress'}</span>
+                                🛵 {order.carrierName || 'GrabExpress'}
                               </button>
                               {order.trackingUrl && (
                                 <a
                                   href={order.trackingUrl}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="p-1 text-emerald-400 hover:text-emerald-300 transition"
-                                  title="Xem hành trình hỏa tốc thời gian thực"
+                                  className="text-emerald-400 text-[10px] hover:underline"
+                                  title="Xem lộ trình"
                                 >
                                   📍
                                 </a>
@@ -1471,65 +1459,92 @@ export default function CentralizedOrdersPage() {
                         </div>
                       </td>
 
-                      {/* Store */}
-                      <td className="py-3.5 px-4 whitespace-nowrap">
-                        <span className="px-2 py-0.5 rounded-lg dark:bg-neutral-800 bg-stone-100 text-stone-700 dark:text-neutral-300 text-[11px] font-medium border border-stone-200 dark:border-neutral-700">
-                          {branchName}
-                        </span>
-                      </td>
-
-                      {/* Products */}
-                      <td className="py-3.5 px-4 max-w-[200px]">
-                        <div className="text-[11px] dark:text-neutral-200 text-stone-800 line-clamp-2">
-                          {order.items.map((i) => `${i.productName} (x${i.quantity})`).join(', ')}
+                      {/* 3. Cửa Hàng & Người Bán */}
+                      <td className="py-2.5 px-3 whitespace-nowrap align-middle">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="px-2 py-0.5 rounded-md dark:bg-neutral-800 bg-stone-100 text-stone-700 dark:text-neutral-300 text-[11px] font-semibold border border-stone-200 dark:border-neutral-700 w-fit">
+                            {branchName}
+                          </span>
+                          <span className="text-[9px] text-neutral-400">
+                            {order.sellerName || 'Thu ngân POS'}
+                          </span>
                         </div>
                       </td>
 
-                      {/* Customer */}
-                      <td className="py-3.5 px-4 min-w-[220px] max-w-[260px]">
-                        <PhoneActionCell
-                          name={order.customerName}
-                          phone={order.customerPhone}
-                          address={order.deliveryAddress}
-                        />
+                      {/* 4. Sản Phẩm & Số Lượng */}
+                      <td className="py-2.5 px-3 max-w-[200px] align-middle">
+                        <div className="flex flex-col gap-0.5">
+                          <div
+                            className="text-[11px] dark:text-neutral-200 text-stone-800 font-medium line-clamp-1"
+                            title={order.items.map((i) => `${i.productName} (x${i.quantity})`).join(', ')}
+                          >
+                            {order.items.map((i) => `${i.productName} (x${i.quantity})`).join(', ')}
+                          </div>
+                          <span className="text-[10px] text-amber-500 font-bold">
+                            Tổng: {totalQty} món
+                          </span>
+                        </div>
                       </td>
 
-                      {/* Qty */}
-                      <td className="py-3.5 px-4 text-center font-bold dark:text-white text-stone-900">
-                        {totalQty}
+                      {/* 5. Khách Hàng & Địa Chỉ */}
+                      <td className="py-2.5 px-3 min-w-[200px] max-w-[240px] align-middle">
+                        <div className="flex flex-col gap-0.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-bold dark:text-white text-stone-900 text-xs">
+                              {order.customerName || 'Khách Vãng Lai'}
+                            </span>
+                            {order.customerPhone && (
+                              <span className="text-emerald-500 dark:text-emerald-400 font-mono text-[11px] flex items-center gap-0.5">
+                                - {order.customerPhone}
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleCopyPhoneOnly(order.customerPhone);
+                                  }}
+                                  className="p-0.5 text-neutral-400 hover:text-white transition cursor-pointer"
+                                  title="Sao chép SĐT"
+                                >
+                                  <Copy size={11} />
+                                </button>
+                              </span>
+                            )}
+                          </div>
+                          <div
+                            className="text-[11px] text-neutral-400 truncate flex items-center gap-1"
+                            title={order.deliveryAddress || 'Mua tại quầy'}
+                          >
+                            <span>📍</span>
+                            <span className="truncate">{order.deliveryAddress || 'Mua tại quầy'}</span>
+                          </div>
+                        </div>
                       </td>
 
-                      {/* Subtotal */}
-                      <td className="py-3.5 px-4 whitespace-nowrap font-medium dark:text-neutral-300 text-stone-700">
-                        {subtotalAmount.toLocaleString('vi-VN')} đ
+                      {/* 6. Tổng Tiền (Gộp Tiền Hàng, Giảm Giá & Thành Tiền) */}
+                      <td className="py-2.5 px-3 whitespace-nowrap align-middle">
+                        <div className="flex flex-col">
+                          <span className="font-black text-emerald-500 text-sm">
+                            {order.totalAmount.toLocaleString('vi-VN')} đ
+                          </span>
+                          {(order.discountAmount || 0) > 0 && (
+                            <span className="text-[10px] text-rose-400 font-medium">
+                              (Giảm -{(order.discountAmount || 0).toLocaleString('vi-VN')}đ)
+                            </span>
+                          )}
+                        </div>
                       </td>
 
-                      {/* Discount */}
-                      <td className="py-3.5 px-4 whitespace-nowrap text-rose-500 font-medium">
-                        -{(order.discountAmount || 0).toLocaleString('vi-VN')} đ
-                      </td>
-
-                      {/* Total Amount */}
-                      <td className="py-3.5 px-4 whitespace-nowrap font-black text-emerald-500 text-sm">
-                        {order.totalAmount.toLocaleString('vi-VN')} đ
-                      </td>
-
-                      {/* Seller */}
-                      <td className="py-3.5 px-4 whitespace-nowrap text-neutral-400 text-[11px]">
-                        {order.sellerName || 'Thu ngân POS'}
-                      </td>
-
-                      {/* Interactive Payment Status Select & Method Badge */}
-                      <td className="py-3.5 px-4 whitespace-nowrap">
-                        <div className="space-y-1.5">
+                      {/* 7. Trạng Thái Thanh Toán & Phương Thức */}
+                      <td className="py-2.5 px-3 whitespace-nowrap align-middle">
+                        <div className="flex flex-col gap-0.5">
                           {canEditPaymentStatus ? (
                             <select
                               value={order.paymentStatus || 'UNPAID'}
                               onChange={(e) => handleUpdatePaymentStatus(order.id, e.target.value)}
-                              className={`px-2 py-1 rounded text-[10px] font-extrabold focus:outline-none cursor-pointer border ${
+                              className={`h-6 px-1.5 rounded text-[10px] font-bold focus:outline-none cursor-pointer border ${
                                 order.paymentStatus === 'PAID'
-                                  ? 'bg-emerald-500/20 text-emerald-500 border-emerald-500/40'
-                                  : 'bg-amber-500/10 text-amber-500 border-amber-500/30'
+                                  ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
+                                  : 'bg-rose-500/15 text-rose-400 border-rose-500/30'
                               }`}
                             >
                               <option value="UNPAID">❌ Chưa thanh toán</option>
@@ -1537,125 +1552,186 @@ export default function CentralizedOrdersPage() {
                             </select>
                           ) : (
                             <span
-                              className={`inline-block px-2.5 py-1 rounded text-[10px] font-extrabold border ${
+                              className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold border ${
                                 order.paymentStatus === 'PAID'
                                   ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
-                                  : 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                                  : 'bg-rose-500/15 text-rose-400 border-rose-500/30'
                               }`}
                             >
                               {order.paymentStatus === 'PAID' ? '✅ Đã nhận tiền' : '❌ Chưa thanh toán'}
                             </span>
                           )}
 
-                          {/* Payment Method Badge */}
-                          <div className="text-[10px] font-medium">
+                          <div className="text-[10px] font-medium text-neutral-400">
                             {order.paymentMethod === 'SPLIT' ? (
-                              <div className="px-2 py-1 bg-purple-500/15 border border-purple-500/30 rounded-lg text-purple-300 flex flex-col gap-0.5 shadow-2xs">
-                                <span className="font-extrabold flex items-center gap-1 text-[10px] text-purple-300">
-                                  🔀 Hỗn hợp:
-                                </span>
-                                <span className="text-[9px] text-amber-400 font-semibold">
-                                  💵 TM: {(order.cashAmount || 0).toLocaleString('vi-VN')}đ
-                                </span>
-                                <span className="text-[9px] text-blue-400 font-semibold">
-                                  🏦 CK: {(order.transferAmount || 0).toLocaleString('vi-VN')}đ
-                                </span>
-                              </div>
+                              <span className="text-purple-300 font-bold">
+                                TM: {((order.cashAmount || 0) / 1000).toFixed(0)}k | CK: {((order.transferAmount || 0) / 1000).toFixed(0)}k
+                              </span>
                             ) : order.paymentMethod === 'BANK_TRANSFER' ? (
-                              <span className="text-blue-400 font-bold flex items-center gap-1">📱 Chuyển khoản QR</span>
+                              <span className="text-blue-400 font-semibold">📱 Chuyển khoản</span>
                             ) : (
-                              <span className="text-amber-500 font-bold flex items-center gap-1">💵 Tiền mặt</span>
+                              <span className="text-amber-500 font-semibold">💵 Tiền mặt</span>
                             )}
                           </div>
                         </div>
                       </td>
 
-                      {/* Fast Actions: Smart VietQR Bill, Edit, K80 Print & Detail View */}
-                      <td className="py-3.5 px-4 text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end gap-1.5 flex-wrap">
-                          {/* Fast Debt Reminder & Debt Collect for Unpaid Orders */}
+                      {/* 8. Thao Tác Nhanh (Compact Single-Row Toolbar) */}
+                      <td className="py-2.5 px-3 text-right whitespace-nowrap align-middle">
+                        <div className="flex items-center justify-end gap-1.5 flex-row">
+                          {/* 1. Nút Thu Tiền / Nhắc Nợ nếu là UNPAID */}
                           {order.paymentStatus === 'UNPAID' && order.status !== 'CANCELLED' && (
                             <>
-                              <button
-                                type="button"
-                                onClick={() => handleRemindDebt(order)}
-                                className="px-2.5 py-1.5 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white font-bold rounded-lg text-[11px] flex items-center gap-1 transition shadow-xs cursor-pointer"
-                                title="Gửi link VietQR nhắc nợ qua Zalo / SMS"
-                              >
-                                <Share2 className="w-3.5 h-3.5 stroke-[2]" />
-                                <span>Nhắc Nợ</span>
-                              </button>
-
-                              {canEditPaymentStatus && (
+                              {canEditPaymentStatus ? (
                                 <button
                                   type="button"
                                   onClick={() => {
                                     setDebtCollectOrder(order);
                                     setDebtPaymentMethod(order.paymentMethod === 'BANK_TRANSFER' ? 'BANK_TRANSFER' : 'COD');
                                   }}
-                                  className="px-2.5 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/40 font-bold rounded-lg text-[11px] flex items-center gap-1 transition shadow-xs cursor-pointer"
-                                  title="Xác nhận đã thu đủ tiền công nợ"
+                                  className="h-8 px-2.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/40 font-bold rounded-lg text-xs flex items-center gap-1 transition cursor-pointer shadow-2xs"
+                                  title="Xác nhận đã thu tiền nợ"
                                 >
                                   <CheckCircle2 className="w-3.5 h-3.5 stroke-[2]" />
-                                  <span>Đã Thu</span>
+                                  <span>Thu Tiền</span>
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemindDebt(order)}
+                                  className="h-8 px-2 bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 border border-rose-500/40 font-bold rounded-lg text-[11px] flex items-center gap-1 transition cursor-pointer"
+                                  title="Gửi link VietQR nhắc nợ qua Zalo/SMS"
+                                >
+                                  <Share2 className="w-3.5 h-3.5 stroke-[2]" />
+                                  <span>Nhắc Nợ</span>
                                 </button>
                               )}
                             </>
                           )}
 
-                          {/* Smart Dynamic VietQR Bill Button */}
+                          {/* 2. Nút In K80 chính */}
                           <button
-                            onClick={() => setSmartBillOrder(order)}
-                            className="px-2.5 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-lg text-[11px] flex items-center gap-1 transition shadow-xs cursor-pointer"
-                            title="Gửi Bill Thanh Toán Tự Động (VietQR)"
+                            type="button"
+                            onClick={() => setPrintBillOrder(order)}
+                            className="h-8 px-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-lg text-xs flex items-center gap-1.5 transition shadow-xs cursor-pointer"
+                            title="In hóa đơn K80"
                           >
-                            <QrCode className="w-3.5 h-3.5 stroke-[2]" />
-                            <span>Bill QR</span>
+                            <Printer className="w-3.5 h-3.5 stroke-[2]" />
+                            <span>In K80</span>
                           </button>
 
-                          {/* Edit Order Button (Telesales & Admin only) */}
-                          {canEditOrder && (
-                            <button
-                              onClick={() => handleOpenEditModal(order)}
-                              className="px-2.5 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-500 border border-amber-500/40 font-bold rounded-lg text-[11px] flex items-center gap-1 transition shadow-xs cursor-pointer"
-                              title="Chỉnh sửa đơn hàng"
-                            >
-                              <Pencil className="w-3.5 h-3.5 stroke-[2]" />
-                              <span>Sửa</span>
-                            </button>
-                          )}
+                          {/* 3. Nút Bill QR */}
+                          <button
+                            type="button"
+                            onClick={() => setSmartBillOrder(order)}
+                            className="h-8 w-8 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-500/30 font-bold rounded-lg flex items-center justify-center transition shadow-xs cursor-pointer"
+                            title="Gửi Bill QR Napas 247"
+                          >
+                            <QrCode className="w-4 h-4 stroke-[2]" />
+                          </button>
 
-                          {/* Quick Zalo Research & Contact Button */}
+                          {/* 4. Nút Zalo */}
                           {order.customerPhone && (
                             <button
                               type="button"
                               onClick={() => handleOpenZaloByPhone(order.customerPhone, order.customerName)}
-                              className="px-2.5 py-1.5 bg-blue-600/15 hover:bg-blue-600/30 text-blue-400 border border-blue-500/30 font-bold rounded-lg text-[11px] flex items-center gap-1 transition shadow-xs cursor-pointer"
-                              title={`Mở Zalo khách & tự động copy SĐT (${order.customerPhone})`}
+                              className="h-8 px-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg text-xs flex items-center gap-1 transition shadow-xs cursor-pointer"
+                              title={`Mở Zalo & copy SĐT (${order.customerPhone})`}
                             >
                               <MessageSquare className="w-3.5 h-3.5 stroke-[2]" />
                               <span>Zalo</span>
                             </button>
                           )}
 
-                          {/* Fast K80 Print Button */}
-                          <button
-                            onClick={() => setPrintBillOrder(order)}
-                            className="px-2.5 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-lg text-[11px] flex items-center gap-1 transition shadow-xs cursor-pointer"
-                            title="In hóa đơn K80 nhanh"
-                          >
-                            <Printer className="w-3.5 h-3.5 stroke-[2]" />
-                            <span>In K80</span>
-                          </button>
+                          {/* 5. Nút Menu Thao Tác Phụ [•••] */}
+                          <div className="relative">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setOpenActionMenuId(openActionMenuId === order.id ? null : order.id);
+                              }}
+                              className="h-8 w-8 dark:bg-neutral-800 bg-stone-100 hover:bg-stone-200 dark:hover:bg-neutral-700 text-neutral-400 hover:text-white rounded-lg flex items-center justify-center transition cursor-pointer border dark:border-neutral-700 border-stone-200"
+                              title="Thao tác khác"
+                            >
+                              <MoreVertical className="w-4 h-4 stroke-[2]" />
+                            </button>
 
-                          {/* Detail view */}
-                          <button
-                            onClick={() => setSelectedOrder(order)}
-                            className="p-1.5 dark:bg-neutral-800 bg-stone-100 hover:bg-stone-200 dark:hover:bg-neutral-700 text-neutral-400 hover:text-white rounded-lg transition cursor-pointer"
-                            title="Xem chi tiết đơn"
-                          >
-                            <Eye className="w-4 h-4 stroke-[1.5]" />
-                          </button>
+                            {openActionMenuId === order.id && (
+                              <div
+                                onClick={(e) => e.stopPropagation()}
+                                className="absolute right-0 top-full mt-1.5 z-40 w-44 rounded-xl dark:bg-[#1A202C] bg-white border dark:border-neutral-700 border-stone-200 shadow-2xl p-1.5 space-y-1 animate-in fade-in zoom-in-95 duration-150 text-left"
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedOrder(order);
+                                    setOpenActionMenuId(null);
+                                  }}
+                                  className="w-full px-2.5 py-1.5 rounded-lg text-xs font-medium dark:text-neutral-200 text-stone-700 hover:bg-amber-500/10 hover:text-amber-500 flex items-center gap-2 transition cursor-pointer"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                  <span>Xem chi tiết đơn</span>
+                                </button>
+
+                                {canEditOrder && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      handleOpenEditModal(order);
+                                      setOpenActionMenuId(null);
+                                    }}
+                                    className="w-full px-2.5 py-1.5 rounded-lg text-xs font-medium dark:text-neutral-200 text-stone-700 hover:bg-amber-500/10 hover:text-amber-500 flex items-center gap-2 transition cursor-pointer"
+                                  >
+                                    <Pencil className="w-3.5 h-3.5" />
+                                    <span>Chỉnh sửa đơn</span>
+                                  </button>
+                                )}
+
+                                {order.customerPhone && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      handleCopyPhoneOnly(order.customerPhone);
+                                      setOpenActionMenuId(null);
+                                    }}
+                                    className="w-full px-2.5 py-1.5 rounded-lg text-xs font-medium dark:text-neutral-200 text-stone-700 hover:bg-blue-500/10 hover:text-blue-400 flex items-center gap-2 transition cursor-pointer"
+                                  >
+                                    <Copy className="w-3.5 h-3.5" />
+                                    <span>Sao chép SĐT</span>
+                                  </button>
+                                )}
+
+                                {order.paymentStatus === 'UNPAID' && order.status !== 'CANCELLED' && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      handleRemindDebt(order);
+                                      setOpenActionMenuId(null);
+                                    }}
+                                    className="w-full px-2.5 py-1.5 rounded-lg text-xs font-medium text-rose-400 hover:bg-rose-500/10 flex items-center gap-2 transition cursor-pointer"
+                                  >
+                                    <Share2 className="w-3.5 h-3.5" />
+                                    <span>Gửi tin nhắc nợ</span>
+                                  </button>
+                                )}
+
+                                {canCancelOrder && order.status !== 'CANCELLED' && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      handleUpdateOrderStatus(order.id, 'CANCELLED');
+                                      setOpenActionMenuId(null);
+                                    }}
+                                    className="w-full px-2.5 py-1.5 rounded-lg text-xs font-medium text-rose-500 hover:bg-rose-500/10 flex items-center gap-2 transition cursor-pointer border-t dark:border-neutral-700 border-stone-200 pt-1.5 mt-1"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                    <span>Hủy đơn hàng</span>
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </td>
                     </tr>
