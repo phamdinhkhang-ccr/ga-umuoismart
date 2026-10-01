@@ -20,6 +20,7 @@ interface ClientStorefrontProps {
 export default function ClientStorefront({ categories, products, settings, initialBranches = [] }: ClientStorefrontProps) {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [isCartBumping, setIsCartBumping] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isLookupOpen, setIsLookupOpen] = useState(false);
   const [lookupPhone, setLookupPhone] = useState('');
@@ -163,6 +164,8 @@ export default function ClientStorefront({ categories, products, settings, initi
     'Thứ 2 - Chủ Nhật: 08:00 - 22:00';
 
   const handleAddToCart = (product: Product) => {
+    setIsCartBumping(true);
+    setTimeout(() => setIsCartBumping(false), 500);
     setCart((prev) => {
       const existing = prev.find((item) => item.product.id === product.id);
       if (existing) {
@@ -482,33 +485,39 @@ export default function ClientStorefront({ categories, products, settings, initi
         </div>
       </footer>
 
-      {/* Floating Action Group (Giỏ Hàng & Trợ Lý Ẩm Thực Smart) */}
-      <div className="fixed bottom-6 right-6 z-40 flex flex-col items-end gap-3 pointer-events-none">
-        {/* Nút Giỏ Hàng Nổi (Top) */}
+      {/* Floating Action Group (Giỏ Hàng Nổi & Trợ Lý Ẩm Thực Smart) */}
+      <div className="fixed bottom-6 right-4 sm:right-6 z-50 flex flex-col items-end gap-3 pointer-events-none">
+        {/* Nút Giỏ Hàng Nổi (Floating Cart Widget) */}
         <button
           type="button"
           onClick={() => setIsCartOpen(true)}
-          className="pointer-events-auto bg-[#1e2024]/90 hover:bg-[#282b30] text-[#FAFAF9] backdrop-blur-md border border-amber-500/30 rounded-full shadow-[0_4px_20px_rgba(0,0,0,0.35)] hover:shadow-[0_0_25px_rgba(217,119,6,0.3)] transition-all duration-300 transform hover:scale-105 px-4 py-2.5 sm:py-3 flex items-center gap-3 group cursor-pointer"
+          className={`pointer-events-auto flex items-center gap-3 px-4 py-2.5 sm:py-3 rounded-full border transition-all duration-300 transform cursor-pointer backdrop-blur-md ${
+            isCartBumping ? 'scale-110 shadow-[0_0_30px_rgba(245,158,11,0.7)]' : 'hover:scale-105'
+          } ${
+            totalCartCount > 0
+              ? 'bg-gradient-to-r from-amber-500 via-amber-500 to-amber-600 text-neutral-950 border-amber-300 font-bold shadow-[0_4px_25px_rgba(245,158,11,0.45)] hover:shadow-[0_0_30px_rgba(245,158,11,0.6)]'
+              : 'bg-[#1e2024]/90 hover:bg-[#282b30] text-[#FAFAF9] border-neutral-700/60 shadow-[0_4px_16px_rgba(0,0,0,0.3)] opacity-85 hover:opacity-100'
+          }`}
           title="Xem giỏ hàng"
         >
-          <div className="relative">
-            <ShoppingCart className="w-5 h-5 sm:w-6 sm:h-6 text-amber-400 stroke-[1.5] transition-transform group-hover:scale-110" />
+          <div className="relative flex items-center justify-center">
+            <ShoppingCart className={`w-5 h-5 sm:w-6 sm:h-6 stroke-[2] ${totalCartCount > 0 ? 'text-neutral-950' : 'text-amber-400'}`} />
             {totalCartCount > 0 && (
-              <span className="absolute -top-2 -right-2.5 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[10px] font-extrabold rounded-full flex items-center justify-center border-2 border-[#1e2024] shadow-sm animate-pulse">
+              <span className="absolute -top-2.5 -right-3 min-w-[20px] h-[20px] px-1 bg-red-600 text-white text-[11px] font-black rounded-full flex items-center justify-center border-2 border-white shadow-md animate-pulse">
                 {totalCartCount}
               </span>
             )}
           </div>
-          <div className="flex flex-col items-start text-left">
-            <span className="font-extrabold text-xs tracking-tight text-[#FAFAF9]">
+          <div className="flex flex-col items-start text-left leading-tight">
+            <span className={`text-xs tracking-tight ${totalCartCount > 0 ? 'font-black text-neutral-950' : 'font-extrabold text-[#FAFAF9]'}`}>
               Giỏ hàng
             </span>
             {totalCartCount > 0 ? (
-              <span className="text-[11px] font-bold text-amber-400">
+              <span className="text-[11px] font-black text-neutral-900">
                 {totalCartAmount.toLocaleString('vi-VN')} đ
               </span>
             ) : (
-              <span className="text-[10px] text-neutral-400 font-normal">
+              <span className="text-[10px] text-neutral-400 font-medium">
                 0 món
               </span>
             )}
