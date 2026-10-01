@@ -10,8 +10,39 @@ interface ChatMessage {
   timestamp: string;
 }
 
-export default function AIChatbotWidget() {
-  const [isOpen, setIsOpen] = useState(false);
+interface AIChatbotWidgetProps {
+  isOpen?: boolean;
+  onClose?: () => void;
+  onOpen?: () => void;
+  hideTrigger?: boolean;
+}
+
+export default function AIChatbotWidget({
+  isOpen: controlledIsOpen,
+  onClose,
+  onOpen,
+  hideTrigger = false,
+}: AIChatbotWidgetProps = {}) {
+  const [internalIsOpen, setInternalIsOpen] = useState(false);
+  const isControlled = typeof controlledIsOpen === 'boolean';
+  const isOpen = isControlled ? controlledIsOpen : internalIsOpen;
+
+  const handleClose = () => {
+    if (isControlled) {
+      onClose?.();
+    } else {
+      setInternalIsOpen(false);
+    }
+  };
+
+  const handleOpen = () => {
+    if (isControlled) {
+      onOpen?.();
+    } else {
+      setInternalIsOpen(true);
+    }
+  };
+
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -91,9 +122,9 @@ export default function AIChatbotWidget() {
   return (
     <>
       {/* Floating Trigger Button */}
-      {!isOpen && (
+      {!hideTrigger && !isOpen && (
         <button
-          onClick={() => setIsOpen(true)}
+          onClick={handleOpen}
           className="fixed bottom-6 right-6 z-40 bg-[#121419] hover:bg-[#181B20] text-amber-300 p-4 rounded-full shadow-[0_0_25px_rgba(217,119,6,0.2)] flex items-center gap-3 border border-amber-500/40 transition-all duration-300 transform hover:scale-105"
         >
           <div className="relative">
@@ -126,7 +157,7 @@ export default function AIChatbotWidget() {
             </div>
 
             <button
-              onClick={() => setIsOpen(false)}
+              onClick={handleClose}
               className="text-neutral-400 hover:text-white p-1 rounded-lg hover:bg-neutral-800 transition"
             >
               <X className="w-5 h-5 stroke-[1.5]" />

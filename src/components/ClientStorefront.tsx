@@ -7,7 +7,7 @@ import MenuSection, { Category, Product } from './MenuSection';
 import CartDrawer, { CartItem } from './CartDrawer';
 import OrderLookupModal from './OrderLookupModal';
 import AIChatbotWidget from './AIChatbotWidget';
-import { PhoneCall, MapPin, Clock, Navigation } from 'lucide-react';
+import { PhoneCall, MapPin, Clock, Navigation, ShoppingCart, Bot } from 'lucide-react';
 import { useBranches } from '../hooks/useBranches';
 
 interface ClientStorefrontProps {
@@ -20,6 +20,7 @@ interface ClientStorefrontProps {
 export default function ClientStorefront({ categories, products, settings, initialBranches = [] }: ClientStorefrontProps) {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
   const [isLookupOpen, setIsLookupOpen] = useState(false);
   const [lookupPhone, setLookupPhone] = useState('');
 
@@ -203,6 +204,7 @@ export default function ClientStorefront({ categories, products, settings, initi
   };
 
   const totalCartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const totalCartAmount = cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
 
   return (
     <div className="min-h-screen dark:bg-[#0F1115] bg-[#FBF9F5] dark:text-[#FAFAF9] text-stone-900 font-sans flex flex-col justify-between selection:bg-amber-500/30 selection:text-amber-200 transition-colors duration-300">
@@ -480,6 +482,58 @@ export default function ClientStorefront({ categories, products, settings, initi
         </div>
       </footer>
 
+      {/* Floating Action Group (Giỏ Hàng & Trợ Lý Ẩm Thực Smart) */}
+      <div className="fixed bottom-6 right-6 z-40 flex flex-col items-end gap-3 pointer-events-none">
+        {/* Nút Giỏ Hàng Nổi (Top) */}
+        <button
+          type="button"
+          onClick={() => setIsCartOpen(true)}
+          className="pointer-events-auto bg-[#1e2024]/90 hover:bg-[#282b30] text-[#FAFAF9] backdrop-blur-md border border-amber-500/30 rounded-full shadow-[0_4px_20px_rgba(0,0,0,0.35)] hover:shadow-[0_0_25px_rgba(217,119,6,0.3)] transition-all duration-300 transform hover:scale-105 px-4 py-2.5 sm:py-3 flex items-center gap-3 group cursor-pointer"
+          title="Xem giỏ hàng"
+        >
+          <div className="relative">
+            <ShoppingCart className="w-5 h-5 sm:w-6 sm:h-6 text-amber-400 stroke-[1.5] transition-transform group-hover:scale-110" />
+            {totalCartCount > 0 && (
+              <span className="absolute -top-2 -right-2.5 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[10px] font-extrabold rounded-full flex items-center justify-center border-2 border-[#1e2024] shadow-sm animate-pulse">
+                {totalCartCount}
+              </span>
+            )}
+          </div>
+          <div className="flex flex-col items-start text-left">
+            <span className="font-extrabold text-xs tracking-tight text-[#FAFAF9]">
+              Giỏ hàng
+            </span>
+            {totalCartCount > 0 ? (
+              <span className="text-[11px] font-bold text-amber-400">
+                {totalCartAmount.toLocaleString('vi-VN')} đ
+              </span>
+            ) : (
+              <span className="text-[10px] text-neutral-400 font-normal">
+                0 món
+              </span>
+            )}
+          </div>
+        </button>
+
+        {/* Nút Trợ Lý Ẩm Thực Smart (Bottom) */}
+        {!isChatOpen && (
+          <button
+            type="button"
+            onClick={() => setIsChatOpen(true)}
+            className="pointer-events-auto bg-[#121419]/95 hover:bg-[#181B20] text-amber-300 px-4 py-3 rounded-full shadow-[0_0_25px_rgba(217,119,6,0.2)] flex items-center gap-3 border border-amber-500/40 transition-all duration-300 transform hover:scale-105 backdrop-blur-md cursor-pointer"
+            title="Trợ Lý Ẩm Thực Smart"
+          >
+            <div className="relative">
+              <Bot className="w-5 h-5 sm:w-6 sm:h-6 text-amber-400 stroke-[1.5]" />
+              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-500 rounded-full border border-neutral-950 animate-pulse" />
+            </div>
+            <span className="font-extrabold text-xs tracking-tight text-[#FAFAF9] hidden sm:inline">
+              Trợ Lý Ẩm Thực Smart
+            </span>
+          </button>
+        )}
+      </div>
+
       {/* Modals & Widget */}
       <CartDrawer
         isOpen={isCartOpen}
@@ -497,7 +551,12 @@ export default function ClientStorefront({ categories, products, settings, initi
         initialQuery={lookupPhone}
       />
 
-      <AIChatbotWidget />
+      <AIChatbotWidget
+        isOpen={isChatOpen}
+        onClose={() => setIsChatOpen(false)}
+        onOpen={() => setIsChatOpen(true)}
+        hideTrigger={true}
+      />
     </div>
   );
 }
