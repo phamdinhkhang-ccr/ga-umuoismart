@@ -233,8 +233,8 @@ export default function AIChatbotWidget({
                 </div>
                 <div className="bg-[#181B20] border border-neutral-800 p-2.5 rounded-2xl flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 bg-amber-400 rounded-full animate-bounce" />
-                  <span className="w-1.5 h-1.5 bg-amber-400 rounded-full animate-bounce [animation-delay:0.2s]" />
-                  <span className="w-1.5 h-1.5 bg-amber-400 rounded-full animate-bounce [animation-delay:0.4s]" />
+                  <span className="w-1.5 h-1.5 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+                  <span className="w-1.5 h-1.5 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }} />
                 </div>
               </div>
             )}
