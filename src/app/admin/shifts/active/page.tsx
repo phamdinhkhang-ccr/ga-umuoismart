@@ -20,6 +20,9 @@ import {
   UserPlus,
   X,
   RotateCcw,
+  Receipt,
+  Plus,
+  ListOrdered,
 } from 'lucide-react';
 
 import { useBranches } from '@/hooks/useBranches';
@@ -56,6 +59,15 @@ export default function ActiveShiftPage() {
   const [finalCashActual, setFinalCashActual] = useState<number>(0);
   const [closeNote, setCloseNote] = useState('');
   const [closing, setClosing] = useState(false);
+
+  // Quick Expense Modal States
+  const [showQuickExpenseModal, setShowQuickExpenseModal] = useState(false);
+  const [quickExpenseTitle, setQuickExpenseTitle] = useState('');
+  const [quickExpenseAmount, setQuickExpenseAmount] = useState('');
+  const [quickExpenseCategory, setQuickExpenseCategory] = useState('🚚 Tiền Ship / Vận Chuyển');
+  const [quickExpenseSubmitting, setQuickExpenseSubmitting] = useState(false);
+  const [quickExpenseError, setQuickExpenseError] = useState('');
+  const [showExpensesBreakdown, setShowExpensesBreakdown] = useState(false);
 
   // Handover Receipt Modal
   const [showPrintModal, setShowPrintModal] = useState(false);
@@ -265,6 +277,53 @@ export default function ActiveShiftPage() {
       }
     } catch (err) {
       alert('Lỗi kết nối máy chủ');
+    }
+  };
+
+  const handleCreateQuickExpense = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeShift) return;
+    const numAmount = Number(quickExpenseAmount);
+    if (!numAmount || numAmount <= 0) {
+      setQuickExpenseError('Vui lòng nhập số tiền chi hợp lệ!');
+      return;
+    }
+    if (!quickExpenseTitle.trim()) {
+      setQuickExpenseError('Vui lòng nhập nội dung chi!');
+      return;
+    }
+
+    setQuickExpenseSubmitting(true);
+    setQuickExpenseError('');
+    try {
+      const res = await fetch('/api/expenses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: quickExpenseTitle.trim(),
+          amount: numAmount,
+          paymentMethod: 'CASH',
+          paymentSource: 'CASH',
+          category: quickExpenseCategory || '🚚 Tiền Ship / Vận Chuyển',
+          branchId: selectedBranchId,
+          shiftId: activeShift.id,
+          creatorName: currentUser?.fullName || activeShift.staffName || 'Thu ngân',
+          note: quickExpenseTitle.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setShowQuickExpenseModal(false);
+        setQuickExpenseTitle('');
+        setQuickExpenseAmount('');
+        await fetchShiftData();
+      } else {
+        setQuickExpenseError(data.error || 'Lỗi khi tạo phiếu chi');
+      }
+    } catch (err: any) {
+      setQuickExpenseError(err.message || 'Lỗi kết nối máy chủ');
+    } finally {
+      setQuickExpenseSubmitting(false);
     }
   };
 
@@ -514,6 +573,65 @@ export default function ActiveShiftPage() {
             </div>
           </div>
 
+          {/* Quick Expense Action & Shift Expenses Breakdown */}
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 dark:bg-[#0B0D11] p-3.5 rounded-xl border border-slate-200 dark:border-neutral-800">
+            <div className="flex items-center gap-2">
+              <Receipt className="w-4 h-4 text-rose-500" />
+              <span className="text-xs font-bold text-slate-800 dark:text-neutral-200">
+                Phiếu chi tiền mặt trong ca: {activeBranchShift.expenses?.length || 0} phiếu ({formatCurrency(cashExpenses)})
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {activeBranchShift.expenses && activeBranchShift.expenses.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowExpensesBreakdown(!showExpensesBreakdown)}
+                  className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-neutral-700 bg-white dark:bg-[#14171D] text-slate-700 dark:text-neutral-300 font-bold text-xs hover:border-amber-500 transition cursor-pointer flex items-center gap-1"
+                >
+                  <ListOrdered className="w-3.5 h-3.5 text-amber-500" />
+                  <span>{showExpensesBreakdown ? 'Ẩn danh sách' : 'Xem chi tiết chi'}</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setShowQuickExpenseModal(true)}
+                className="px-3.5 py-1.5 rounded-lg bg-rose-500 hover:bg-rose-600 text-white font-bold text-xs shadow transition cursor-pointer flex items-center gap-1"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>+ Chi Tiền Mặt (Xuất Két)</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Collapsible Expense Breakdown List */}
+          {showExpensesBreakdown && activeBranchShift.expenses && activeBranchShift.expenses.length > 0 && (
+            <div className="bg-slate-50 dark:bg-[#0B0D11] p-4 rounded-xl border border-slate-200 dark:border-neutral-800 space-y-2">
+              <h4 className="font-bold text-xs text-slate-700 dark:text-neutral-300 uppercase tracking-wider">
+                Chi tiết phiếu chi tiền mặt xuất két trong ca:
+              </h4>
+              <div className="divide-y divide-slate-200 dark:divide-neutral-800 text-xs">
+                {activeBranchShift.expenses.map((exp: any) => (
+                  <div key={exp.id} className="py-2 flex items-center justify-between gap-4">
+                    <div className="space-y-0.5">
+                      <div className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                        <span className="text-amber-500 font-mono text-[11px]">{exp.expenseCode || '#EXP'}</span>
+                        <span>{exp.title}</span>
+                      </div>
+                      <div className="text-[11px] text-slate-500 dark:text-neutral-400">
+                        {exp.category} • Người tạo: {exp.creatorName || 'Thu ngân'} • {new Date(exp.date || exp.createdAt).toLocaleTimeString('vi-VN')}
+                      </div>
+                    </div>
+                    <div className="font-extrabold text-rose-500 text-sm whitespace-nowrap">
+                      -{formatCurrency(exp.amount)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* PERMISSION BANNER IF NOT MAIN CASHIER OR ADMIN */}
           {!canCloseShift && (
             <div className="bg-amber-500/15 border border-amber-500/40 p-4 rounded-xl text-xs font-semibold text-amber-700 dark:text-amber-300 flex items-center gap-2">
@@ -739,6 +857,104 @@ export default function ActiveShiftPage() {
               <span>⚡ XÁC NHẬN MỞ CA LÀM VIỆC POS</span>
             </button>
           </form>
+        </div>
+      )}
+
+      {/* ================= QUICK EXPENSE MODAL ================= */}
+      {showQuickExpenseModal && (
+        <div className="fixed inset-0 bg-neutral-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-[#14171D] border border-slate-300 dark:border-neutral-800 rounded-2xl max-w-md w-full p-6 space-y-5 shadow-2xl relative animate-in fade-in zoom-in-95 duration-200">
+            <button
+              onClick={() => setShowQuickExpenseModal(false)}
+              className="absolute right-4 top-4 text-slate-400 hover:text-slate-600 dark:hover:text-white cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-2.5 border-b border-slate-200 dark:border-neutral-800 pb-3">
+              <div className="w-9 h-9 rounded-xl bg-rose-500/10 text-rose-500 flex items-center justify-center font-bold">
+                <Receipt className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-base text-slate-900 dark:text-white">
+                  Tạo Phiếu Chi Tiền Mặt (Xuất Két)
+                </h3>
+                <p className="text-[11px] text-slate-500 dark:text-neutral-400">
+                  Ghi nhận xuất tiền mặt trực tiếp từ két ca làm việc
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handleCreateQuickExpense} className="space-y-4 text-xs">
+              {quickExpenseError && (
+                <div className="p-3 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-600 dark:text-rose-400 font-bold">
+                  {quickExpenseError}
+                </div>
+              )}
+
+              <div className="space-y-1.5">
+                <label className="block font-bold text-slate-700 dark:text-neutral-300">
+                  Số tiền chi (VNĐ) (*):
+                </label>
+                <input
+                  type="number"
+                  required
+                  placeholder="Ví dụ: 50000"
+                  value={quickExpenseAmount}
+                  onChange={(e) => setQuickExpenseAmount(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-slate-50 dark:bg-[#0B0D11] border border-slate-300 dark:border-neutral-800 rounded-xl font-extrabold text-rose-500 text-base focus:border-rose-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block font-bold text-slate-700 dark:text-neutral-300">
+                  Nội dung chi tiết (*):
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ví dụ: Trả tiền ship đơn #1042, Mua thêm đá..."
+                  value={quickExpenseTitle}
+                  onChange={(e) => setQuickExpenseTitle(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-slate-50 dark:bg-[#0B0D11] border border-slate-300 dark:border-neutral-800 rounded-xl font-medium text-slate-800 dark:text-neutral-200 focus:border-rose-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block font-bold text-slate-700 dark:text-neutral-300">
+                  Danh mục chi:
+                </label>
+                <select
+                  value={quickExpenseCategory}
+                  onChange={(e) => setQuickExpenseCategory(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-slate-50 dark:bg-[#0B0D11] border border-slate-300 dark:border-neutral-800 rounded-xl font-semibold text-slate-800 dark:text-neutral-200 focus:border-rose-500 focus:outline-none cursor-pointer"
+                >
+                  <option value="🚚 Tiền Ship / Vận Chuyển">🚚 Tiền Ship / Vận Chuyển</option>
+                  <option value="⚡ Điện / Nước / Internet / Mặt Bằng">⚡ Điện / Nước / Internet / Mặt Bằng</option>
+                  <option value="📦 Vật Tư Tiêu Hao (Hộp, Túi, Đũa)">📦 Vật Tư Tiêu Hao (Hộp, Túi, Đũa)</option>
+                  <option value="☕ Tiếp Khách / Marketing / Khác">☕ Tiếp Khách / Marketing / Khác</option>
+                  <option value="💼 Lương & Phụ Cấp">💼 Lương & Phụ Cấp</option>
+                </select>
+              </div>
+
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowQuickExpenseModal(false)}
+                  className="flex-1 py-3 bg-slate-100 dark:bg-neutral-800 hover:bg-slate-200 dark:hover:bg-neutral-700 text-slate-700 dark:text-neutral-300 font-bold rounded-xl transition cursor-pointer"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={quickExpenseSubmitting}
+                  className="flex-1 py-3 bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white font-extrabold rounded-xl shadow-lg shadow-rose-600/20 transition cursor-pointer flex items-center justify-center gap-2"
+                >
+                  {quickExpenseSubmitting ? 'Đang lưu...' : 'Xác Nhận Xuất Két'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 

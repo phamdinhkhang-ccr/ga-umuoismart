@@ -122,9 +122,11 @@ export async function POST(request: NextRequest) {
       targetCategory = 'GENERAL',
       productId = null,
       branchId = 'cs1',
+      shiftId = null,
       note = '',
       creatorName = 'Quản trị viên',
       receiptPhoto = null,
+      date = null,
     } = body;
 
     const effectiveBranchId = (userPayload && userPayload.role !== 'ADMIN' && userPayload.branchId)
@@ -142,37 +144,67 @@ export async function POST(request: NextRequest) {
     const randomDigits = Math.floor(1000 + Math.random() * 9000);
     const expenseCode = `#EXP-${randomDigits}`;
 
-    // Detect payment source (CASH or BANK_TRANSFER)
-    const effectiveSource = paymentSource || (paymentMethod === 'BANK_TRANSFER' ? 'BANK_TRANSFER' : 'CASH');
+    // Normalize payment source (CASH or BANK_TRANSFER)
+    const normMethod = (paymentMethod || 'CASH').toUpperCase();
+    const isBank =
+      normMethod.includes('BANK') ||
+      normMethod.includes('TRANSFER') ||
+      normMethod.includes('QR') ||
+      normMethod.includes('CHUYEN') ||
+      normMethod.includes('CHUYỂN');
+    const effectiveSource = paymentSource || (isBank ? 'BANK_TRANSFER' : 'CASH');
+    const finalPaymentMethod = isBank ? 'BANK_TRANSFER' : 'CASH';
 
-    // Find active shift at branch
-    const branchMatches = [
-      effectiveBranchId,
-      effectiveBranchId ? effectiveBranchId.toLowerCase() : '',
-      effectiveBranchId ? effectiveBranchId.toUpperCase() : '',
-    ].filter(Boolean) as string[];
+    // Find active shift at branch if shiftId not explicitly supplied
+    let targetShiftId: string | null = shiftId || null;
 
-    const activeShift = await prisma.shift.findFirst({
-      where: { status: 'OPEN', branchId: { in: branchMatches } },
-      orderBy: { createdAt: 'desc' },
-    });
+    if (!targetShiftId) {
+      const dbBranches = await prisma.branch.findMany({ where: { isActive: true } });
+      const matchedBranch = dbBranches.find(
+        (b) =>
+          b.id === effectiveBranchId ||
+          (b.code && b.code.toLowerCase() === effectiveBranchId.toLowerCase()) ||
+          (b.name && b.name.toLowerCase() === effectiveBranchId.toLowerCase())
+      );
+
+      const branchMatches = [
+        effectiveBranchId,
+        effectiveBranchId ? effectiveBranchId.toLowerCase() : '',
+        effectiveBranchId ? effectiveBranchId.toUpperCase() : '',
+        matchedBranch?.id,
+        matchedBranch?.code,
+        matchedBranch?.id?.toLowerCase(),
+        matchedBranch?.code?.toLowerCase(),
+      ].filter(Boolean) as string[];
+
+      const activeShift = await prisma.shift.findFirst({
+        where: { status: 'OPEN', branchId: { in: branchMatches } },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      if (activeShift) {
+        targetShiftId = activeShift.id;
+      }
+    }
+
+    const expenseDate = date ? new Date(date) : new Date();
 
     const expense = await prisma.expense.create({
       data: {
         expenseCode,
         title,
         amount: Number(amount),
-        paymentMethod,
+        paymentMethod: finalPaymentMethod,
         paymentSource: effectiveSource,
         category,
         targetCategory: targetCategory || 'GENERAL',
         productId: productId || null,
         branchId: effectiveBranchId,
-        shiftId: activeShift ? activeShift.id : null,
+        shiftId: targetShiftId,
         note: note || title,
         creatorName: creatorName || 'Quản trị viên',
         receiptPhoto: receiptPhoto || null,
-        date: new Date(),
+        date: expenseDate,
       },
     });
 

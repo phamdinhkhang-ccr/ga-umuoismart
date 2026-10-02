@@ -114,8 +114,19 @@ export async function GET(request: NextRequest) {
     let bankExpense = 0;
 
     expensesInDay.forEach((e) => {
-      const source = (e.paymentSource || e.paymentMethod || '').toUpperCase();
-      if (source === 'BANK_TRANSFER' || source === 'BANK') {
+      if (!e.amount || e.amount <= 0 || e.title?.startsWith('[ĐÃ HỦY]')) return;
+
+      const source = (e.paymentSource || e.paymentMethod || 'CASH').toUpperCase();
+      const isBank =
+        source === 'BANK_TRANSFER' ||
+        source === 'BANK' ||
+        source.includes('TRANSFER') ||
+        source.includes('CHUYEN') ||
+        source.includes('CHUYỂN') ||
+        source.includes('QR') ||
+        source.includes('VIETQR');
+
+      if (isBank) {
         bankExpense += e.amount || 0;
       } else {
         cashExpense += e.amount || 0;
@@ -141,14 +152,6 @@ export async function GET(request: NextRequest) {
       orderBy: { startTime: 'desc' },
     });
 
-    const activeShifts = await prisma.shift.findMany({
-      where: {
-        status: 'OPEN',
-        ...(!isAllBranches ? { branchId: { in: targetBranchIds } } : {}),
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-
     // Enriched Shifts with Detailed Closeout Reconciliation
     const enrichedShifts = await Promise.all(
       shifts.map(async (shift) => {
@@ -156,7 +159,11 @@ export async function GET(request: NextRequest) {
 
         // Matching branch IDs for this shift
         const matchedBranch = dbBranches.find(
-          (b) => b.id === shift.branchId || (b.code && b.code.toLowerCase() === shift.branchId?.toLowerCase())
+          (b) =>
+            b.id === shift.branchId ||
+            (b.code && b.code.toLowerCase() === shift.branchId?.toLowerCase()) ||
+            (shift.branchId && b.id.toLowerCase() === shift.branchId.toLowerCase()) ||
+            (b.name && b.name.toLowerCase() === shift.branchId?.toLowerCase())
         );
         const shiftBranchMatches = [
           shift.branchId,
@@ -164,20 +171,29 @@ export async function GET(request: NextRequest) {
           shift.branchId?.toUpperCase(),
           matchedBranch?.id,
           matchedBranch?.code,
+          matchedBranch?.name,
           matchedBranch?.id?.toLowerCase(),
           matchedBranch?.code?.toLowerCase(),
+          matchedBranch?.code?.toUpperCase(),
         ].filter(Boolean) as string[];
 
+        const orderOrClauses: any[] = [{ shiftId: shift.id }];
+        if (shiftBranchMatches.length > 0) {
+          if (shift.status === 'OPEN') {
+            orderOrClauses.push({
+              createdAt: { gte: shift.startTime },
+              branchId: { in: shiftBranchMatches },
+            });
+          } else {
+            orderOrClauses.push({
+              createdAt: { gte: shift.startTime, lte: sEnd },
+              branchId: { in: shiftBranchMatches },
+            });
+          }
+        }
+
         const shiftOrders = await prisma.order.findMany({
-          where: {
-            OR: [
-              { shiftId: shift.id },
-              {
-                createdAt: { gte: shift.startTime, lte: sEnd },
-                branchId: { in: shiftBranchMatches },
-              },
-            ],
-          },
+          where: { OR: orderOrClauses },
         });
 
         const sValidOrders = shiftOrders.filter((o) => o.status !== 'CANCELLED');
@@ -201,11 +217,22 @@ export async function GET(request: NextRequest) {
           .filter((o) => o.paymentStatus !== 'PAID' && o.status !== 'CANCELLED')
           .reduce((acc, o) => acc + (o.totalAmount || 0), 0);
 
-        // Shift Expenses
-        const shiftExpenses = await prisma.expense.findMany({
-          where: {
-            OR: [
-              { shiftId: shift.id },
+        // Shift Expenses Query
+        const expenseOrClauses: any[] = [{ shiftId: shift.id }];
+        if (shiftBranchMatches.length > 0) {
+          if (shift.status === 'OPEN') {
+            expenseOrClauses.push(
+              {
+                date: { gte: shift.startTime },
+                branchId: { in: shiftBranchMatches },
+              },
+              {
+                createdAt: { gte: shift.startTime },
+                branchId: { in: shiftBranchMatches },
+              }
+            );
+          } else {
+            expenseOrClauses.push(
               {
                 date: { gte: shift.startTime, lte: sEnd },
                 branchId: { in: shiftBranchMatches },
@@ -213,21 +240,51 @@ export async function GET(request: NextRequest) {
               {
                 createdAt: { gte: shift.startTime, lte: sEnd },
                 branchId: { in: shiftBranchMatches },
-              },
-            ],
-          },
+              }
+            );
+          }
+        }
+
+        const shiftExpenses = await prisma.expense.findMany({
+          where: { OR: expenseOrClauses },
+          orderBy: { date: 'desc' },
         });
 
         let sCashExpense = 0;
         let sBankExpense = 0;
+        const validShiftExpenses: any[] = [];
 
         shiftExpenses.forEach((e) => {
-          const source = (e.paymentSource || e.paymentMethod || '').toUpperCase();
-          if (source === 'BANK_TRANSFER' || source === 'BANK') {
+          if (!e.amount || e.amount <= 0 || e.title?.startsWith('[ĐÃ HỦY]')) return;
+
+          const source = (e.paymentSource || e.paymentMethod || 'CASH').toUpperCase();
+          const isBank =
+            source === 'BANK_TRANSFER' ||
+            source === 'BANK' ||
+            source.includes('TRANSFER') ||
+            source.includes('CHUYEN') ||
+            source.includes('CHUYỂN') ||
+            source.includes('QR') ||
+            source.includes('VIETQR');
+
+          if (isBank) {
             sBankExpense += e.amount || 0;
           } else {
             sCashExpense += e.amount || 0;
           }
+
+          validShiftExpenses.push({
+            id: e.id,
+            expenseCode: e.expenseCode,
+            title: e.title,
+            amount: e.amount,
+            paymentMethod: isBank ? 'BANK_TRANSFER' : 'CASH',
+            category: e.category,
+            creatorName: e.creatorName,
+            note: e.note,
+            date: e.date,
+            createdAt: e.createdAt,
+          });
         });
 
         // Theoretical End Cash = Initial Cash + Cash Sales - Cash Expenses
@@ -255,6 +312,7 @@ export async function GET(request: NextRequest) {
           unpaidSales: shiftUnpaidSales,
           cashExpenses: sCashExpense,
           bankExpenses: sBankExpense,
+          expenses: validShiftExpenses,
           discrepancy,
           status: shift.status,
           note: shift.note,
@@ -265,6 +323,8 @@ export async function GET(request: NextRequest) {
         };
       })
     );
+
+    const openEnrichedShifts = enrichedShifts.filter((s) => s.status === 'OPEN');
 
     return new NextResponse(
       JSON.stringify({
@@ -281,8 +341,8 @@ export async function GET(request: NextRequest) {
           bankExpense,
         },
         shifts: enrichedShifts,
-        activeShifts,
-        activeShift: activeShifts[0] || null,
+        activeShifts: openEnrichedShifts,
+        activeShift: openEnrichedShifts[0] || null,
       }),
       {
         status: 200,
