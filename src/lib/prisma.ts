@@ -83,9 +83,14 @@ export async function ensureDbInitialized() {
         name TEXT NOT NULL,
         slug TEXT UNIQUE NOT NULL,
         description TEXT,
+        isActive BOOLEAN DEFAULT 1,
         createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
       );
     `);
+
+    try {
+      await prisma.$executeRawUnsafe(`ALTER TABLE Category ADD COLUMN isActive BOOLEAN DEFAULT 1;`);
+    } catch (e) {}
 
     // 3. Create Product table if missing
     await prisma.$executeRawUnsafe(`

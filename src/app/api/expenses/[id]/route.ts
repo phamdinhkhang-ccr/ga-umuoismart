@@ -63,11 +63,19 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: 'Không tìm thấy phiếu chi!' }, { status: 404 });
     }
 
-    await prisma.expense.delete({ where: { id } });
+    // Soft Delete - Bảo tồn dữ liệu sổ quỹ (Đặt số tiền về 0 và ghi nhận hủy)
+    await prisma.expense.update({
+      where: { id },
+      data: {
+        amount: 0,
+        title: existing.title.startsWith('[ĐÃ HỦY]') ? existing.title : `[ĐÃ HỦY] ${existing.title}`,
+        note: existing.note ? `[Đã hủy] ${existing.note}` : '[Đã hủy phiếu chi]',
+      },
+    });
 
     return NextResponse.json({
       success: true,
-      message: 'Đã xóa phiếu chi thành công!',
+      message: 'Đã hủy phiếu chi an toàn (Soft Delete)!',
     });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });

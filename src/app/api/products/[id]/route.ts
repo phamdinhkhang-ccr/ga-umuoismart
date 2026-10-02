@@ -160,44 +160,27 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
   try {
     const { id } = await params;
 
-    await prisma.$transaction(async (tx) => {
-      const existing = await tx.product.findUnique({ where: { id } });
-      if (!existing) return;
-
-      // Clean relations
-      await tx.comboItem.deleteMany({
-        where: { OR: [{ comboId: id }, { productId: id }] },
-      });
-      await tx.branchInventory.deleteMany({
-        where: { productId: id },
-      });
-      await tx.inventoryReceiptItem.deleteMany({
-        where: { OR: [{ productId: id }, { productName: existing.name }] },
-      });
-      await tx.inventoryExportItem.deleteMany({
-        where: { OR: [{ productId: id }, { productName: existing.name }] },
-      });
-      await tx.inventoryItem.deleteMany({
-        where: { name: existing.name },
-      });
-
-      await tx.product.delete({ where: { id } });
+    // Soft Delete - Bảo tồn dữ liệu tuyệt đối (Zero Data Loss)
+    const updated = await prisma.product.update({
+      where: { id },
+      data: { isAvailable: false },
     });
 
     try {
       revalidatePath('/admin/products');
       revalidatePath('/admin/inventory/stock');
       revalidatePath('/admin/orders');
+      revalidatePath('/');
     } catch (_) {}
 
     return new NextResponse(
-      JSON.stringify({ success: true, message: 'Đã xóa món ăn thành công' }),
+      JSON.stringify({ success: true, message: 'Đã ẩn món ăn an toàn (Soft Delete)', product: updated }),
       { status: 200, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } }
     );
   } catch (error: any) {
     console.error('API DELETE /api/products/[id] error:', error);
     return NextResponse.json(
-      { success: false, message: 'Lỗi server khi xóa món ăn' },
+      { success: false, message: 'Lỗi server khi ẩn món ăn' },
       { status: 500 }
     );
   }

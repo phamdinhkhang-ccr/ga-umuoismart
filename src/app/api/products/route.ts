@@ -544,8 +544,19 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ success: false, error: 'Thiếu ID món' }, { status: 400 });
     }
 
-    await prisma.product.delete({ where: { id } });
-    return NextResponse.json({ success: true, message: 'Đã xóa món thành công' });
+    // Soft Delete - Bảo tồn dữ liệu tuyệt đối (Zero Data Loss)
+    const updated = await prisma.product.update({
+      where: { id },
+      data: { isAvailable: false },
+    });
+
+    try {
+      revalidatePath('/admin/products');
+      revalidatePath('/admin/inventory/stock');
+      revalidatePath('/');
+    } catch (_) {}
+
+    return NextResponse.json({ success: true, message: 'Đã ẩn món ăn an toàn (Soft Delete)', product: updated });
   } catch (error: any) {
     console.error('API DELETE /api/products error:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });

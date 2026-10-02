@@ -3,6 +3,10 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 async function cleanupDemoData() {
+  if (process.env.ALLOW_DEMO_CLEANUP !== 'true') {
+    console.warn('⚠️ DEMO CLEANUP IS DISABLED TO PROTECT PRODUCTION DATA. Set ALLOW_DEMO_CLEANUP="true" if explicitly needed.');
+    return;
+  }
   console.log("==========================================");
   console.log("-> Starting Operational Demo Data Cleanup");
   console.log("==========================================");

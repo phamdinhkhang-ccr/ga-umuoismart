@@ -145,13 +145,18 @@ export async function DELETE(
       );
     }
 
-    await prisma.attendance.delete({
+    // Soft Delete - Bảo tồn dữ liệu chấm công
+    await prisma.attendance.update({
       where: { id },
+      data: {
+        status: 'ABSENT',
+        notes: existing.notes ? `[Đã hủy] ${existing.notes}` : '[Đã hủy chấm công]',
+      },
     });
 
     return NextResponse.json({
       success: true,
-      message: 'Đã xóa bản ghi chấm công thành công!',
+      message: 'Đã hủy bản ghi chấm công an toàn (Soft Delete)!',
     });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });

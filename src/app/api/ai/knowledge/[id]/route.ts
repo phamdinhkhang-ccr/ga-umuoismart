@@ -35,11 +35,13 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    await prisma.aIKnowledge.delete({
+    // Soft Delete - Bảo tồn dữ liệu tuyệt đối (Zero Data Loss)
+    await prisma.aIKnowledge.update({
       where: { id },
+      data: { isActive: false },
     });
 
-    return NextResponse.json({ success: true, message: 'Đã xóa bản ghi tri thức' });
+    return NextResponse.json({ success: true, message: 'Đã ẩn bản ghi tri thức an toàn (Soft Delete)' });
   } catch (error: any) {
     console.error('Error deleting AI knowledge:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });

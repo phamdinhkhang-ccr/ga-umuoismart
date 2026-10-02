@@ -274,10 +274,12 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    await prisma.order.delete({
+    // Soft Delete - Bảo tồn dữ liệu đơn hàng (Chuyển trạng thái CANCELLED)
+    const cancelledOrder = await prisma.order.update({
       where: { id },
+      data: { status: 'CANCELLED' },
     });
-    return NextResponse.json({ success: true, message: 'Đã xóa đơn hàng thành công' });
+    return NextResponse.json({ success: true, message: 'Đã hủy đơn hàng an toàn (Soft Delete)', order: cancelledOrder });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }

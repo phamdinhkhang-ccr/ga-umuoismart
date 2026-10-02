@@ -70,13 +70,15 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    await prisma.user.delete({
+    // Soft Delete - Bảo tồn dữ liệu tuyệt đối (Zero Data Loss)
+    await prisma.user.update({
       where: { id },
+      data: { isActive: false },
     });
 
     return NextResponse.json({
       success: true,
-      message: 'Đã xóa tài khoản nhân viên thành công',
+      message: 'Đã vô hiệu hóa tài khoản nhân viên an toàn (Soft Delete)',
     });
   } catch (error: any) {
     console.error('Error deleting staff:', error);

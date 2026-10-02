@@ -112,14 +112,18 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
       return NextResponse.json({ success: false, message: 'Không tìm thấy cơ sở' }, { status: 404 });
     }
 
-    await prisma.branch.delete({ where: { id } });
+    // Soft Delete - Bảo tồn dữ liệu tuyệt đối (Zero Data Loss)
+    await prisma.branch.update({
+      where: { id },
+      data: { isActive: false },
+    });
 
     triggerRevalidation();
-    return NextResponse.json({ success: true, message: 'Đã xóa cơ sở thành công' });
+    return NextResponse.json({ success: true, message: 'Đã ngưng hoạt động cơ sở an toàn (Soft Delete)' });
   } catch (error: any) {
     console.error('API DELETE /api/branches/[id] error:', error);
     return NextResponse.json(
-      { success: false, message: 'Lỗi server khi xóa cơ sở' },
+      { success: false, message: 'Lỗi server khi ngưng hoạt động cơ sở' },
       { status: 500 }
     );
   }

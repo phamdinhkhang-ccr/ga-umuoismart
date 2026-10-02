@@ -12,6 +12,7 @@ model Category {
   name        String
   slug        String    @unique
   description String?
+  isActive    Boolean   @default(true)
   products    Product[]
   createdAt   DateTime  @default(now())
 }
@@ -50,8 +51,8 @@ model ComboItem {
   productId   String   // ID của sản phẩm thường con
   quantity    Int      @default(1)
 
-  combo       Product  @relation("ParentCombo", fields: [comboId], references: [id], onDelete: Cascade)
-  product     Product  @relation("ChildProduct", fields: [productId], references: [id], onDelete: Cascade)
+  combo       Product  @relation("ParentCombo", fields: [comboId], references: [id], onDelete: Restrict)
+  product     Product  @relation("ChildProduct", fields: [productId], references: [id], onDelete: Restrict)
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -95,7 +96,7 @@ model Order {
 model OrderItem {
   id          String   @id @default(cuid())
   orderId     String
-  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Restrict)
   productId   String?
   product     Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
   productName String
@@ -164,7 +165,7 @@ model InventoryItem {
 model InventoryTransaction {
   id        String        @id @default(cuid())
   itemId    String
-  item      InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  item      InventoryItem @relation(fields: [itemId], references: [id], onDelete: Restrict)
   type      String // IN, OUT
   quantity  Float
   note      String?
@@ -189,7 +190,7 @@ model InventoryReceipt {
 model InventoryReceiptItem {
   id          String           @id @default(cuid())
   receiptId   String
-  receipt     InventoryReceipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  receipt     InventoryReceipt @relation(fields: [receiptId], references: [id], onDelete: Restrict)
   productId   String?
   productName String
   unit        String           @default("Con")
@@ -218,7 +219,7 @@ model InventoryExport {
 model InventoryExportItem {
   id          String          @id @default(cuid())
   exportId    String
-  export      InventoryExport @relation(fields: [exportId], references: [id], onDelete: Cascade)
+  export      InventoryExport @relation(fields: [exportId], references: [id], onDelete: Restrict)
   productId   String?
   productName String
   unit        String          @default("Con")
@@ -331,7 +332,7 @@ model AIKnowledge {
 model PaymentConfig {
   id              String   @id @default(uuid())
   branchId        String   @unique
-  branch          Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  branch          Branch   @relation(fields: [branchId], references: [id], onDelete: Restrict)
   
   // Thông tin VietQR
   bankId          String   @default("MB")       // MB, VCB, TCB, ACB...
@@ -354,9 +355,9 @@ model PaymentConfig {
 model BranchInventory {
   id        String   @id @default(cuid())
   productId String
-  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
   branchId  String
-  branch    Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  branch    Branch   @relation(fields: [branchId], references: [id], onDelete: Restrict)
   stock     Float    @default(0)
 
   createdAt DateTime @default(now())

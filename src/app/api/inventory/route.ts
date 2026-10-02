@@ -480,11 +480,12 @@ export async function POST(request: NextRequest) {
       const targetName = (name || '').trim();
 
       await prisma.$transaction(async (tx) => {
-        // 1. Branch-specific deletion
+        // 1. Branch-specific reset
         if (branchId && branchId !== 'all') {
           if (targetId) {
-            await tx.branchInventory.deleteMany({
+            await tx.branchInventory.updateMany({
               where: { productId: targetId, branchId },
+              data: { stock: 0 },
             });
             await tx.inventoryItem.deleteMany({
               where: { id: targetId, branchId },
@@ -496,8 +497,9 @@ export async function POST(request: NextRequest) {
               where: { OR: [{ name: targetName }, { name: { contains: targetName } }] },
             });
             for (const mp of matchingProds) {
-              await tx.branchInventory.deleteMany({
+              await tx.branchInventory.updateMany({
                 where: { productId: mp.id, branchId },
+                data: { stock: 0 },
               });
             }
 
@@ -506,53 +508,28 @@ export async function POST(request: NextRequest) {
             });
           }
         } else {
-          // 2. Global deletion (Toàn hệ thống)
+          // 2. Global reset (Toàn hệ thống - Zero Data Loss: Không xóa Product và Lịch sử Phiếu)
           if (targetId) {
-            await tx.inventoryTransaction.deleteMany({ where: { itemId: targetId } });
-            await tx.inventoryItem.deleteMany({ where: { id: targetId } });
-            await tx.branchInventory.deleteMany({ where: { productId: targetId } });
-            await tx.comboItem.deleteMany({
-              where: { OR: [{ comboId: targetId }, { productId: targetId }] },
+            await tx.branchInventory.updateMany({
+              where: { productId: targetId },
+              data: { stock: 0 },
             });
-            await tx.inventoryReceiptItem.deleteMany({ where: { productId: targetId } });
-            await tx.inventoryExportItem.deleteMany({ where: { productId: targetId } });
-            try {
-              await tx.product.deleteMany({ where: { id: targetId } });
-            } catch (_) {}
+            await tx.inventoryItem.deleteMany({ where: { id: targetId } });
           }
 
           if (targetName) {
-            const matchingInvItems = await tx.inventoryItem.findMany({
-              where: { OR: [{ name: targetName }, { name: { contains: targetName } }] },
-            });
-            for (const mInv of matchingInvItems) {
-              await tx.inventoryTransaction.deleteMany({ where: { itemId: mInv.id } });
-              await tx.inventoryItem.deleteMany({ where: { id: mInv.id } });
-            }
+            await tx.inventoryItem.deleteMany({ where: { name: targetName } });
 
             const matchingProds = await tx.product.findMany({
               where: { OR: [{ id: targetId || '' }, { name: targetName }, { name: { contains: targetName } }] },
             });
 
             for (const p of matchingProds) {
-              await tx.branchInventory.deleteMany({ where: { productId: p.id } });
-              await tx.comboItem.deleteMany({
-                where: { OR: [{ comboId: p.id }, { productId: p.id }] },
+              await tx.branchInventory.updateMany({
+                where: { productId: p.id },
+                data: { stock: 0 },
               });
-              await tx.inventoryReceiptItem.deleteMany({
-                where: { OR: [{ productId: p.id }, { productName: p.name }] },
-              });
-              await tx.inventoryExportItem.deleteMany({
-                where: { OR: [{ productId: p.id }, { productName: p.name }] },
-              });
-              try {
-                await tx.product.deleteMany({ where: { id: p.id } });
-              } catch (_) {}
             }
-
-            // Also clean any orphan receipt items with this name so they don't resurrect
-            await tx.inventoryReceiptItem.deleteMany({ where: { productName: targetName } });
-            await tx.inventoryExportItem.deleteMany({ where: { productName: targetName } });
           }
         }
       });
@@ -605,7 +582,10 @@ export async function DELETE(request: NextRequest) {
     await prisma.$transaction(async (tx) => {
       if (branchId && branchId !== 'all') {
         if (id) {
-          await tx.branchInventory.deleteMany({ where: { productId: id, branchId } });
+          await tx.branchInventory.updateMany({
+            where: { productId: id, branchId },
+            data: { stock: 0 },
+          });
           await tx.inventoryItem.deleteMany({ where: { id, branchId } });
         }
         if (name) {
@@ -613,51 +593,35 @@ export async function DELETE(request: NextRequest) {
             where: { OR: [{ name }, { name: { contains: name } }] },
           });
           for (const mp of matchingProds) {
-            await tx.branchInventory.deleteMany({ where: { productId: mp.id, branchId } });
+            await tx.branchInventory.updateMany({
+              where: { productId: mp.id, branchId },
+              data: { stock: 0 },
+            });
           }
           await tx.inventoryItem.deleteMany({ where: { name, branchId } });
         }
       } else {
+        // Global reset - Zero Data Loss: Không xóa Product và Lịch sử Phiếu
         if (id) {
-          await tx.inventoryTransaction.deleteMany({ where: { itemId: id } });
+          await tx.branchInventory.updateMany({
+            where: { productId: id },
+            data: { stock: 0 },
+          });
           await tx.inventoryItem.deleteMany({ where: { id } });
-          await tx.branchInventory.deleteMany({ where: { productId: id } });
-          await tx.comboItem.deleteMany({ where: { OR: [{ comboId: id }, { productId: id }] } });
-          await tx.inventoryReceiptItem.deleteMany({ where: { productId: id } });
-          await tx.inventoryExportItem.deleteMany({ where: { productId: id } });
-          try {
-            await tx.product.deleteMany({ where: { id } });
-          } catch (_) {}
         }
         if (name) {
-          const matchingInvItems = await tx.inventoryItem.findMany({
-            where: { OR: [{ name }, { name: { contains: name } }] },
-          });
-          for (const mInv of matchingInvItems) {
-            await tx.inventoryTransaction.deleteMany({ where: { itemId: mInv.id } });
-            await tx.inventoryItem.deleteMany({ where: { id: mInv.id } });
-          }
+          await tx.inventoryItem.deleteMany({ where: { name } });
 
           const matchingProds = await tx.product.findMany({
             where: { OR: [{ id: id || '' }, { name }, { name: { contains: name } }] },
           });
 
           for (const p of matchingProds) {
-            await tx.branchInventory.deleteMany({ where: { productId: p.id } });
-            await tx.comboItem.deleteMany({ where: { OR: [{ comboId: p.id }, { productId: p.id }] } });
-            await tx.inventoryReceiptItem.deleteMany({
-              where: { OR: [{ productId: p.id }, { productName: p.name }] },
+            await tx.branchInventory.updateMany({
+              where: { productId: p.id },
+              data: { stock: 0 },
             });
-            await tx.inventoryExportItem.deleteMany({
-              where: { OR: [{ productId: p.id }, { productName: p.name }] },
-            });
-            try {
-              await tx.product.deleteMany({ where: { id: p.id } });
-            } catch (_) {}
           }
-
-          await tx.inventoryReceiptItem.deleteMany({ where: { productName: name } });
-          await tx.inventoryExportItem.deleteMany({ where: { productName: name } });
         }
       }
     });
