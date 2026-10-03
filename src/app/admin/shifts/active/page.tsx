@@ -163,6 +163,21 @@ export default function ActiveShiftPage() {
     fetchShiftData();
   }, [selectedBranchId, fetchShiftData]);
 
+  // Auto-refresh shift data periodically & when focusing the window
+  useEffect(() => {
+    const handleFocus = () => {
+      fetchShiftData();
+    };
+    window.addEventListener('focus', handleFocus);
+    const interval = setInterval(() => {
+      fetchShiftData();
+    }, 10000); // 10s auto-refresh
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      clearInterval(interval);
+    };
+  }, [fetchShiftData]);
+
   // Keep active shift state in sync when selectedBranchId changes
   useEffect(() => {
     const currentActive =
@@ -429,6 +444,8 @@ export default function ActiveShiftPage() {
   // Calculated numbers for open shift
   const initialC = activeBranchShift?.initialCash || 0;
   const cashSales = activeBranchShift?.cashSales || 0;
+  const bankSales = activeBranchShift?.bankSales || 0;
+  const unpaidSales = activeBranchShift?.unpaidSales || 0;
   const cashExpenses = activeBranchShift?.cashExpenses || 0;
   const expectedCashInDrawer = initialC + cashSales - cashExpenses;
   const discrepancyVal = finalCashActual - expectedCashInDrawer;
@@ -569,6 +586,51 @@ export default function ActiveShiftPage() {
               </span>
               <span className="text-[10px] text-amber-700/80 dark:text-amber-400/80 block">
                 (Đầu ca + A - C)
+              </span>
+            </div>
+          </div>
+
+          {/* Additional Realtime Revenue Breakdown (Bank, Unpaid & Total) */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="bg-blue-500/10 dark:bg-blue-500/15 p-3 rounded-xl border border-blue-500/30 flex items-center justify-between">
+              <div>
+                <span className="text-[10px] font-bold text-blue-700 dark:text-blue-400 uppercase block">
+                  DOANH THU CHUYỂN KHOẢN (B)
+                </span>
+                <span className="text-sm font-extrabold text-blue-600 dark:text-blue-300">
+                  +{formatCurrency(bankSales)}
+                </span>
+              </div>
+              <span className="text-xs font-bold text-blue-600 bg-blue-500/20 px-2 py-0.5 rounded-md">
+                VietQR / Bank
+              </span>
+            </div>
+
+            <div className="bg-amber-500/10 dark:bg-amber-500/15 p-3 rounded-xl border border-amber-500/30 flex items-center justify-between">
+              <div>
+                <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400 uppercase block">
+                  CHƯA THANH TOÁN (UNPAID)
+                </span>
+                <span className="text-sm font-extrabold text-amber-600 dark:text-amber-300">
+                  {formatCurrency(unpaidSales)}
+                </span>
+              </div>
+              <span className="text-xs font-bold text-amber-600 bg-amber-500/20 px-2 py-0.5 rounded-md">
+                Đơn treo
+              </span>
+            </div>
+
+            <div className="bg-emerald-500/10 dark:bg-emerald-500/15 p-3 rounded-xl border border-emerald-500/30 flex items-center justify-between">
+              <div>
+                <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 uppercase block">
+                  TỔNG DOANH THU ĐÃ THU (A + B)
+                </span>
+                <span className="text-sm font-black text-emerald-600 dark:text-emerald-300">
+                  +{formatCurrency(cashSales + bankSales)}
+                </span>
+              </div>
+              <span className="text-xs font-bold text-emerald-600 bg-emerald-500/20 px-2 py-0.5 rounded-md">
+                Thực thu ca
               </span>
             </div>
           </div>
@@ -1023,11 +1085,19 @@ export default function ActiveShiftPage() {
                   <span className="font-bold">{formatCurrency(lastClosedShiftData.initialCash)}</span>
                 </div>
                 <div className="flex justify-between text-emerald-600 dark:text-emerald-400 font-bold">
-                  <span>(+) Doanh thu tiền mặt:</span>
+                  <span>(+) Doanh thu tiền mặt (A):</span>
                   <span>+{formatCurrency(lastClosedShiftData.cashSales)}</span>
                 </div>
+                <div className="flex justify-between text-blue-600 dark:text-blue-400 font-bold">
+                  <span>(+) Doanh thu chuyển khoản (B):</span>
+                  <span>+{formatCurrency(lastClosedShiftData.bankSales || 0)}</span>
+                </div>
+                <div className="flex justify-between text-slate-700 dark:text-neutral-300 font-extrabold border-t border-dotted border-slate-200 dark:border-neutral-800 pt-0.5">
+                  <span>(=) Tổng doanh thu ca (A + B):</span>
+                  <span>+{formatCurrency((lastClosedShiftData.cashSales || 0) + (lastClosedShiftData.bankSales || 0))}</span>
+                </div>
                 <div className="flex justify-between text-rose-500 font-bold">
-                  <span>(-) Chi quỹ tiền mặt:</span>
+                  <span>(-) Chi quỹ tiền mặt (C):</span>
                   <span>-{formatCurrency(lastClosedShiftData.cashExpenses)}</span>
                 </div>
                 <div className="flex justify-between font-extrabold text-amber-600 dark:text-amber-400 pt-1 border-t border-slate-200 dark:border-neutral-800">

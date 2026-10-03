@@ -6,6 +6,76 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 export const fetchCache = 'force-no-store';
 
+/**
+ * Helper chuẩn hóa và bóc tách dòng tiền doanh thu động theo thời gian thực:
+ * - Đơn đã thanh toán: paymentStatus === 'PAID'
+ *   + BANK_TRANSFER / BANK / CHUYEN_KHOAN / QR / VIETQR -> 100% Chuyển khoản (Bank)
+ *   + SPLIT -> Bóc tách cashAmount & transferAmount
+ *   + CASH / COD / TIEN_MAT / Khác -> 100% Tiền mặt (Cash)
+ * - Đơn chưa thanh toán: paymentStatus !== 'PAID' -> Ghi nhận vào unpaid
+ * - Đơn hủy: CANCELLED -> 0đ
+ */
+export function getOrderRevenueBreakdown(o: {
+  status?: string | null;
+  paymentStatus?: string | null;
+  paymentMethod?: string | null;
+  totalAmount?: number | null;
+  cashAmount?: number | null;
+  transferAmount?: number | null;
+}) {
+  const status = (o.status || '').toUpperCase().trim();
+  if (status === 'CANCELLED') {
+    return { isPaid: false, cash: 0, bank: 0, unpaid: 0, total: 0 };
+  }
+
+  const total = Math.max(0, o.totalAmount || 0);
+  const payStatus = (o.paymentStatus || '').toUpperCase().trim();
+  const isPaid = payStatus === 'PAID' || payStatus === 'DA_THANH_TOAN' || payStatus === 'COMPLETED';
+
+  if (!isPaid) {
+    return { isPaid: false, cash: 0, bank: 0, unpaid: total, total };
+  }
+
+  const rawMethod = (o.paymentMethod || 'CASH').toUpperCase().trim();
+  const isBank =
+    rawMethod === 'BANK_TRANSFER' ||
+    rawMethod === 'BANK' ||
+    rawMethod === 'CHUYEN_KHOAN' ||
+    rawMethod === 'CHUYENKHOAN' ||
+    rawMethod === 'QR' ||
+    rawMethod === 'VIETQR' ||
+    rawMethod.includes('TRANSFER') ||
+    rawMethod.includes('CHUYEN') ||
+    rawMethod.includes('CHUYỂN') ||
+    rawMethod.includes('QR');
+
+  const isSplit =
+    rawMethod === 'SPLIT' ||
+    rawMethod.includes('KET_HOP') ||
+    rawMethod.includes('KẾT HỢP') ||
+    rawMethod.includes('PHAN_BO');
+
+  if (isSplit) {
+    let c = Number(o.cashAmount) || 0;
+    let t = Number(o.transferAmount) || 0;
+    if (c <= 0 && t <= 0) {
+      c = total;
+      t = 0;
+    } else if (c + t !== total && total > 0) {
+      c = Math.min(total, Math.max(0, c));
+      t = Math.max(0, total - c);
+    }
+    return { isPaid: true, cash: c, bank: t, unpaid: 0, total };
+  }
+
+  if (isBank) {
+    return { isPaid: true, cash: 0, bank: total, unpaid: 0, total };
+  }
+
+  // Default to CASH
+  return { isPaid: true, cash: total, bank: 0, unpaid: 0, total };
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -77,24 +147,16 @@ export async function GET(request: NextRequest) {
 
     const totalDayRevenue = validOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
 
-    // Sum cashAmount (includes cash portion of SPLIT orders)
-    const cashRevenue = validOrders.reduce((sum, o) => {
-      if (o.cashAmount && o.cashAmount > 0) return sum + o.cashAmount;
-      if (o.paymentMethod === 'COD' || o.paymentMethod === 'CASH') return sum + (o.totalAmount || 0);
-      return sum;
-    }, 0);
+    // Sum cash revenue dynamically (only paid cash / cash portion of paid split orders)
+    const cashRevenue = validOrders.reduce((sum, o) => sum + getOrderRevenueBreakdown(o).cash, 0);
 
-    // Sum transferAmount (includes transfer portion of SPLIT orders)
-    const bankRevenue = validOrders.reduce((sum, o) => {
-      if (o.transferAmount && o.transferAmount > 0) return sum + o.transferAmount;
-      if (o.paymentMethod === 'BANK_TRANSFER' || o.paymentMethod === 'BANK') return sum + (o.totalAmount || 0);
-      return sum;
-    }, 0);
+    // Sum bank revenue dynamically (only paid bank / bank portion of paid split orders)
+    const bankRevenue = validOrders.reduce((sum, o) => sum + getOrderRevenueBreakdown(o).bank, 0);
 
-    // Sum unpaid orders
+    // Sum unpaid orders dynamically
     const unpaidRevenue = ordersInDay
-      .filter((o) => o.paymentStatus !== 'PAID' && o.status !== 'CANCELLED')
-      .reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+      .filter((o) => o.status !== 'CANCELLED')
+      .reduce((sum, o) => sum + getOrderRevenueBreakdown(o).unpaid, 0);
 
     // 2. Fetch Expenses for Summary KPI Cards
     const expenseWhere: any = {};
@@ -198,24 +260,16 @@ export async function GET(request: NextRequest) {
 
         const sValidOrders = shiftOrders.filter((o) => o.status !== 'CANCELLED');
 
-        // Cash sales in shift (including cash component of split orders)
-        const shiftCashSales = sValidOrders.reduce((acc, o) => {
-          if (o.cashAmount && o.cashAmount > 0) return acc + o.cashAmount;
-          if (o.paymentMethod === 'COD' || o.paymentMethod === 'CASH') return acc + (o.totalAmount || 0);
-          return acc;
-        }, 0);
+        // Cash sales in shift (dynamically computed: only paid cash / cash portion of paid split orders)
+        const shiftCashSales = sValidOrders.reduce((acc, o) => acc + getOrderRevenueBreakdown(o).cash, 0);
 
-        // Bank transfer sales in shift (including transfer component of split orders)
-        const shiftBankSales = sValidOrders.reduce((acc, o) => {
-          if (o.transferAmount && o.transferAmount > 0) return acc + o.transferAmount;
-          if (o.paymentMethod === 'BANK_TRANSFER' || o.paymentMethod === 'BANK') return acc + (o.totalAmount || 0);
-          return acc;
-        }, 0);
+        // Bank transfer sales in shift (dynamically computed: only paid bank / bank portion of paid split orders)
+        const shiftBankSales = sValidOrders.reduce((acc, o) => acc + getOrderRevenueBreakdown(o).bank, 0);
 
-        // Unpaid sales in shift
+        // Unpaid sales in shift (dynamically computed from all non-cancelled orders)
         const shiftUnpaidSales = shiftOrders
-          .filter((o) => o.paymentStatus !== 'PAID' && o.status !== 'CANCELLED')
-          .reduce((acc, o) => acc + (o.totalAmount || 0), 0);
+          .filter((o) => o.status !== 'CANCELLED')
+          .reduce((acc, o) => acc + getOrderRevenueBreakdown(o).unpaid, 0);
 
         // Shift Expenses Query
         const expenseOrClauses: any[] = [{ shiftId: shift.id }];

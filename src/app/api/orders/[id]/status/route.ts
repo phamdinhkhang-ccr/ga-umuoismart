@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
+import { revalidatePath } from 'next/cache';
 import prisma from '@/lib/prisma';
 import { verifyJWT } from '@/lib/auth';
 
@@ -168,6 +169,18 @@ export async function PATCH(
       data: updateData,
       include: { items: true },
     });
+
+    // Revalidate shifts and orders pages
+    try {
+      revalidatePath('/admin/shifts');
+      revalidatePath('/admin/shifts/active');
+      revalidatePath('/admin/shifts/open-close');
+      revalidatePath('/admin/shift-pos');
+      revalidatePath('/admin/orders');
+      revalidatePath('/admin/kitchen');
+    } catch (e) {
+      // ignore in edge/preview
+    }
 
     return NextResponse.json({ success: true, order: updatedOrder });
   } catch (error: any) {

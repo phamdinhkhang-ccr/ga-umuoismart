@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
+import { revalidatePath } from 'next/cache';
 import prisma from '@/lib/prisma';
 import { verifyJWT } from '@/lib/auth';
 
@@ -394,6 +395,15 @@ export async function POST(request: NextRequest) {
 
       return order;
     });
+
+    try {
+      revalidatePath('/admin/shifts');
+      revalidatePath('/admin/shifts/active');
+      revalidatePath('/admin/shifts/open-close');
+      revalidatePath('/admin/shift-pos');
+      revalidatePath('/admin/orders');
+      revalidatePath('/admin/kitchen');
+    } catch (e) {}
 
     return NextResponse.json({ success: true, order: newOrder });
   } catch (error: any) {

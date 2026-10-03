@@ -62,6 +62,21 @@ export default function ShiftsManagementPage() {
     fetchShiftsData();
   }, [fetchShiftsData]);
 
+  // Realtime polling and focus listener
+  useEffect(() => {
+    const handleFocus = () => {
+      fetchShiftsData();
+    };
+    window.addEventListener('focus', handleFocus);
+    const interval = setInterval(() => {
+      fetchShiftsData();
+    }, 15000); // 15s refresh
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      clearInterval(interval);
+    };
+  }, [fetchShiftsData]);
+
   const handleResetFilter = () => {
     setDate(getLocalTodayString());
     setBranchId('ALL');

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
+import { revalidatePath } from 'next/cache';
 import prisma from '@/lib/prisma';
 import { verifyJWT } from '@/lib/auth';
 
@@ -165,6 +166,15 @@ export async function PUT(
       return order;
     });
 
+    // Revalidate shifts and orders
+    try {
+      revalidatePath('/admin/shifts');
+      revalidatePath('/admin/shifts/active');
+      revalidatePath('/admin/shifts/open-close');
+      revalidatePath('/admin/shift-pos');
+      revalidatePath('/admin/orders');
+    } catch (e) {}
+
     return NextResponse.json({ success: true, order: updatedOrder });
   } catch (error: any) {
     console.error('Lỗi cập nhật đơn hàng:', error);
@@ -182,7 +192,7 @@ export async function PATCH(
 
     // Lọc bỏ triệt để createdAt / created_at ra khỏi payload update để không bao giờ bị ghi đè ngày tạo gốc
     const { createdAt, created_at, id: _id, ...cleanBody } = body;
-    const { status, paymentStatus, autoMarkPaid, carrierName, driverName, driverPhone, trackingUrl } = cleanBody;
+    const { status, paymentStatus, autoMarkPaid, paymentMethod, cashAmount, transferAmount, carrierName, driverName, driverPhone, trackingUrl } = cleanBody;
 
     // Tìm đơn hàng theo id gốc hoặc mã đơn orderCode (DH-XXXXX)
     const existingOrder = await prisma.order.findFirst({
@@ -239,7 +249,16 @@ export async function PATCH(
       if (status === 'COMPLETED' || status === 'DELIVERED') {
         updateData.completedAt = existingOrder.completedAt || new Date();
       }
+      if (status === 'CANCELLED') {
+        const cancelReason = cleanBody.cancelReason || cleanBody.note;
+        if (cancelReason) {
+          updateData.note = existingOrder.note 
+            ? `${existingOrder.note} [Lý do hủy: ${cancelReason}]`
+            : `[Lý do hủy: ${cancelReason}]`;
+        }
+      }
     }
+
     if (paymentStatus) {
       updateData.paymentStatus = paymentStatus;
       if (paymentStatus === 'PAID') {
@@ -250,6 +269,26 @@ export async function PATCH(
       updateData.paymentStatus = 'PAID';
       updateData.paidAt = existingOrder.paidAt || new Date();
     }
+
+    if (paymentMethod !== undefined) {
+      updateData.paymentMethod = paymentMethod;
+      const effectiveTotal = existingOrder.totalAmount || 0;
+      if (paymentMethod === 'BANK_TRANSFER') {
+        updateData.cashAmount = 0;
+        updateData.transferAmount = effectiveTotal;
+      } else if (paymentMethod === 'SPLIT') {
+        const cAmount = Math.min(effectiveTotal, Number(cashAmount) || 0);
+        updateData.cashAmount = cAmount;
+        updateData.transferAmount = Math.max(0, effectiveTotal - cAmount);
+      } else {
+        updateData.cashAmount = effectiveTotal;
+        updateData.transferAmount = 0;
+      }
+    } else if (cashAmount !== undefined || transferAmount !== undefined) {
+      if (cashAmount !== undefined) updateData.cashAmount = Number(cashAmount) || 0;
+      if (transferAmount !== undefined) updateData.transferAmount = Number(transferAmount) || 0;
+    }
+
     if (carrierName !== undefined) updateData.carrierName = carrierName;
     if (driverName !== undefined) updateData.driverName = driverName;
     if (driverPhone !== undefined) updateData.driverPhone = driverPhone;
@@ -260,6 +299,15 @@ export async function PATCH(
       data: updateData,
       include: { items: true },
     });
+
+    // Revalidate shifts and orders
+    try {
+      revalidatePath('/admin/shifts');
+      revalidatePath('/admin/shifts/active');
+      revalidatePath('/admin/shifts/open-close');
+      revalidatePath('/admin/shift-pos');
+      revalidatePath('/admin/orders');
+    } catch (e) {}
 
     return NextResponse.json({ success: true, order: updatedOrder });
   } catch (error: any) {
@@ -279,6 +327,15 @@ export async function DELETE(
       where: { id },
       data: { status: 'CANCELLED' },
     });
+
+    try {
+      revalidatePath('/admin/shifts');
+      revalidatePath('/admin/shifts/active');
+      revalidatePath('/admin/shifts/open-close');
+      revalidatePath('/admin/shift-pos');
+      revalidatePath('/admin/orders');
+    } catch (e) {}
+
     return NextResponse.json({ success: true, message: 'Đã hủy đơn hàng an toàn (Soft Delete)', order: cancelledOrder });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
