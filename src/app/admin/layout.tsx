@@ -91,8 +91,13 @@ function AdminLayoutInner({ children }: { children: React.ReactNode }) {
 
     const userRole = currentUser.role || 'STAFF';
 
-    if (userRole === 'TELESALES') {
-      return navItems.filter((item) => item.href === '/admin/orders');
+    if (userRole === 'TELESALES' || userRole === 'CS' || userRole === 'CALL_CENTER' || userRole === 'TONG_DAI') {
+      const allowedPaths = [
+        '/admin/orders',
+        '/admin/customers',
+        '/admin/inventory/stock',
+      ];
+      return navItems.filter((item) => allowedPaths.includes(item.href));
     }
 
     if (userRole === 'STAFF' || userRole === 'CASHIER' || userRole === 'USER' || userRole === 'KITCHEN') {
@@ -138,8 +143,14 @@ function AdminLayoutInner({ children }: { children: React.ReactNode }) {
     }
 
     const role = currentUser.role;
-    if (role === 'TELESALES') {
-      if (pathname !== '/admin/orders') {
+    if (role === 'TELESALES' || role === 'CS' || role === 'CALL_CENTER' || role === 'TONG_DAI') {
+      const allowedPaths = [
+        '/admin/orders',
+        '/admin/customers',
+        '/admin/inventory/stock',
+        '/admin/inventory-check',
+      ];
+      if (!allowedPaths.includes(pathname)) {
         router.push('/admin/orders');
       }
     } else if (role === 'STAFF' || role === 'CASHIER' || role === 'USER' || role === 'KITCHEN') {

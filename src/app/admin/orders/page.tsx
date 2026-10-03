@@ -157,7 +157,7 @@ export default function CentralizedOrdersPage() {
   // Role matrix definitions
   const userRole = (currentUser?.role || '').toUpperCase();
   const isKitchen = userRole === 'KITCHEN' || userRole === 'CHEF' || userRole === 'BEP';
-  const isTelesales = userRole === 'TELESALES' || userRole === 'CS' || userRole === 'TONG_DAI';
+  const isTelesales = userRole === 'TELESALES' || userRole === 'CS' || userRole === 'CALL_CENTER' || userRole === 'TONG_DAI';
   const canEditPaymentStatus = userRole === 'ADMIN' || userRole === 'MANAGER';
   const canEditOrder = userRole === 'ADMIN' || userRole === 'MANAGER' || isTelesales;
   const canCreateOrder = !isKitchen;
@@ -831,6 +831,34 @@ export default function CentralizedOrdersPage() {
     }
   };
 
+  // Quick Update Payment Method (CASH / BANK_TRANSFER / SPLIT)
+  const handleQuickUpdatePaymentMethod = async (id: string, newPaymentMethod: string) => {
+    try {
+      const res = await fetch(`/api/orders/${id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          paymentMethod: newPaymentMethod,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        fetchOrders();
+        const methodLabel =
+          newPaymentMethod === 'BANK_TRANSFER'
+            ? 'Chuyển khoản VietQR'
+            : newPaymentMethod === 'SPLIT'
+            ? 'Hỗn hợp (TM + CK)'
+            : 'Tiền mặt (CASH)';
+        showToast(`Đã đổi hình thức thanh toán: ${methodLabel}`);
+      } else {
+        alert(data.error || 'Cập nhật hình thức thanh toán thất bại');
+      }
+    } catch (err) {
+      alert('Lỗi kết nối máy chủ');
+    }
+  };
+
   // Open Create Modal
   const handleOpenCreateModal = () => {
     const isStaffRole = userRole !== 'ADMIN' && userRole !== 'MANAGER';
@@ -1474,7 +1502,8 @@ export default function CentralizedOrdersPage() {
                   <th className="py-2.5 px-3">SẢN PHẨM & SL</th>
                   <th className="py-2.5 px-3 min-w-[200px] max-w-[240px]">KHÁCH HÀNG & ĐỊA CHỈ</th>
                   <th className="py-2.5 px-3">TỔNG TIỀN</th>
-                  <th className="py-2.5 px-3">THANH TOÁN</th>
+                  <th className="py-2.5 px-3">HÌNH THỨC TT</th>
+                  <th className="py-2.5 px-3">TRẠNG THÁI TT</th>
                   <th className="py-2.5 px-3 text-right">THAO TÁC</th>
                 </tr>
               </thead>
@@ -1529,11 +1558,11 @@ export default function CentralizedOrdersPage() {
                               <button
                                 type="button"
                                 onClick={() => {
-                                  setShippingModalOrder(order);
-                                  setShippingCarrierName(order.carrierName || 'GrabExpress');
-                                  setShippingDriverName(order.driverName || '');
-                                  setShippingDriverPhone(order.driverPhone || '');
-                                  setShippingTrackingUrl(order.trackingUrl || '');
+                                   setShippingModalOrder(order);
+                                   setShippingCarrierName(order.carrierName || 'GrabExpress');
+                                   setShippingDriverName(order.driverName || '');
+                                   setShippingDriverPhone(order.driverPhone || '');
+                                   setShippingTrackingUrl(order.trackingUrl || '');
                                 }}
                                 className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 truncate max-w-[100px] cursor-pointer"
                                 title={`Đơn vị: ${order.carrierName || 'GrabExpress'} | Tài xế: ${order.driverName || 'Chưa có'}`}
@@ -1662,7 +1691,27 @@ export default function CentralizedOrdersPage() {
                         </div>
                       </td>
 
-                      {/* 7. Trạng Thái Thanh Toán & Phương Thức */}
+                      {/* 7. Hình Thức Thanh Toán (Payment Method) */}
+                      <td className="py-2.5 px-3 whitespace-nowrap align-middle">
+                        <div className="flex flex-col gap-1">
+                          <select
+                            value={order.paymentMethod === 'BANK_TRANSFER' ? 'BANK_TRANSFER' : order.paymentMethod === 'SPLIT' ? 'SPLIT' : 'CASH'}
+                            onChange={(e) => handleQuickUpdatePaymentMethod(order.id, e.target.value)}
+                            className="h-6 px-1.5 rounded text-[10px] font-bold focus:outline-none cursor-pointer border dark:bg-neutral-800 bg-stone-100 dark:border-neutral-700 border-stone-300 dark:text-neutral-200 text-stone-800"
+                          >
+                            <option value="CASH">💵 Tiền mặt</option>
+                            <option value="BANK_TRANSFER">💳 Chuyển khoản (VietQR)</option>
+                            <option value="SPLIT">🔀 Hỗn hợp (TM + CK)</option>
+                          </select>
+                          {order.paymentMethod === 'SPLIT' && (
+                            <span className="text-[9px] text-purple-400 font-medium">
+                              TM: {((order.cashAmount || 0) / 1000).toFixed(0)}k | CK: {((order.transferAmount || 0) / 1000).toFixed(0)}k
+                            </span>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* 8. Trạng Thái Thanh Toán (Payment Status) */}
                       <td className="py-2.5 px-3 whitespace-nowrap align-middle">
                         <div className="flex flex-col gap-0.5">
                           {canEditPaymentStatus ? (
@@ -1689,22 +1738,10 @@ export default function CentralizedOrdersPage() {
                               {order.paymentStatus === 'PAID' ? '✅ Đã nhận tiền' : '❌ Chưa thanh toán'}
                             </span>
                           )}
-
-                          <div className="text-[10px] font-medium text-neutral-400">
-                            {order.paymentMethod === 'SPLIT' ? (
-                              <span className="text-purple-300 font-bold">
-                                TM: {((order.cashAmount || 0) / 1000).toFixed(0)}k | CK: {((order.transferAmount || 0) / 1000).toFixed(0)}k
-                              </span>
-                            ) : order.paymentMethod === 'BANK_TRANSFER' ? (
-                              <span className="text-blue-400 font-semibold">📱 Chuyển khoản</span>
-                            ) : (
-                              <span className="text-amber-500 font-semibold">💵 Tiền mặt</span>
-                            )}
-                          </div>
                         </div>
                       </td>
 
-                      {/* 8. Thao Tác Nhanh (Compact Single-Row Toolbar) */}
+                      {/* 9. Thao Tác Nhanh (Compact Single-Row Toolbar) */}
                       <td className="py-2.5 px-3 text-right whitespace-nowrap align-middle">
                         <div className="flex items-center justify-end gap-1.5 flex-row">
                           {/* 1. Nút Thu Tiền / Nhắc Nợ nếu là UNPAID */}

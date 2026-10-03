@@ -49,7 +49,7 @@ export async function PATCH(
     const userRole = (userPayload?.role || '').toUpperCase();
     const isSuperAdminOrManager = userRole === 'ADMIN' || userRole === 'MANAGER';
     const isKitchen = userRole === 'KITCHEN' || userRole === 'CHEF' || userRole === 'BEP';
-    const isTelesales = userRole === 'TELESALES' || userRole === 'CS' || userRole === 'TONG_DAI';
+    const isTelesales = userRole === 'TELESALES' || userRole === 'CS' || userRole === 'CALL_CENTER' || userRole === 'TONG_DAI';
 
     // RBAC validation: Orders in CLOSED shifts cannot be modified by staff
     if (existingOrder.shiftId && !isSuperAdminOrManager) {
