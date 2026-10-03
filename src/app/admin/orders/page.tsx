@@ -28,6 +28,9 @@ import {
   ExternalLink,
   MoreVertical,
   MoreHorizontal,
+  MapPin,
+  ClipboardCopy,
+  ClipboardCheck,
 } from 'lucide-react';
 import PhoneActionCell from '@/components/PhoneActionCell';
 import * as XLSX from 'xlsx';
@@ -563,6 +566,28 @@ export default function CentralizedOrdersPage() {
     }
     navigator.clipboard.writeText(clean);
     showToast(`📋 Đã sao chép SĐT [${clean}]!`);
+  };
+
+  const handleCopyAddressOnly = (rawAddress?: string | null) => {
+    const addr = (rawAddress || '').trim();
+    if (!addr || addr === 'Mua tại quầy') {
+      showToast('⚠️ Không có địa chỉ giao hàng để sao chép!');
+      return;
+    }
+    navigator.clipboard.writeText(addr);
+    showToast(`📍 Đã copy địa chỉ: ${addr}`);
+  };
+
+  const handleCopyFullDeliveryInfo = (ord: OrderRecord) => {
+    const name = ord.customerName || 'Khách';
+    const phone = ord.customerPhone || '';
+    const address = ord.deliveryAddress || 'Mua tại quầy';
+    const note = ord.note ? ` (Ghi chú: ${ord.note})` : '';
+
+    // Format chuẩn: [Tên khách] - [SĐT] - [Địa chỉ] (kèm ghi chú nếu có)
+    const fullInfo = `${name}${phone ? ' - ' + phone : ''} - ${address}${note}`;
+    navigator.clipboard.writeText(fullInfo);
+    showToast(`📦 Đã copy thông tin giao hàng: ${fullInfo}`);
   };
 
   // Debt Reminder handler (Zalo/SMS with Dynamic VietQR Link)
@@ -1492,7 +1517,7 @@ export default function CentralizedOrdersPage() {
                       </td>
 
                       {/* 5. Khách Hàng & Địa Chỉ */}
-                      <td className="py-2.5 px-3 min-w-[200px] max-w-[240px] align-middle">
+                      <td className="py-2.5 px-3 min-w-[210px] max-w-[260px] align-middle">
                         <div className="flex flex-col gap-0.5">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="font-bold dark:text-white text-stone-900 text-xs">
@@ -1507,20 +1532,51 @@ export default function CentralizedOrdersPage() {
                                     e.stopPropagation();
                                     handleCopyPhoneOnly(order.customerPhone);
                                   }}
-                                  className="p-0.5 text-neutral-400 hover:text-white transition cursor-pointer"
+                                  className="p-0.5 text-neutral-400 hover:text-emerald-400 hover:bg-emerald-500/10 rounded transition cursor-pointer"
                                   title="Sao chép SĐT"
                                 >
                                   <Copy size={11} />
                                 </button>
                               </span>
                             )}
+                            {/* Copy Quick Full Info for Shipper */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleCopyFullDeliveryInfo(order);
+                              }}
+                              className="p-0.5 text-amber-500/70 hover:text-amber-400 hover:bg-amber-500/10 rounded transition cursor-pointer"
+                              title="Copy trọn gói giao hàng cho Shipper (Tên - SĐT - Địa chỉ)"
+                            >
+                              <ClipboardCopy size={11} />
+                            </button>
                           </div>
                           <div
-                            className="text-[11px] text-neutral-400 truncate flex items-center gap-1"
-                            title={order.deliveryAddress || 'Mua tại quầy'}
+                            className="text-[11px] text-neutral-400 truncate flex items-center gap-1 group/addr cursor-pointer hover:text-stone-300 dark:hover:text-neutral-200 transition"
+                            title={order.deliveryAddress ? `${order.deliveryAddress} (Click để copy địa chỉ)` : 'Mua tại quầy'}
+                            onClick={(e) => {
+                              if (order.deliveryAddress && order.deliveryAddress !== 'Mua tại quầy') {
+                                e.stopPropagation();
+                                handleCopyAddressOnly(order.deliveryAddress);
+                              }
+                            }}
                           >
-                            <span>📍</span>
+                            <span className="shrink-0 text-[11px]">📍</span>
                             <span className="truncate">{order.deliveryAddress || 'Mua tại quầy'}</span>
+                            {order.deliveryAddress && order.deliveryAddress !== 'Mua tại quầy' && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCopyAddressOnly(order.deliveryAddress);
+                                }}
+                                className="p-0.5 text-neutral-400 hover:text-amber-400 hover:bg-amber-500/10 rounded transition cursor-pointer shrink-0"
+                                title="Sao chép địa chỉ giao hàng"
+                              >
+                                <Copy size={11} />
+                              </button>
+                            )}
                           </div>
                         </div>
                       </td>
@@ -1706,6 +1762,32 @@ export default function CentralizedOrdersPage() {
                                     <span>Sao chép SĐT</span>
                                   </button>
                                 )}
+
+                                {order.deliveryAddress && order.deliveryAddress !== 'Mua tại quầy' && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      handleCopyAddressOnly(order.deliveryAddress);
+                                      setOpenActionMenuId(null);
+                                    }}
+                                    className="w-full px-2.5 py-1.5 rounded-lg text-xs font-medium dark:text-neutral-200 text-stone-700 hover:bg-amber-500/10 hover:text-amber-400 flex items-center gap-2 transition cursor-pointer"
+                                  >
+                                    <MapPin className="w-3.5 h-3.5" />
+                                    <span>Sao chép Địa chỉ</span>
+                                  </button>
+                                )}
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    handleCopyFullDeliveryInfo(order);
+                                    setOpenActionMenuId(null);
+                                  }}
+                                  className="w-full px-2.5 py-1.5 rounded-lg text-xs font-medium dark:text-neutral-200 text-stone-700 hover:bg-emerald-500/10 hover:text-emerald-400 flex items-center gap-2 transition cursor-pointer"
+                                >
+                                  <ClipboardCopy className="w-3.5 h-3.5" />
+                                  <span>Copy cho Shipper</span>
+                                </button>
 
                                 {order.paymentStatus === 'UNPAID' && order.status !== 'CANCELLED' && (
                                   <button
@@ -2518,13 +2600,42 @@ export default function CentralizedOrdersPage() {
               </span>
             </div>
 
-            <div className="text-xs space-y-1.5 dark:text-neutral-300 text-stone-700">
+            <div className="text-xs space-y-2 dark:text-neutral-300 text-stone-700">
               <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-[#0B0D11] border border-slate-200 dark:border-neutral-800 mb-2">
-                <PhoneActionCell name={selectedOrder.customerName} phone={selectedOrder.customerPhone} />
+                <PhoneActionCell
+                  name={selectedOrder.customerName}
+                  phone={selectedOrder.customerPhone}
+                  address={selectedOrder.deliveryAddress}
+                />
               </div>
-              <p>
-                <strong className="dark:text-white text-stone-900">Địa chỉ giao:</strong> {selectedOrder.deliveryAddress}
-              </p>
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <p className="flex items-center gap-1.5 flex-wrap">
+                  <strong className="dark:text-white text-stone-900">Địa chỉ giao:</strong>{' '}
+                  <span>{selectedOrder.deliveryAddress}</span>
+                </p>
+                <div className="flex items-center gap-1">
+                  {selectedOrder.deliveryAddress && selectedOrder.deliveryAddress !== 'Mua tại quầy' && (
+                    <button
+                      type="button"
+                      onClick={() => handleCopyAddressOnly(selectedOrder.deliveryAddress)}
+                      className="px-2 py-1 bg-stone-200 dark:bg-neutral-800 hover:bg-stone-300 dark:hover:bg-neutral-700 text-stone-700 dark:text-neutral-300 font-bold rounded-lg text-[11px] flex items-center gap-1 transition cursor-pointer"
+                      title="Copy địa chỉ"
+                    >
+                      <Copy className="w-3 h-3" />
+                      <span>Copy Đ/C</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => handleCopyFullDeliveryInfo(selectedOrder)}
+                    className="px-2 py-1 bg-amber-500/15 hover:bg-amber-500/25 text-amber-600 dark:text-amber-400 border border-amber-500/30 font-bold rounded-lg text-[11px] flex items-center gap-1 transition cursor-pointer"
+                    title="Copy trọn gói giao hàng cho Shipper (Tên - SĐT - Địa chỉ)"
+                  >
+                    <ClipboardCopy className="w-3 h-3" />
+                    <span>Copy Shipper</span>
+                  </button>
+                </div>
+              </div>
               <p>
                 <strong className="dark:text-white text-stone-900">Nguồn đơn:</strong> {selectedOrder.sourceTag || 'Web POS'}
               </p>
@@ -2860,7 +2971,7 @@ export default function CentralizedOrdersPage() {
               </button>
 
               <div className="flex items-center gap-1.5 flex-wrap">
-                {/* Zalo Quick Actions */}
+                {/* Quick Copy & Zalo Actions */}
                 {printBillOrder.customerPhone && (
                   <>
                     <button
@@ -2882,6 +2993,27 @@ export default function CentralizedOrdersPage() {
                     </button>
                   </>
                 )}
+
+                {printBillOrder.deliveryAddress && printBillOrder.deliveryAddress !== 'Mua tại quầy' && (
+                  <button
+                    type="button"
+                    onClick={() => handleCopyAddressOnly(printBillOrder.deliveryAddress)}
+                    className="p-2 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-xl font-bold text-xs flex items-center gap-1 cursor-pointer transition border border-stone-300"
+                    title="Sao chép địa chỉ giao hàng"
+                  >
+                    <MapPin className="w-3.5 h-3.5" />
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => handleCopyFullDeliveryInfo(printBillOrder)}
+                  className="px-3 py-2 bg-amber-500/15 hover:bg-amber-500/25 text-amber-800 border border-amber-500/40 rounded-xl font-bold text-xs flex items-center gap-1.5 cursor-pointer transition"
+                  title="Copy trọn gói giao hàng cho Shipper (Tên - SĐT - Địa chỉ)"
+                >
+                  <ClipboardCopy className="w-3.5 h-3.5" />
+                  <span>Copy Shipper</span>
+                </button>
 
                 {/* Button 2 (Right): Print K80 */}
                 <button

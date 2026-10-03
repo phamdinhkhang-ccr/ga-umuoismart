@@ -1,12 +1,13 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Phone, Copy, Check, MapPin, ExternalLink } from 'lucide-react';
+import { Phone, Copy, Check, MapPin, ExternalLink, ClipboardCopy } from 'lucide-react';
 
 interface PhoneActionCellProps {
   name?: string | null;
   phone?: string | null;
   address?: string | null;
+  note?: string | null;
   className?: string;
   showName?: boolean;
   showAddress?: boolean;
@@ -16,12 +17,14 @@ export default function PhoneActionCell({
   name,
   phone,
   address,
+  note,
   className = '',
   showName = true,
   showAddress = true,
 }: PhoneActionCellProps) {
   const [copiedPhone, setCopiedPhone] = useState(false);
   const [copiedAddress, setCopiedAddress] = useState(false);
+  const [copiedFull, setCopiedFull] = useState(false);
   const [openedZalo, setOpenedZalo] = useState(false);
 
   const normalizePhone = (p?: string | null) => {
@@ -61,14 +64,40 @@ export default function PhoneActionCell({
     setTimeout(() => setCopiedAddress(false), 1500);
   };
 
+  const handleCopyFullInfo = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const custName = name || 'Khách';
+    const cleanP = normalizePhone(phone);
+    const addr = address || 'Mua tại quầy';
+    const noteText = note ? ` (${note})` : '';
+    const full = `${custName}${cleanP ? ' - ' + cleanP : ''} - ${addr}${noteText}`;
+    navigator.clipboard.writeText(full);
+    setCopiedFull(true);
+    setTimeout(() => setCopiedFull(false), 1500);
+  };
+
   return (
     <div className={`flex flex-col gap-1 items-start text-xs ${className}`}>
-      {/* Line 1: Customer Name */}
-      {showName && (
-        <span className="font-semibold dark:text-white text-stone-900 tracking-wide block leading-tight text-xs sm:text-sm">
-          {name || 'Khách Hàng'}
-        </span>
-      )}
+      {/* Line 1: Customer Name + Quick Copy Shipper */}
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {showName && (
+          <span className="font-semibold dark:text-white text-stone-900 tracking-wide block leading-tight text-xs sm:text-sm">
+            {name || 'Khách Hàng'}
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={handleCopyFullInfo}
+          className="p-0.5 rounded hover:bg-stone-200 dark:hover:bg-neutral-800 text-amber-500/80 hover:text-amber-500 transition-colors cursor-pointer shrink-0"
+          title="Copy trọn gói giao hàng cho Shipper (Tên - SĐT - Địa chỉ)"
+        >
+          {copiedFull ? (
+            <Check className="text-emerald-500" size={12} />
+          ) : (
+            <ClipboardCopy size={12} />
+          )}
+        </button>
+      </div>
 
       {/* Line 2: Phone + Copy Button + Zalo Quick Button */}
       {phone ? (
