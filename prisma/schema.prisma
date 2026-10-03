@@ -37,9 +37,10 @@ model Product {
   orderItems  OrderItem[]
 
   // Combo relations
-  comboItems  ComboItem[] @relation("ParentCombo")
-  inCombos    ComboItem[] @relation("ChildProduct")
+  comboItems        ComboItem[]       @relation("ParentCombo")
+  inCombos          ComboItem[]       @relation("ChildProduct")
   branchInventories BranchInventory[]
+  stockMovements    StockMovement[]
 
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
@@ -56,6 +57,28 @@ model ComboItem {
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  @@unique([comboId, productId])
+}
+
+model StockMovement {
+  id                String   @id @default(cuid())
+  productId         String?  // ID của sản phẩm vật lý (Single product / Component con)
+  product           Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  productName       String
+  branchId          String?  @default("cs1")
+  type              String   // SALE_SINGLE, SALE_COMBO_COMPONENT, IMPORT, EXPORT, ADJUSTMENT, REFUND
+  quantityChange    Float    // Biến động kho (ví dụ: -1, -2, +5)
+  previousStock     Float?   // Tồn kho trước giao dịch
+  newStock          Float?   // Tồn kho sau giao dịch
+  orderId           String?  // Reference Order ID
+  orderCode         String?  // Reference Order Code
+  comboProductId    String?  // ID của Combo mẹ (nếu là phân rã từ combo)
+  comboProductName  String?  // Tên Combo mẹ
+  componentQuantity Int?     @default(1) // Định mức component trong 1 combo
+  note              String?
+  creatorName       String?  @default("Hệ thống POS")
+  createdAt         DateTime @default(now())
 }
 
 model Order {

@@ -635,10 +635,10 @@ export default function AdminProductsPage() {
                             <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full font-bold text-xs border shadow-xs ${
                               (p.stockQuantity || 0) > 0
                                 ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
-                                : 'bg-rose-500/20 text-rose-400 border-rose-500/40'
+                                : 'bg-rose-500/25 text-rose-400 border-rose-500/50 font-black'
                             }`}>
-                              <span className={`w-2 h-2 rounded-full ${ (p.stockQuantity || 0) > 0 ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400' }`}></span>
-                              <span>{(p.stockQuantity || 0) > 0 ? '🟢 Còn' : '🔴 Hết'}</span>
+                              <span className={`w-2 h-2 rounded-full ${ (p.stockQuantity || 0) > 0 ? 'bg-emerald-400 animate-pulse' : 'bg-rose-500' }`}></span>
+                              <span>{(p.stockQuantity || 0) > 0 ? '🟢 Còn Hàng' : '🔴 Hết Hàng'}</span>
                             </span>
                             <p className="text-[11px] font-mono text-purple-300 font-semibold">
                               Tồn: <span className="text-amber-400 font-extrabold">{p.stockQuantity ?? 0}</span> Combo

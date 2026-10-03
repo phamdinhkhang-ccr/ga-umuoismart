@@ -78,7 +78,7 @@ export async function GET(request: Request) {
             virtualComboStock = Math.min(...possibleCombos);
             branchStock = virtualComboStock;
           } else {
-            // Calculate total virtual combo stock as the sum of virtual stocks across all branches
+            // Calculate total virtual combo stock across all branches and base stocks
             let sumVirtualComboStock = 0;
             for (const bId of branchIdsList) {
               const possibleCombosForBranch = p.comboItems.map((ci) => {
@@ -92,7 +92,17 @@ export async function GET(request: Request) {
               const bVirtual = p.comboItems.length > 0 ? Math.min(...possibleCombosForBranch) : 0;
               sumVirtualComboStock += bVirtual;
             }
-            virtualComboStock = sumVirtualComboStock;
+
+            const baseComponentCombos = p.comboItems.map((ci) => {
+              const childProd = ci.product;
+              if (!childProd) return 0;
+              const childStock = childProd.stockQuantity || 0;
+              const reqQty = Math.max(1, ci.quantity || 1);
+              return Math.floor(Math.max(0, childStock) / reqQty);
+            });
+            const baseVirtual = p.comboItems.length > 0 ? Math.min(...baseComponentCombos) : 0;
+
+            virtualComboStock = Math.max(sumVirtualComboStock, baseVirtual);
             branchStock = virtualComboStock;
           }
         } else {

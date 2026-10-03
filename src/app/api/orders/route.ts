@@ -350,6 +350,30 @@ export async function POST(request: NextRequest) {
                 stockQuantity: { decrement: childQtyToDeduct },
               },
             });
+
+            // 3. Create StockMovement Audit Record for Combo Component
+            try {
+              await tx.stockMovement.create({
+                data: {
+                  productId: ci.productId,
+                  productName: ci.product?.name || 'Món thành phần',
+                  branchId: effectiveBranchId,
+                  type: 'SALE_COMBO_COMPONENT',
+                  quantityChange: -childQtyToDeduct,
+                  previousStock: currentStock,
+                  newStock: newStock,
+                  orderId: order.id,
+                  orderCode: order.orderCode,
+                  comboProductId: prod.id,
+                  comboProductName: prod.name,
+                  componentQuantity: ci.quantity || 1,
+                  note: `Trừ kho thành phần khi bán ${item.quantity} suất Combo [${prod.name}]`,
+                  creatorName: sellerName || 'Thu ngân POS',
+                },
+              });
+            } catch (smErr) {
+              console.warn('StockMovement creation warning (combo):', smErr);
+            }
           }
         } else {
           const qtyToDeduct = item.quantity || 1;
@@ -390,6 +414,27 @@ export async function POST(request: NextRequest) {
               stockQuantity: { decrement: qtyToDeduct },
             },
           });
+
+          // 3. Create StockMovement Audit Record for Single Product
+          try {
+            await tx.stockMovement.create({
+              data: {
+                productId: prod.id,
+                productName: prod.name,
+                branchId: effectiveBranchId,
+                type: 'SALE_SINGLE',
+                quantityChange: -qtyToDeduct,
+                previousStock: currentStock,
+                newStock: newStock,
+                orderId: order.id,
+                orderCode: order.orderCode,
+                note: `Trừ kho khi bán ${qtyToDeduct} ${prod.unit || 'Con'} [${prod.name}]`,
+                creatorName: sellerName || 'Thu ngân POS',
+              },
+            });
+          } catch (smErr) {
+            console.warn('StockMovement creation warning (single):', smErr);
+          }
         }
       }
 
