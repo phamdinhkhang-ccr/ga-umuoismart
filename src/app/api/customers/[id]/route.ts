@@ -48,12 +48,24 @@ export async function GET(
       daysSinceLastOrder = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
     }
 
+    let daysSinceLastCare: number | null = null;
+    const careTime = customer.lastCareAt
+      ? new Date(customer.lastCareAt).getTime()
+      : customer.lastContactedAt
+      ? new Date(customer.lastContactedAt).getTime()
+      : null;
+    if (careTime) {
+      const diffMs = now.getTime() - careTime;
+      daysSinceLastCare = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+    }
+
     return NextResponse.json({
       success: true,
       customer: {
         ...customer,
         favoriteDish: customer.favoriteDish || favoriteDish,
         daysSinceLastOrder,
+        daysSinceLastCare,
         firstOrderDate,
         lastOrderDate,
       },
@@ -71,14 +83,30 @@ export async function PUT(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { name, address, tasteNotes, branchId, reorderNotes } = body;
+    const {
+      name,
+      phone,
+      address,
+      tasteNotes,
+      notes,
+      branchId,
+      reorderNotes,
+      careStatus,
+      lastCareAt,
+      isActive,
+    } = body;
 
     const updateData: any = {};
-    if (name) updateData.name = name;
-    if (address !== undefined) updateData.address = address;
+    if (name !== undefined) updateData.name = name.trim();
+    if (phone !== undefined) updateData.phone = phone.trim();
+    if (address !== undefined) updateData.address = address ? address.trim() : '';
     if (tasteNotes !== undefined) updateData.tasteNotes = tasteNotes;
-    if (branchId) updateData.branchId = branchId;
+    if (notes !== undefined) updateData.notes = notes;
+    if (branchId !== undefined) updateData.branchId = branchId;
     if (reorderNotes !== undefined) updateData.reorderNotes = reorderNotes;
+    if (careStatus !== undefined) updateData.careStatus = careStatus;
+    if (lastCareAt !== undefined) updateData.lastCareAt = lastCareAt ? new Date(lastCareAt) : null;
+    if (isActive !== undefined) updateData.isActive = Boolean(isActive);
 
     const updated = await prisma.customer.update({
       where: { id },
@@ -87,6 +115,26 @@ export async function PUT(
 
     return NextResponse.json({ success: true, customer: updated });
   } catch (error: any) {
+    console.error('Error updating customer:', error);
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    // Soft delete: set isActive = false
+    const updated = await prisma.customer.update({
+      where: { id },
+      data: { isActive: false },
+    });
+
+    return NextResponse.json({ success: true, message: 'Đã ẩn khách hàng thành công (Soft Delete)', customer: updated });
+  } catch (error: any) {
+    console.error('Error soft deleting customer:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }

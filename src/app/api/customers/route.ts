@@ -5,10 +5,12 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search')?.trim().toLowerCase() || '';
-    const category = searchParams.get('category')?.trim() || 'ALL'; // ALL, VIP, REGULAR, NEW, CHURN_RISK
+    const category = searchParams.get('category')?.trim() || 'ALL'; // ALL, VIP, REGULAR, NEW, CHURN_RISK, NEED_CARE_7D, NEED_CARE_14D
     const branchId = searchParams.get('branchId')?.trim() || 'all';
+    const careStatus = searchParams.get('careStatus')?.trim() || 'ALL'; // ALL, NEW, CONTACTED, NEED_FOLLOW_UP
 
     const rawCustomers = await prisma.customer.findMany({
+      where: { isActive: true },
       orderBy: { totalSpent: 'desc' },
     });
 
@@ -20,17 +22,31 @@ export async function GET(request: NextRequest) {
     let repeatCount = 0;
     let newThisMonthCount = 0;
     let churnRiskCount = 0;
+    let needCareCount = 0;
 
     const processedCustomers = rawCustomers.map((c) => {
       let daysSinceLastOrder: number | null = null;
+      let daysSinceLastCare: number | null = null;
       let isChurnRisk = false;
 
-      if (c.lastOrderAt) {
-        const diffMs = now.getTime() - new Date(c.lastOrderAt).getTime();
+      const orderTime = c.lastOrderAt ? new Date(c.lastOrderAt).getTime() : null;
+      if (orderTime) {
+        const diffMs = now.getTime() - orderTime;
         daysSinceLastOrder = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
         if (daysSinceLastOrder >= 30) {
           isChurnRisk = true;
         }
+      }
+
+      const careTime = c.lastCareAt
+        ? new Date(c.lastCareAt).getTime()
+        : c.lastContactedAt
+        ? new Date(c.lastContactedAt).getTime()
+        : null;
+
+      if (careTime) {
+        const diffMs = now.getTime() - careTime;
+        daysSinceLastCare = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
       }
 
       let tier: 'VIP' | 'REGULAR' | 'NEW' = 'NEW';
@@ -45,7 +61,10 @@ export async function GET(request: NextRequest) {
         repeatCount++;
       }
 
-      if (new Date(c.createdAt) >= currentMonthStart || (c.lastOrderAt && new Date(c.lastOrderAt) >= currentMonthStart && c.totalOrders <= 1)) {
+      if (
+        new Date(c.createdAt) >= currentMonthStart ||
+        (c.lastOrderAt && new Date(c.lastOrderAt) >= currentMonthStart && c.totalOrders <= 1)
+      ) {
         newThisMonthCount++;
       }
 
@@ -53,10 +72,23 @@ export async function GET(request: NextRequest) {
         churnRiskCount++;
       }
 
+      // Check if customer needs care: (No care yet OR >7 days without care) AND (has purchased or >7 days since order)
+      const isCareNeeded =
+        c.careStatus === 'NEED_FOLLOW_UP' ||
+        c.careStatus === 'NEW' ||
+        (daysSinceLastCare !== null && daysSinceLastCare >= 7) ||
+        (daysSinceLastOrder !== null && daysSinceLastOrder >= 7 && (!daysSinceLastCare || daysSinceLastCare >= 7));
+
+      if (isCareNeeded) {
+        needCareCount++;
+      }
+
       return {
         ...c,
         daysSinceLastOrder,
+        daysSinceLastCare,
         isChurnRisk,
+        isCareNeeded,
         tier,
       };
     });
@@ -64,17 +96,24 @@ export async function GET(request: NextRequest) {
     // Retention Rate = (Repeat Customers / Total Customers) * 100
     const retentionRate = totalCount > 0 ? Number(((repeatCount / totalCount) * 100).toFixed(1)) : 0;
 
-    // Filter by search, category, and branchId
+    // Filter by search, category, branchId, and careStatus
     let filtered = processedCustomers;
 
     if (search) {
       filtered = filtered.filter(
-        (c) => c.name.toLowerCase().includes(search) || c.phone.includes(search)
+        (c) =>
+          c.name.toLowerCase().includes(search) ||
+          c.phone.includes(search) ||
+          (c.address && c.address.toLowerCase().includes(search))
       );
     }
 
     if (branchId !== 'all') {
       filtered = filtered.filter((c) => c.branchId === branchId || (!c.branchId && branchId === 'cs1'));
+    }
+
+    if (careStatus !== 'ALL') {
+      filtered = filtered.filter((c) => (c.careStatus || 'NEW') === careStatus);
     }
 
     if (category === 'VIP') {
@@ -85,6 +124,20 @@ export async function GET(request: NextRequest) {
       filtered = filtered.filter((c) => c.tier === 'NEW');
     } else if (category === 'CHURN_RISK') {
       filtered = filtered.filter((c) => c.isChurnRisk);
+    } else if (category === 'NEED_CARE_7D') {
+      filtered = filtered.filter(
+        (c) =>
+          (c.daysSinceLastOrder !== null && c.daysSinceLastOrder >= 7) ||
+          (c.daysSinceLastCare !== null && c.daysSinceLastCare >= 7) ||
+          c.careStatus === 'NEED_FOLLOW_UP'
+      );
+    } else if (category === 'NEED_CARE_14D') {
+      filtered = filtered.filter(
+        (c) =>
+          (c.daysSinceLastOrder !== null && c.daysSinceLastOrder >= 14) ||
+          (c.daysSinceLastCare !== null && c.daysSinceLastCare >= 14) ||
+          c.careStatus === 'NEED_FOLLOW_UP'
+      );
     }
 
     return NextResponse.json({
@@ -96,6 +149,7 @@ export async function GET(request: NextRequest) {
         retentionRate,
         newThisMonthCount,
         churnRiskCount,
+        needCareCount,
       },
     });
   } catch (error: any) {
@@ -107,38 +161,58 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, phone, address, tasteNotes, branchId = 'cs1' } = body;
+    const { name, phone, address, tasteNotes, branchId = 'cs1', notes, careStatus = 'NEW' } = body;
 
     if (!name || !phone) {
       return NextResponse.json({ success: false, error: 'Họ tên và Số điện thoại là bắt buộc' }, { status: 400 });
     }
 
-    const existing = await prisma.customer.findUnique({ where: { phone } });
+    const cleanPhone = phone.trim();
+
+    // Check duplicate by phone
+    const existing = await prisma.customer.findUnique({ where: { phone: cleanPhone } });
     if (existing) {
       const updated = await prisma.customer.update({
-        where: { phone },
+        where: { phone: cleanPhone },
         data: {
-          name,
-          address: address || existing.address,
-          tasteNotes: tasteNotes || existing.tasteNotes,
+          name: name.trim(),
+          address: address !== undefined ? address.trim() : existing.address,
+          tasteNotes: tasteNotes !== undefined ? tasteNotes : existing.tasteNotes,
+          notes: notes !== undefined ? notes : existing.notes,
           branchId: branchId || existing.branchId,
+          careStatus: careStatus || existing.careStatus || 'NEW',
+          isActive: true,
         },
       });
-      return NextResponse.json({ success: true, customer: updated });
+      return NextResponse.json({
+        success: true,
+        isExisting: true,
+        message: 'Đã cập nhật thông tin khách hàng hiện có!',
+        customer: updated,
+      });
     }
 
     const newCustomer = await prisma.customer.create({
       data: {
-        name,
-        phone,
-        address: address || '',
+        name: name.trim(),
+        phone: cleanPhone,
+        address: address ? address.trim() : '',
         tasteNotes: tasteNotes || null,
+        notes: notes || null,
         branchId: branchId || 'cs1',
+        careStatus: careStatus || 'NEW',
+        isActive: true,
       },
     });
 
-    return NextResponse.json({ success: true, customer: newCustomer });
+    return NextResponse.json({
+      success: true,
+      isExisting: false,
+      message: 'Đã tạo mới khách hàng thành công!',
+      customer: newCustomer,
+    });
   } catch (error: any) {
+    console.error('Error creating/updating customer:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }

@@ -243,16 +243,31 @@ model Customer {
   name            String
   phone           String    @unique
   address         String?
+  branchId        String?   @default("cs1")
+  notes           String?
   totalOrders     Int       @default(0)
   totalSpent      Float     @default(0)
   lastOrderAt     DateTime?
-  branchId        String?   @default("cs1")
+  lastCareAt      DateTime?
+  careStatus      String?   @default("NEW") // NEW, CONTACTED, NEED_FOLLOW_UP
+  isActive        Boolean   @default(true)
   tasteNotes      String?
   favoriteDish    String?
   lastContactedAt DateTime?
   contactCount    Int       @default(0)
   reorderNotes    String?
   createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @default(now()) @updatedAt
+}
+
+model CareScript {
+  id        String   @id @default(cuid())
+  title     String
+  content   String
+  type      String?  @default("RE_ENGAGE") // PROMO, FEEDBACK, RE_ENGAGE, GENERAL
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
 }
 
 model Setting {

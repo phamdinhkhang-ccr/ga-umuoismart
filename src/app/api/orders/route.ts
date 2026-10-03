@@ -393,6 +393,42 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      // 3. Upsert / Sync Customer Record (De-duplication by Phone)
+      if (customerPhone) {
+        try {
+          const cleanPhone = customerPhone.trim();
+          const existingCust = await tx.customer.findUnique({ where: { phone: cleanPhone } });
+          if (existingCust) {
+            await tx.customer.update({
+              where: { phone: cleanPhone },
+              data: {
+                name: customerName || existingCust.name,
+                address: deliveryAddress || existingCust.address,
+                branchId: effectiveBranchId || existingCust.branchId,
+                totalOrders: { increment: 1 },
+                totalSpent: { increment: finalTotal },
+                lastOrderAt: new Date(),
+              },
+            });
+          } else {
+            await tx.customer.create({
+              data: {
+                phone: cleanPhone,
+                name: customerName || 'Khách Hàng',
+                address: deliveryAddress || '',
+                branchId: effectiveBranchId || 'cs1',
+                totalOrders: 1,
+                totalSpent: finalTotal,
+                lastOrderAt: new Date(),
+                careStatus: 'NEW',
+              },
+            });
+          }
+        } catch (custErr) {
+          console.error('Error syncing customer in order creation:', custErr);
+        }
+      }
+
       return order;
     });
 
