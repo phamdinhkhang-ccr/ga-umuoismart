@@ -112,7 +112,8 @@ export default function InventoryOutboundPage() {
       .then((data) => {
         if (data.success && data.user) {
           setCurrentUser(data.user);
-          setCreatorName(data.user.name || 'Quản lý kho');
+          const name = data.user.fullName || data.user.name || data.user.username || 'Quản lý kho';
+          setCreatorName(name);
           if (data.user.role !== 'ADMIN' && data.user.branchId) {
             setBranchId(data.user.branchId);
           }
@@ -584,13 +585,18 @@ export default function InventoryOutboundPage() {
 
           {/* Col 4: Creator Name */}
           <div className="space-y-1.5">
-            <label className="block font-extrabold text-neutral-300">Người Lập Phiếu</label>
+            <label className="block font-extrabold text-neutral-300 flex items-center justify-between">
+              <span>Người Lập Phiếu</span>
+              <span className="text-[10px] text-amber-400 font-bold bg-amber-500/10 px-1.5 py-0.5 rounded-md border border-amber-500/20">
+                🔒 Tự động theo tài khoản
+              </span>
+            </label>
             <input
               type="text"
+              readOnly
               value={creatorName}
-              onChange={(e) => setCreatorName(e.target.value)}
-              disabled={currentUser && currentUser.role !== 'ADMIN'}
-              className="w-full px-3.5 py-2.5 bg-[#0B0D11] border border-neutral-800 rounded-xl text-xs text-[#FAFAF9] font-bold focus:border-amber-500 disabled:opacity-60 focus:outline-none"
+              title="Người lập phiếu được tự động lấy theo tài khoản đang đăng nhập"
+              className="w-full px-3.5 py-2.5 bg-neutral-800/80 border border-neutral-700 rounded-xl text-xs text-neutral-300 font-bold cursor-not-allowed select-none"
             />
           </div>
         </div>

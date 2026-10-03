@@ -105,10 +105,12 @@ export async function POST(request: NextRequest) {
       reasonCategory = 'PROCESSING', // PROCESSING, DAMAGE_EXPIRED, TRANSFER, SAMPLE_INTERNAL, PROMOTION, OTHER
       targetBranchId,
       exportedAt,
-      creatorName = 'Quản lý kho',
+      creatorName,
       notes,
       items,
     } = body;
+
+    const finalCreatorName = userPayload.fullName || userPayload.name || userPayload.username || creatorName || 'Quản lý kho';
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return NextResponse.json(
@@ -202,7 +204,7 @@ export async function POST(request: NextRequest) {
           targetBranchId: reasonCategory === 'TRANSFER' ? targetBranchId : null,
           totalItems: formattedItems.length,
           totalValue,
-          creatorName,
+          creatorName: finalCreatorName,
           notes: notes || null,
           exportedAt: exportedAt ? new Date(exportedAt) : new Date(),
           items: {
@@ -263,6 +265,42 @@ export async function POST(request: NextRequest) {
                 stock: item.quantity,
               },
             });
+
+            // Log StockMovement for Destination Branch
+            try {
+              await tx.stockMovement.create({
+                data: {
+                  productId: item.productId,
+                  productName: item.productName,
+                  branchId: targetBranchId,
+                  type: 'TRANSFER_IN',
+                  quantityChange: item.quantity,
+                  orderCode: exportCode,
+                  note: `Nhập điều chuyển từ cơ sở ${branchId} (Phiếu ${exportCode})`,
+                  creatorName: finalCreatorName,
+                },
+              });
+            } catch (smErr) {
+              console.warn('StockMovement transfer in warning:', smErr);
+            }
+          }
+
+          // Log StockMovement for Source Branch
+          try {
+            await tx.stockMovement.create({
+              data: {
+                productId: item.productId,
+                productName: item.productName,
+                branchId: branchId,
+                type: reasonCategory === 'TRANSFER' ? 'TRANSFER_OUT' : 'EXPORT',
+                quantityChange: -item.quantity,
+                orderCode: exportCode,
+                note: `Xuất kho: ${reasonLabelMap[reasonCategory] || reasonCategory} (Phiếu ${exportCode})`,
+                creatorName: finalCreatorName,
+              },
+            });
+          } catch (smErr) {
+            console.warn('StockMovement export warning:', smErr);
           }
         }
 

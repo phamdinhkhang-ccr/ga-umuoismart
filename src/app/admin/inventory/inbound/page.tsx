@@ -112,15 +112,14 @@ function InboundReceiptsInner() {
   const todayStr = new Date().toISOString().split('T')[0];
   const searchParams = useSearchParams();
 
-  // Auth User State
-  const [currentUser, setCurrentUser] = useState<any>(null);
-
   useEffect(() => {
     fetch('/api/auth/me')
       .then((res) => res.json())
       .then((data) => {
         if (data.success && data.user) {
           setCurrentUser(data.user);
+          const name = data.user.fullName || data.user.name || data.user.username || 'Quản lý kho';
+          setCreatorName(name);
         }
       })
       .catch(console.error);
@@ -593,15 +592,21 @@ function InboundReceiptsInner() {
 
           {/* Col 4: Creator */}
           <div className="space-y-1.5">
-            <label className="block font-extrabold text-slate-800 dark:text-neutral-200 flex items-center gap-1">
-              <User className="w-3.5 h-3.5 text-amber-500" />
-              <span>Người Lập Phiếu:</span>
+            <label className="block font-extrabold text-slate-800 dark:text-neutral-200 flex items-center justify-between">
+              <span className="flex items-center gap-1">
+                <User className="w-3.5 h-3.5 text-amber-500" />
+                <span>Người Lập Phiếu:</span>
+              </span>
+              <span className="text-[10px] text-amber-600 dark:text-amber-400 font-bold bg-amber-500/10 px-1.5 py-0.5 rounded-md border border-amber-500/20">
+                🔒 Tự động theo tài khoản
+              </span>
             </label>
             <input
               type="text"
+              readOnly
               value={creatorName}
-              onChange={(e) => setCreatorName(e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-[#0B0D11] border border-slate-300 dark:border-neutral-800 rounded-xl font-bold text-xs text-slate-900 dark:text-white focus:border-amber-500 focus:outline-none"
+              title="Người lập phiếu được tự động lấy theo tài khoản đang đăng nhập"
+              className="w-full px-3.5 py-2.5 bg-slate-100 dark:bg-neutral-800/80 border border-slate-300 dark:border-neutral-700 rounded-xl font-bold text-xs text-slate-700 dark:text-neutral-300 cursor-not-allowed select-none"
             />
           </div>
         </div>

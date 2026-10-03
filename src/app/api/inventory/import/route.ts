@@ -91,11 +91,13 @@ export async function POST(request: NextRequest) {
       branchId = 'cs1',
       supplierName,
       receivedAt,
-      creatorName = userPayload.fullName || userPayload.username || 'Quản lý kho',
+      creatorName,
       paymentMethod = 'CASH', // CASH, BANK_TRANSFER, CREDIT
       notes,
       items,
     } = body;
+
+    const finalCreatorName = userPayload.fullName || userPayload.name || userPayload.username || creatorName || 'Quản lý kho';
 
     if (!supplierName || !items || !Array.isArray(items) || items.length === 0) {
       return NextResponse.json(
@@ -270,6 +272,25 @@ export async function POST(request: NextRequest) {
             },
           });
         }
+        // Create StockMovement audit record
+        try {
+          await tx.stockMovement.create({
+            data: {
+              productId: targetProduct.id,
+              productName: targetProduct.name,
+              branchId: validBranchId,
+              type: 'IMPORT',
+              quantityChange: item.quantity,
+              previousStock: targetProduct.stockQuantity,
+              newStock: targetProduct.stockQuantity + item.quantity,
+              orderCode: receiptCode,
+              note: `Nhập kho từ phiếu ${receiptCode} tại ${validBranch.name} (NCC: ${supplierName})`,
+              creatorName: finalCreatorName,
+            },
+          });
+        } catch (smErr) {
+          console.warn('StockMovement import warning:', smErr);
+        }
       }
 
       // 2. Save InventoryReceipt with validated productIds
@@ -281,7 +302,7 @@ export async function POST(request: NextRequest) {
           totalAmount,
           paymentMethod,
           paymentStatus,
-          creatorName: creatorName || 'Quản lý kho',
+          creatorName: finalCreatorName,
           notes: notes || '',
           receivedAt: receivedAt ? new Date(receivedAt) : new Date(),
           items: {
