@@ -85,6 +85,17 @@ export async function PATCH(
       if (status === 'COMPLETED' || status === 'DELIVERED') {
         updateData.completedAt = existingOrder.completedAt || new Date();
       }
+      if (status === 'CANCELLED') {
+        // Tuân thủ quy định: KHÔNG hoàn lại tồn kho, KHÔNG trừ lùi doanh thu kế toán
+        const cancelReason = cleanBody.cancelReason || cleanBody.note;
+        if (cancelReason) {
+          updateData.note = existingOrder.note 
+            ? `${existingOrder.note} [Lý do hủy: ${cancelReason}]`
+            : `[Lý do hủy: ${cancelReason}]`;
+        }
+      }
+    } else if (cleanBody.note) {
+      updateData.note = cleanBody.note;
     }
 
     if (paymentStatus) {

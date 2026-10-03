@@ -627,8 +627,12 @@ export default function CentralizedOrdersPage() {
 
     let cancelReason: string | null = null;
     if (newStatus === 'CANCELLED') {
-      cancelReason = prompt('Vui lòng nhập lý do hủy đơn hàng:');
+      cancelReason = prompt('Vui lòng nhập lý do hủy đơn hàng (*):');
       if (cancelReason === null) {
+        return;
+      }
+      if (!cancelReason.trim()) {
+        alert('Bắt buộc phải nhập lý do khi hủy đơn hàng!');
         return;
       }
     }
@@ -967,10 +971,11 @@ export default function CentralizedOrdersPage() {
           customerPhone: formCustomerPhone,
           deliveryAddress: formDeliveryAddress,
           note: formNotes,
-          paymentMethod: formPaymentMethod,
-          cashAmountInput: formCashAmount,
-          cashAmount: formCashAmount,
-          transferAmount: formTransferAmount,
+          paymentMethod: 'COD',
+          paymentStatus: 'UNPAID',
+          cashAmountInput: 0,
+          cashAmount: 0,
+          transferAmount: 0,
           branchId: formBranchId,
           discountAmount: formDiscountAmount,
           shippingFee: formShippingFee,
@@ -2078,113 +2083,37 @@ export default function CentralizedOrdersPage() {
                 </div>
               </div>
 
-              {/* Payment Method & Source Tag */}
+              {/* Source Tag & Default Unpaid Payment Status Banner */}
               <div className="space-y-3">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs font-bold dark:text-neutral-300 text-stone-700 block mb-1">
-                      Hình Thức Thanh Toán
-                    </label>
-                    <div className="grid grid-cols-3 gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => setFormPaymentMethod('COD')}
-                        className={`py-2 px-1 text-center rounded-xl text-[11px] font-bold border transition cursor-pointer ${
-                          formPaymentMethod === 'COD'
-                            ? 'bg-amber-500/20 text-amber-500 border-amber-500 shadow-2xs font-extrabold'
-                            : 'dark:bg-neutral-900 bg-stone-100 text-neutral-400 border-transparent hover:text-stone-700 dark:hover:text-stone-300'
-                        }`}
-                      >
-                        💵 Tiền Mặt
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setFormPaymentMethod('BANK_TRANSFER')}
-                        className={`py-2 px-1 text-center rounded-xl text-[11px] font-bold border transition cursor-pointer ${
-                          formPaymentMethod === 'BANK_TRANSFER'
-                            ? 'bg-blue-500/20 text-blue-400 border-blue-500 shadow-2xs font-extrabold'
-                            : 'dark:bg-neutral-900 bg-stone-100 text-neutral-400 border-transparent hover:text-stone-700 dark:hover:text-stone-300'
-                        }`}
-                      >
-                        📱 Chuyển Khoản
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleSelectSplit}
-                        className={`py-2 px-1 text-center rounded-xl text-[11px] font-bold border transition cursor-pointer ${
-                          formPaymentMethod === 'SPLIT'
-                            ? 'bg-purple-500/20 text-purple-400 border-purple-500 shadow-2xs font-extrabold'
-                            : 'dark:bg-neutral-900 bg-stone-100 text-neutral-400 border-transparent hover:text-stone-700 dark:hover:text-stone-300'
-                        }`}
-                      >
-                        🔄 Tiền Mặt + CK
-                      </button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-bold dark:text-neutral-300 text-stone-700 block mb-1">
-                      Nguồn Đơn / Ghi Chú
-                    </label>
+                <div>
+                  <label className="text-xs font-bold dark:text-neutral-300 text-stone-700 block mb-1">
+                    Nguồn Đơn Hàng
+                  </label>
                   <select
                     value={formSourceTag}
                     onChange={(e) => setFormSourceTag(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl dark:bg-neutral-900 bg-stone-50 border dark:border-neutral-700 border-stone-300 text-xs font-bold dark:text-white text-stone-900 focus:outline-none focus:border-amber-500"
                   >
+                    <option value="TỔNG ĐÀI TELESALES">📞 Tổng Đài Telesales</option>
                     <option value="Đơn Mới Web">🌐 Đơn Mới Web</option>
                     <option value="AI Bot Chat">🤖 AI Bot Chat</option>
                     <option value="POS Tại Quầy">🏪 POS Tại Quầy</option>
-                    <option value="Hotline Zalo">📞 Hotline Zalo</option>
+                    <option value="Hotline Zalo">💬 Hotline Zalo</option>
                   </select>
                 </div>
-              </div>
 
-              {/* 2 Parallel Inputs for SPLIT Payment Method */}
-              {formPaymentMethod === 'SPLIT' && (
-                <div className="p-3.5 rounded-xl dark:bg-purple-950/20 bg-purple-50/60 border dark:border-purple-500/30 border-purple-200 space-y-2 animate-in fade-in duration-200">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-[11px] font-bold text-amber-500 block mb-1">
-                        💵 Tiền Mặt (VNĐ):
-                      </label>
-                      <input
-                        type="number"
-                        value={formCashAmount}
-                        onChange={(e) => handleCashChange(Number(e.target.value) || 0)}
-                        placeholder="VD: 200,000"
-                        className="w-full px-3 py-2 rounded-xl dark:bg-neutral-900 bg-white border dark:border-neutral-700 border-stone-300 text-xs font-bold dark:text-white text-stone-900 focus:outline-none focus:border-amber-500"
-                      />
-                      <span className="text-[10px] text-neutral-400 mt-0.5 block font-medium">
-                        {formCashAmount.toLocaleString('vi-VN')} đ
-                      </span>
-                    </div>
-
-                    <div>
-                      <label className="text-[11px] font-bold text-blue-400 block mb-1">
-                        📱 Chuyển Khoản (VNĐ):
-                      </label>
-                      <input
-                        type="number"
-                        value={formTransferAmount}
-                        onChange={(e) => handleTransferChange(Number(e.target.value) || 0)}
-                        placeholder="VD: 125,000"
-                        className="w-full px-3 py-2 rounded-xl dark:bg-neutral-900 bg-white border dark:border-neutral-700 border-stone-300 text-xs font-bold dark:text-white text-stone-900 focus:outline-none focus:border-blue-500"
-                      />
-                      <span className="text-[10px] text-neutral-400 mt-0.5 block font-medium">
-                        {formTransferAmount.toLocaleString('vi-VN')} đ
-                      </span>
-                    </div>
+                <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse shrink-0" />
+                    <span className="text-stone-700 dark:text-neutral-300 font-medium">
+                      Trạng thái thanh toán: <strong className="text-amber-500 font-bold uppercase">CHƯA THANH TOÁN (UNPAID)</strong>
+                    </span>
                   </div>
-
-                  {/* Validation Alert */}
-                  {formCashAmount + formTransferAmount !== formFinalTotal && (
-                    <p className="text-[11px] font-bold text-amber-400 bg-amber-500/10 p-2 rounded-lg border border-amber-500/30 flex items-center gap-1.5">
-                      <span>⚠️ Tổng 2 khoản ({(formCashAmount + formTransferAmount).toLocaleString('vi-VN')} đ) chưa khớp với tổng thanh toán ({formFinalTotal.toLocaleString('vi-VN')} đ).</span>
-                    </p>
-                  )}
+                  <span className="text-[11px] text-stone-500 dark:text-neutral-400 italic">
+                    (Tự sinh mã Dynamic VietQR Napas MBBank khi in bill / gửi link)
+                  </span>
                 </div>
-              )}
-            </div>
+              </div>
 
               {/* Action Buttons */}
               <div className="pt-4 flex items-center justify-end gap-3 border-t dark:border-neutral-800 border-stone-200">
@@ -2871,26 +2800,45 @@ export default function CentralizedOrdersPage() {
               </div>
             </div>
 
-            {/* Bank Transfer QR Code if Bank Transfer or Split with transferAmount > 0 */}
-            {(printBillOrder.paymentMethod === 'BANK_TRANSFER' ||
+            {/* Dynamic VietQR Napas MBBank - Luôn hiển thị khi đơn chưa thanh toán hoặc chuyển khoản */}
+            {(printBillOrder.paymentStatus !== 'PAID' ||
+              printBillOrder.paymentMethod === 'BANK_TRANSFER' ||
               (printBillOrder.paymentMethod === 'SPLIT' && (printBillOrder.transferAmount || 0) > 0)) && (
-              <div className="my-3 text-center space-y-1 bg-amber-50 p-2 rounded-lg border border-amber-200">
-                <p className="text-[10px] font-bold text-amber-800">
+              <div className="my-3 text-center space-y-1 bg-amber-50 p-2.5 rounded-lg border border-amber-200">
+                <p className="text-[10px] font-extrabold text-amber-800 uppercase">
                   {printBillOrder.paymentMethod === 'SPLIT'
-                    ? `QUÉT MÃ QR THANH TOÁN PHẦN CK (${(printBillOrder.transferAmount || 0).toLocaleString('vi-VN')} đ)`
-                    : 'QUÉT MÃ QR CHUYỂN KHOẢN HỎA TỐC'}
+                    ? `QUÉT MÃ VIETQR THANH TOÁN PHẦN CK (${(printBillOrder.transferAmount || 0).toLocaleString('vi-VN')} đ)`
+                    : 'QUÉT MÃ VIETQR THANH TOÁN TỰ ĐỘNG (NAPAS 247)'}
                 </p>
-                <img
-                  src={`https://img.vietqr.io/image/${paymentConfig.bankId || 'MB'}-${paymentConfig.accountNumber || '0988888888'}-${paymentConfig.qrTemplate || 'compact2'}.png?amount=${printBillOrder.paymentMethod === 'SPLIT' ? (printBillOrder.transferAmount || 0) : printBillOrder.totalAmount}&addInfo=${encodeURIComponent((paymentConfig.transferSyntax || 'GUM [Mã_Đơn]').replace('[Mã_Đơn]', printBillOrder.orderCode).replace('[SĐT]', printBillOrder.customerPhone || ''))}&accountName=${encodeURIComponent(paymentConfig.accountName || 'GA U MUOI SMART')}`}
-                  alt="VietQR"
-                  className="w-32 h-32 mx-auto rounded border border-amber-300 object-contain bg-white"
-                />
-                <p className="text-[9px] text-stone-600 font-mono font-bold">
-                  {paymentConfig.bankName || paymentConfig.bankId} - STK: {paymentConfig.accountNumber}
-                </p>
-                <p className="text-[9px] text-stone-500 font-bold uppercase">
-                  Chủ TK: {paymentConfig.accountName}
-                </p>
+                {(() => {
+                  const qrPayAmount =
+                    printBillOrder.paymentMethod === 'SPLIT' && (printBillOrder.transferAmount || 0) > 0
+                      ? printBillOrder.transferAmount || printBillOrder.totalAmount
+                      : printBillOrder.totalAmount;
+                  const transferSyntax = (paymentConfig.transferSyntax || 'GMS [Mã_Đơn]')
+                    .replace('[Mã_Đơn]', printBillOrder.orderCode)
+                    .replace('[SĐT]', printBillOrder.customerPhone || '');
+                  const qrUrl = `https://img.vietqr.io/image/${paymentConfig.bankId || 'MB'}-${paymentConfig.accountNumber || '0988888888'}-${paymentConfig.qrTemplate || 'compact2'}.png?amount=${qrPayAmount}&addInfo=${encodeURIComponent(transferSyntax)}&accountName=${encodeURIComponent(paymentConfig.accountName || 'GA U MUOI SMART')}`;
+
+                  return (
+                    <>
+                      <img
+                        src={qrUrl}
+                        alt="VietQR Napas MBBank"
+                        className="w-32 h-32 mx-auto rounded border border-amber-300 object-contain bg-white shadow-xs"
+                      />
+                      <p className="text-[9px] text-stone-600 font-mono font-bold">
+                        {paymentConfig.bankName || paymentConfig.bankId} - STK: {paymentConfig.accountNumber}
+                      </p>
+                      <p className="text-[9px] text-stone-500 font-bold uppercase">
+                        Chủ TK: {paymentConfig.accountName}
+                      </p>
+                      <p className="text-[9px] text-amber-800 font-mono font-bold">
+                        Cú pháp: {transferSyntax}
+                      </p>
+                    </>
+                  );
+                })()}
               </div>
             )}
 
