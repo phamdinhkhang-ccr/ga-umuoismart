@@ -43,7 +43,7 @@ interface SidebarItem {
 const navItems: SidebarItem[] = [
   { name: '📊 Báo Cáo', href: '/admin', icon: TrendingUp },
   { name: 'Đóng / Mở Ca', href: '/admin/shifts/active', icon: Clock },
-  { name: 'Quản Lý Các Ca', href: '/admin/shifts', icon: History },
+  { name: 'Quản Lý Các Ca', href: '/admin/shifts', icon: History, badge: 'Admin' },
   { name: 'Chấm Công (Check-in)', href: '/admin/attendance', icon: Camera, badge: 'Live Cam' },
   { name: 'Đơn Hàng', href: '/admin/orders', icon: ShoppingBag, badge: 'POS' },
   { name: 'Chi Tiêu (Sổ Quỹ)', href: '/admin/expenses', icon: Receipt },
@@ -95,11 +95,10 @@ function AdminLayoutInner({ children }: { children: React.ReactNode }) {
       return navItems.filter((item) => item.href === '/admin/orders');
     }
 
-    if (userRole === 'STAFF' || userRole === 'CASHIER' || userRole === 'USER') {
+    if (userRole === 'STAFF' || userRole === 'CASHIER' || userRole === 'USER' || userRole === 'KITCHEN') {
       const allowedPaths = [
         '/admin/orders',
         '/admin/shifts/active',
-        '/admin/shifts',
         '/admin/inventory/stock',
         '/admin/expenses',
         '/admin/attendance',
@@ -130,13 +129,12 @@ function AdminLayoutInner({ children }: { children: React.ReactNode }) {
       if (pathname !== '/admin/orders') {
         router.push('/admin/orders');
       }
-    } else if (role === 'STAFF' || role === 'CASHIER' || role === 'USER') {
+    } else if (role === 'STAFF' || role === 'CASHIER' || role === 'USER' || role === 'KITCHEN') {
       const allowedPaths = [
         '/admin/orders',
         '/admin/shift-pos',
         '/admin/shifts/active',
         '/admin/shifts/open-close',
-        '/admin/shifts',
         '/admin/attendance',
         '/admin/expenses',
         '/admin/inventory/stock',

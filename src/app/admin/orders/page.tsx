@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import Link from 'next/link';
 import {
   ShoppingBag,
   Plus,
@@ -31,6 +32,7 @@ import {
   MapPin,
   ClipboardCopy,
   ClipboardCheck,
+  Lock,
 } from 'lucide-react';
 import PhoneActionCell from '@/components/PhoneActionCell';
 import * as XLSX from 'xlsx';
@@ -156,7 +158,7 @@ export default function CentralizedOrdersPage() {
   const userRole = (currentUser?.role || '').toUpperCase();
   const isKitchen = userRole === 'KITCHEN' || userRole === 'CHEF' || userRole === 'BEP';
   const isTelesales = userRole === 'TELESALES' || userRole === 'CS' || userRole === 'TONG_DAI';
-  const canEditPaymentStatus = userRole === 'ADMIN' || userRole === 'MANAGER' || userRole === 'CASHIER' || userRole === 'THU_NGAN' || userRole === 'STAFF';
+  const canEditPaymentStatus = userRole === 'ADMIN' || userRole === 'MANAGER';
   const canEditOrder = userRole === 'ADMIN' || userRole === 'MANAGER' || isTelesales;
   const canCreateOrder = !isKitchen;
   const canCancelOrder = userRole === 'ADMIN' || userRole === 'MANAGER' || isTelesales;
@@ -172,6 +174,27 @@ export default function CentralizedOrdersPage() {
       setBranchFilter(currentUser.branchId);
     }
   }, [isKitchen, currentUser?.branchId]);
+
+  // Shift Constraints State
+  const [openShifts, setOpenShifts] = useState<any[]>([]);
+  const [shiftsMap, setShiftsMap] = useState<Record<string, any>>({});
+
+  const fetchShiftsStatus = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/shifts?date=all&_t=${Date.now()}`, { cache: 'no-store' });
+      const data = await res.json();
+      if (data.success && Array.isArray(data.shifts)) {
+        const map: Record<string, any> = {};
+        data.shifts.forEach((s: any) => {
+          map[s.id] = s;
+        });
+        setShiftsMap(map);
+        setOpenShifts(data.shifts.filter((s: any) => s.status === 'OPEN'));
+      }
+    } catch (err) {
+      console.error('Error fetching shifts for order constraints:', err);
+    }
+  }, []);
 
   // Modals State
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -493,11 +516,13 @@ export default function CentralizedOrdersPage() {
   useEffect(() => {
     fetchOrders();
     fetchProducts();
-  }, []);
+    fetchShiftsStatus();
+  }, [fetchShiftsStatus]);
 
   // Filter Trigger
   const handleApplyFilter = () => {
     fetchOrders();
+    fetchShiftsStatus();
   };
 
   const handleResetFilter = () => {
@@ -509,6 +534,7 @@ export default function CentralizedOrdersPage() {
     setStatusTab('ALL');
     setTimeout(() => {
       fetchOrders();
+      fetchShiftsStatus();
     }, 50);
   };
 
@@ -778,6 +804,10 @@ export default function CentralizedOrdersPage() {
 
   // Update Payment Status (UNPAID / PAID)
   const handleUpdatePaymentStatus = async (id: string, newPaymentStatus: string) => {
+    if (!canEditPaymentStatus) {
+      alert('Nhân viên không có quyền tự ý chuyển đổi trạng thái thanh toán Đã/Chưa thanh toán! Hệ thống sẽ tự động cập nhật qua chuyển khoản ngân hàng hoặc Admin/Quản lý phê duyệt.');
+      return;
+    }
     try {
       const res = await fetch(`/api/orders/${id}/status`, {
         method: 'PATCH',
@@ -800,14 +830,23 @@ export default function CentralizedOrdersPage() {
 
   // Open Create Modal
   const handleOpenCreateModal = () => {
+    const isStaffRole = userRole !== 'ADMIN' && userRole !== 'MANAGER';
+    const targetBranch = (branchFilter !== 'ALL' ? branchFilter : (currentUser?.branchId || 'cs1')).toLowerCase();
+    const isBranchShiftOpen = openShifts.some((s) => s.branchId?.toLowerCase() === targetBranch);
+
+    if (isStaffRole && !isBranchShiftOpen) {
+      alert('⚠️ Vui lòng mở ca làm việc trước khi lên đơn! Cơ sở hiện tại chưa có ca trực đang mở.');
+      return;
+    }
+
     setRawAiMessage('');
     setAiToast('');
     setFormCustomerName('');
     setFormCustomerPhone('');
     setFormDeliveryAddress('');
-    setFormBranchId('cs1');
+    setFormBranchId(branchFilter !== 'ALL' ? branchFilter : (currentUser?.branchId || 'cs1'));
     setFormPaymentMethod('COD');
-    setFormSellerName('Thu ngân POS');
+    setFormSellerName(currentUser?.fullName || currentUser?.username || 'Thu ngân POS');
     setFormSourceTag('Đơn Mới Web');
     setFormNotes('');
     setFormShippingFee(0);
@@ -1195,6 +1234,31 @@ export default function CentralizedOrdersPage() {
           )}
         </div>
       </div>
+
+      {/* Shift Constraint Warning Banner for Staff */}
+      {(() => {
+        const isStaffRole = userRole !== 'ADMIN' && userRole !== 'MANAGER';
+        const currentBranchForOrder = (branchFilter !== 'ALL' ? branchFilter : (currentUser?.branchId || formBranchId || 'cs1')).toLowerCase();
+        const isBranchShiftOpen = openShifts.some((s) => s.branchId?.toLowerCase() === currentBranchForOrder);
+        if (isStaffRole && !isBranchShiftOpen) {
+          return (
+            <div className="p-3.5 rounded-2xl bg-amber-500/15 border border-amber-500/30 dark:bg-amber-500/10 flex items-center justify-between gap-3 text-amber-600 dark:text-amber-400 animate-in fade-in duration-200">
+              <div className="flex items-center gap-2 text-xs font-bold">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-amber-500" />
+                <span>⚠️ Ca làm việc tại cơ sở này chưa được mở. Nhân viên vui lòng mở ca trước khi tạo đơn hàng mới!</span>
+              </div>
+              <Link
+                href="/admin/shifts/active"
+                className="px-3 py-1.5 bg-amber-500 text-stone-950 rounded-xl text-xs font-black hover:bg-amber-400 transition shrink-0 flex items-center gap-1 shadow-xs"
+              >
+                <span>Mở Ca Ngay</span>
+                <ExternalLink className="w-3.5 h-3.5 stroke-[2]" />
+              </Link>
+            </div>
+          );
+        }
+        return null;
+      })()}
 
       {/* 2. Multi-Dimensional Filter Controls */}
       <div className="p-4 rounded-2xl dark:bg-[#141820] bg-white border dark:border-neutral-800/80 border-stone-200/80 shadow-sm space-y-3">
@@ -1735,19 +1799,38 @@ export default function CentralizedOrdersPage() {
                                   <span>Xem chi tiết đơn</span>
                                 </button>
 
-                                {canEditOrder && (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      handleOpenEditModal(order);
-                                      setOpenActionMenuId(null);
-                                    }}
-                                    className="w-full px-2.5 py-1.5 rounded-lg text-xs font-medium dark:text-neutral-200 text-stone-700 hover:bg-amber-500/10 hover:text-amber-500 flex items-center gap-2 transition cursor-pointer"
-                                  >
-                                    <Pencil className="w-3.5 h-3.5" />
-                                    <span>Chỉnh sửa đơn</span>
-                                  </button>
-                                )}
+                                 {(() => {
+                                  const isOrderInClosedShift = order.shiftId && shiftsMap[order.shiftId]?.status === 'CLOSED';
+                                  const canEditThisOrder = canEditOrder && (!isOrderInClosedShift || userRole === 'ADMIN' || userRole === 'MANAGER');
+
+                                  if (canEditThisOrder) {
+                                    return (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          handleOpenEditModal(order);
+                                          setOpenActionMenuId(null);
+                                        }}
+                                        className="w-full px-2.5 py-1.5 rounded-lg text-xs font-medium dark:text-neutral-200 text-stone-700 hover:bg-amber-500/10 hover:text-amber-500 flex items-center gap-2 transition cursor-pointer"
+                                      >
+                                        <Pencil className="w-3.5 h-3.5" />
+                                        <span>Chỉnh sửa đơn</span>
+                                      </button>
+                                    );
+                                  }
+                                  if (isOrderInClosedShift && canEditOrder) {
+                                    return (
+                                      <div
+                                        className="w-full px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-neutral-500 flex items-center gap-2 cursor-not-allowed opacity-60"
+                                        title="Đơn hàng thuộc ca đã đóng. Chỉ Quản lý/Admin mới có quyền chỉnh sửa."
+                                      >
+                                        <Lock className="w-3.5 h-3.5" />
+                                        <span>Ca đã đóng (Khóa)</span>
+                                      </div>
+                                    );
+                                  }
+                                  return null;
+                                })()}
 
                                 {order.customerPhone && (
                                   <button
@@ -2497,13 +2580,23 @@ export default function CentralizedOrdersPage() {
                 </div>
 
                 <div>
-                  <label className="text-xs font-bold dark:text-neutral-300 text-stone-700 block mb-1">
-                    Trạng Thái Thanh Toán
+                  <label className="text-xs font-bold dark:text-neutral-300 text-stone-700 block mb-1 flex items-center justify-between">
+                    <span>Trạng Thái Thanh Toán</span>
+                    {!canEditPaymentStatus && (
+                      <span className="text-[10px] text-amber-500 font-normal flex items-center gap-0.5">
+                        <Lock className="w-3 h-3" /> Chỉ Admin
+                      </span>
+                    )}
                   </label>
                   <select
+                    disabled={!canEditPaymentStatus}
                     value={editPaymentStatus}
                     onChange={(e) => setEditPaymentStatus(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl dark:bg-neutral-900 bg-stone-50 border dark:border-neutral-700 border-stone-300 text-xs font-bold dark:text-white text-stone-900 focus:outline-none focus:border-amber-500"
+                    className={`w-full px-3 py-2 rounded-xl border text-xs font-bold focus:outline-none ${
+                      canEditPaymentStatus
+                        ? 'dark:bg-neutral-900 bg-stone-50 dark:border-neutral-700 border-stone-300 dark:text-white text-stone-900 focus:border-amber-500'
+                        : 'dark:bg-neutral-800/80 bg-stone-200/80 dark:border-neutral-700 border-stone-300 text-neutral-400 cursor-not-allowed opacity-75'
+                    }`}
                   >
                     <option value="UNPAID">❌ Chưa thanh toán</option>
                     <option value="PAID">✅ Đã nhận tiền</option>

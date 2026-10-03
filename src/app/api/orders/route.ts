@@ -180,6 +180,19 @@ export async function POST(request: NextRequest) {
       orderBy: { createdAt: 'desc' },
     });
 
+    const isSuperAdminOrManager = userPayload?.role === 'ADMIN' || userPayload?.role === 'MANAGER';
+    const isWebAutomation = sourceTag?.includes('ĐƠN TỰ ĐỘNG WEB') || sourceTag?.includes('Web Order');
+
+    if (!activeShift && !isSuperAdminOrManager && !isWebAutomation) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Vui lòng mở ca làm việc trước khi lên đơn! Cơ sở hiện tại chưa có ca trực đang mở.',
+        },
+        { status: 400 }
+      );
+    }
+
     // 1. Pre-validation of Stock at Branch
     for (const item of formattedItems) {
       if (!item.productId) continue;

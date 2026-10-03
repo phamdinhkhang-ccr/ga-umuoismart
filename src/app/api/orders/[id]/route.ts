@@ -69,9 +69,27 @@ export async function PUT(
       return NextResponse.json({ success: false, error: 'Không tìm thấy đơn hàng' }, { status: 404 });
     }
 
-    if (isTelesales && body.paymentStatus && body.paymentStatus !== oldOrder.paymentStatus) {
+    const isSuperAdminOrManager = userRole === 'ADMIN' || userRole === 'MANAGER';
+
+    // RBAC validation: Orders in CLOSED shifts cannot be modified by staff
+    if (oldOrder.shiftId && !isSuperAdminOrManager) {
+      const associatedShift = await prisma.shift.findUnique({
+        where: { id: oldOrder.shiftId },
+      });
+      if (associatedShift && associatedShift.status === 'CLOSED') {
+        return NextResponse.json(
+          { success: false, error: 'Không thể chỉnh sửa đơn hàng thuộc ca làm việc đã đóng!' },
+          { status: 403 }
+        );
+      }
+    }
+
+    if (!isSuperAdminOrManager && body.paymentStatus && body.paymentStatus !== oldOrder.paymentStatus) {
       return NextResponse.json(
-        { success: false, error: 'Nhân viên Tổng Đài không có quyền thay đổi trạng thái thanh toán!' },
+        {
+          success: false,
+          error: 'Nhân viên không có quyền tự ý chuyển đổi trạng thái thanh toán Đã/Chưa thanh toán! Hệ thống sẽ tự động cập nhật qua chuyển khoản ngân hàng hoặc Admin/Quản lý phê duyệt.',
+        },
         { status: 403 }
       );
     }

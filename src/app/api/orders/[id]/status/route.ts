@@ -47,30 +47,41 @@ export async function PATCH(
     }
 
     const userRole = (userPayload?.role || '').toUpperCase();
+    const isSuperAdminOrManager = userRole === 'ADMIN' || userRole === 'MANAGER';
     const isKitchen = userRole === 'KITCHEN' || userRole === 'CHEF' || userRole === 'BEP';
     const isTelesales = userRole === 'TELESALES' || userRole === 'CS' || userRole === 'TONG_DAI';
+
+    // RBAC validation: Orders in CLOSED shifts cannot be modified by staff
+    if (existingOrder.shiftId && !isSuperAdminOrManager) {
+      const associatedShift = await prisma.shift.findUnique({
+        where: { id: existingOrder.shiftId },
+      });
+      if (associatedShift && associatedShift.status === 'CLOSED') {
+        return NextResponse.json(
+          { success: false, error: 'Không thể chỉnh sửa đơn hàng thuộc ca làm việc đã đóng!' },
+          { status: 403 }
+        );
+      }
+    }
+
+    // RBAC validation: Staff cannot manually alter payment status
+    if (!isSuperAdminOrManager && (paymentStatus !== undefined || autoMarkPaid)) {
+      if (paymentStatus && paymentStatus !== existingOrder.paymentStatus) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'Nhân viên không có quyền tự ý chuyển đổi trạng thái thanh toán Đã/Chưa thanh toán! Hệ thống sẽ tự động cập nhật qua chuyển khoản ngân hàng hoặc Admin/Quản lý phê duyệt.',
+          },
+          { status: 403 }
+        );
+      }
+    }
 
     // RBAC validation for Kitchen role
     if (isKitchen) {
       if (status === 'CANCELLED') {
         return NextResponse.json(
           { success: false, error: 'Nhân viên Bếp không có quyền hủy đơn hàng!' },
-          { status: 403 }
-        );
-      }
-      if (paymentStatus !== undefined || autoMarkPaid) {
-        return NextResponse.json(
-          { success: false, error: 'Nhân viên Bếp không có quyền can thiệp trạng thái thanh toán!' },
-          { status: 403 }
-        );
-      }
-    }
-
-    // RBAC validation for Telesales role
-    if (isTelesales) {
-      if (paymentStatus !== undefined || autoMarkPaid) {
-        return NextResponse.json(
-          { success: false, error: 'Nhân viên Tổng Đài không có quyền can thiệp trạng thái thanh toán!' },
           { status: 403 }
         );
       }

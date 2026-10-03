@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   History,
   Calendar,
@@ -25,9 +26,25 @@ import {
 } from 'lucide-react';
 
 import { useBranches } from '@/hooks/useBranches';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function ShiftsManagementPage() {
+  const router = useRouter();
+  const { user: currentUser, loading: authLoading } = useAuth();
   const { branches } = useBranches();
+
+  // Role Protection Redirect
+  useEffect(() => {
+    if (authLoading) return;
+    if (!currentUser) {
+      router.push('/login');
+      return;
+    }
+    const role = currentUser.role;
+    if (role !== 'ADMIN' && role !== 'MANAGER') {
+      router.push('/admin/orders');
+    }
+  }, [currentUser, authLoading, router]);
 
   // Compute today's date string in local browser time (YYYY-MM-DD)
   const getLocalTodayString = () => {
@@ -46,6 +63,9 @@ export default function ShiftsManagementPage() {
   const [showActiveModal, setShowActiveModal] = useState(false);
 
   const fetchShiftsData = useCallback(() => {
+    if (authLoading || (currentUser && currentUser.role !== 'ADMIN' && currentUser.role !== 'MANAGER')) {
+      return;
+    }
     setLoading(true);
     fetch(`/api/shifts?date=${date}&branchId=${branchId}&_t=${Date.now()}`, { cache: 'no-store' })
       .then((res) => res.json())
@@ -56,7 +76,7 @@ export default function ShiftsManagementPage() {
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [date, branchId]);
+  }, [date, branchId, authLoading, currentUser]);
 
   useEffect(() => {
     fetchShiftsData();
