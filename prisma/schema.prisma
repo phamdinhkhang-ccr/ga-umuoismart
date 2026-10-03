@@ -264,20 +264,75 @@ model Setting {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  staffCode String   @unique @default("NV-01")
-  name      String
-  username  String   @unique
-  password  String   // Lưu hashed password bằng bcrypt
-  phone     String?
-  role      String   @default("CASHIER") // ADMIN, MANAGER, CASHIER, STAFF, TELESALES
-  branchId  String?
-  branch    Branch?  @relation(fields: [branchId], references: [id])
-  branchIds String?  @default("[]")
-  avatar    String?
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                String              @id @default(cuid())
+  staffCode         String              @unique @default("NV-01")
+  name              String
+  username          String              @unique
+  password          String              // Lưu hashed password bằng bcrypt
+  phone             String?
+  role              String              @default("CASHIER") // ADMIN, MANAGER, CASHIER, STAFF, TELESALES
+  branchId          String?
+  branch            Branch?             @relation(fields: [branchId], references: [id])
+  branchIds         String?             @default("[]")
+  avatar            String?
+  isActive          Boolean             @default(true)
+  salaryConfig      StaffSalaryConfig?
+  attendanceRecords AttendanceRecord[]
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+}
+
+model BranchShiftConfig {
+  id          String   @id @default(cuid())
+  branchId    String
+  shiftType   String   // SANG, TRUA, TOI, CUSTOM
+  shiftName   String   // Ca Sáng, Ca Trưa, Ca Tối
+  startTime   String   // "06:00"
+  endTime     String   // "11:30"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([branchId, shiftType])
+}
+
+model StaffSalaryConfig {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  salaryType  String   @default("HOURLY") // HOURLY, PER_SHIFT, MONTHLY
+  baseRate    Float    @default(25000)    // 25.000đ/h, 120.000đ/ca, 7.000.000đ/tháng
+  allowance   Float    @default(0)        // Phụ cấp ăn ca, trách nhiệm
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model AttendanceRecord {
+  id              String    @id @default(cuid())
+  userId          String?
+  user            User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  staffName       String
+  staffCode       String?
+  branchId        String
+  branchName      String?
+  shiftId         String?
+  shiftType       String?   // SANG, TRUA, TOI, OTHER
+  date            String    // YYYY-MM-DD
+  checkIn         DateTime?
+  checkOut        DateTime?
+  workHours       Float     @default(0)
+  workShifts      Float     @default(0)
+  status          String    @default("APPROVED") // PENDING, APPROVED, REJECTED
+  salaryType      String?   @default("HOURLY")   // HOURLY, PER_SHIFT, MONTHLY
+  baseRate        Float?    @default(25000)
+  allowance       Float?    @default(0)
+  earnedAmount    Float     @default(0)
+  note            String?
+  checkInPhoto    String?
+  checkOutPhoto   String?
+  logType         String?   @default("CAMERA_POS") // CAMERA_POS, ADMIN_MANUAL
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 }
 
 model Attendance {
