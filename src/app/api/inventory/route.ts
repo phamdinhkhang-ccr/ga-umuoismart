@@ -25,11 +25,10 @@ export async function GET(request: NextRequest) {
     let targetBranchId = branchId;
     if (userPayload && (userPayload.role === 'STAFF' || userPayload.role === 'CASHIER') && userPayload.branchId) {
       targetBranchId = userPayload.branchId;
-    } else if (userPayload && userPayload.role === 'MANAGER' && userPayload.branchIds && userPayload.branchIds.length > 0) {
-      if (branchId !== 'all' && userPayload.branchIds.includes(branchId)) {
-        targetBranchId = branchId;
-      } else if (branchId === 'all') {
-        targetBranchId = 'all';
+    } else if (userPayload && userPayload.role === 'MANAGER') {
+      const allowedBranch = userPayload.branchId || (userPayload.branchIds && userPayload.branchIds[0]);
+      if (allowedBranch) {
+        targetBranchId = allowedBranch;
       }
     }
 

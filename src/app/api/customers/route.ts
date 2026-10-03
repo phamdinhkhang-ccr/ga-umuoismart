@@ -1,16 +1,40 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import prisma from '@/lib/prisma';
+import { verifyJWT } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
   try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get('auth_token')?.value;
+    const userPayload = token ? await verifyJWT(token) : null;
+    const userRole = (userPayload?.role || '').toUpperCase();
+
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search')?.trim().toLowerCase() || '';
     const category = searchParams.get('category')?.trim() || 'ALL'; // ALL, VIP, REGULAR, NEW, CHURN_RISK, NEED_CARE_7D, NEED_CARE_14D
-    const branchId = searchParams.get('branchId')?.trim() || 'all';
+    let branchId = searchParams.get('branchId')?.trim() || 'all';
     const careStatus = searchParams.get('careStatus')?.trim() || 'ALL'; // ALL, NEW, CONTACTED, NEED_FOLLOW_UP
 
+    if (userPayload && (userRole === 'MANAGER' || userRole === 'STAFF' || userRole === 'CASHIER')) {
+      const allowedBranch = userPayload.branchId || (userPayload.branchIds && userPayload.branchIds[0]);
+      if (allowedBranch) {
+        branchId = allowedBranch;
+      }
+    }
+
+    const whereClause: any = { isActive: true };
+    if (branchId !== 'all') {
+      whereClause.OR = [
+        { branchId },
+        { branchId: branchId.toLowerCase() },
+        { branchId: branchId.toUpperCase() },
+        ...(branchId === 'cs1' ? [{ branchId: null }] : []),
+      ];
+    }
+
     const rawCustomers = await prisma.customer.findMany({
-      where: { isActive: true },
+      where: whereClause,
       orderBy: { totalSpent: 'desc' },
     });
 

@@ -9,13 +9,25 @@ export const fetchCache = 'force-no-store';
 
 export async function GET(request: NextRequest) {
   try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get('auth_token')?.value;
+    const userPayload = token ? await verifyJWT(token) : null;
+    const userRole = (userPayload?.role || '').toUpperCase();
+
     const { searchParams } = new URL(request.url);
     const fromDate = searchParams.get('fromDate');
     const toDate = searchParams.get('toDate');
     const month = searchParams.get('month'); // YYYY-MM
-    const branchId = searchParams.get('branchId');
+    let branchId = searchParams.get('branchId');
     const userId = searchParams.get('userId');
     const status = searchParams.get('status');
+
+    if (userPayload && (userRole === 'MANAGER' || userRole === 'STAFF' || userRole === 'CASHIER')) {
+      const allowedBranch = userPayload.branchId || (userPayload.branchIds && userPayload.branchIds[0]);
+      if (allowedBranch) {
+        branchId = allowedBranch;
+      }
+    }
 
     let dateWhere: any = {};
     if (fromDate && toDate) {

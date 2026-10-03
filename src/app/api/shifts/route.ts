@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import prisma from '@/lib/prisma';
+import { verifyJWT } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -78,12 +80,24 @@ export function getOrderRevenueBreakdown(o: {
 
 export async function GET(request: NextRequest) {
   try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get('auth_token')?.value;
+    const userPayload = token ? await verifyJWT(token) : null;
+    const userRole = (userPayload?.role || '').toUpperCase();
+
     const { searchParams } = new URL(request.url);
     const dateParam = searchParams.get('date') || 'all';
-    const branchId = searchParams.get('branchId') || 'all';
+    let branchId = searchParams.get('branchId') || 'all';
+
+    if (userPayload && (userRole === 'MANAGER' || userRole === 'STAFF' || userRole === 'CASHIER')) {
+      const allowedBranch = userPayload.branchId || (userPayload.branchIds && userPayload.branchIds[0]);
+      if (allowedBranch) {
+        branchId = allowedBranch;
+      }
+    }
 
     const isAllDates = !dateParam || dateParam === 'all';
-    const isAllBranches = !branchId || branchId === 'all' || branchId === 'ALL';
+    const isAllBranches = (!branchId || branchId === 'all' || branchId === 'ALL') && userRole === 'ADMIN';
 
     let startDate: Date | undefined;
     let endDate: Date | undefined;

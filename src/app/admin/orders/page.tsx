@@ -163,17 +163,20 @@ export default function CentralizedOrdersPage() {
   const canCreateOrder = !isKitchen;
   const canCancelOrder = userRole === 'ADMIN' || userRole === 'MANAGER' || isTelesales;
 
-  const availableBranches = isKitchen && currentUser?.branchId
+  const availableBranches = (currentUser?.role === 'MANAGER' && currentUser.branchId)
     ? branches.filter((b) => b.id === currentUser.branchId || b.code === currentUser.branchId)
     : (currentUser?.role === 'MANAGER' && currentUser.branchIds && currentUser.branchIds.length > 0)
     ? branches.filter((b) => currentUser.branchIds!.includes(b.id) || currentUser.branchIds!.includes(b.code))
+    : (isKitchen && currentUser?.branchId)
+    ? branches.filter((b) => b.id === currentUser.branchId || b.code === currentUser.branchId)
     : branches;
 
   useEffect(() => {
-    if (isKitchen && currentUser?.branchId) {
+    if ((isKitchen || currentUser?.role === 'MANAGER') && currentUser?.branchId) {
       setBranchFilter(currentUser.branchId);
+      setFormBranchId(currentUser.branchId);
     }
-  }, [isKitchen, currentUser?.branchId]);
+  }, [isKitchen, currentUser]);
 
   // Shift Constraints State
   const [openShifts, setOpenShifts] = useState<any[]>([]);

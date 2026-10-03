@@ -58,6 +58,12 @@ export default function ShiftsManagementPage() {
   const [date, setDate] = useState<string>(getLocalTodayString());
   const [branchId, setBranchId] = useState<string>('ALL');
 
+  useEffect(() => {
+    if (currentUser?.role === 'MANAGER' && currentUser.branchId) {
+      setBranchId(currentUser.branchId);
+    }
+  }, [currentUser]);
+
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showActiveModal, setShowActiveModal] = useState(false);
@@ -182,15 +188,20 @@ export default function ShiftsManagementPage() {
           <div className="relative">
             <select
               value={branchId}
+              disabled={currentUser?.role === 'MANAGER'}
               onChange={(e) => setBranchId(e.target.value)}
-              className="appearance-none bg-slate-50 dark:bg-[#0B0D11] text-xs font-semibold text-slate-800 dark:text-neutral-200 pl-9 pr-8 py-2.5 rounded-xl border border-slate-300 dark:border-neutral-800 hover:border-amber-500/50 focus:border-amber-500 focus:outline-none transition-all cursor-pointer"
+              className={`appearance-none bg-slate-50 dark:bg-[#0B0D11] text-xs font-semibold text-slate-800 dark:text-neutral-200 pl-9 pr-8 py-2.5 rounded-xl border border-slate-300 dark:border-neutral-800 hover:border-amber-500/50 focus:border-amber-500 focus:outline-none transition-all ${
+                currentUser?.role === 'MANAGER' ? 'opacity-80 cursor-not-allowed border-amber-500/30' : 'cursor-pointer'
+              }`}
             >
-              <option value="ALL">🏢 Tất Cả Cơ Sở (Toàn Hệ Thống)</option>
-              {(branches || []).map((branch) => (
-                <option key={branch.id} value={branch.id}>
-                  📍 {branch.name} {branch.code ? `(${branch.code})` : ''}
-                </option>
-              ))}
+              {currentUser?.role !== 'MANAGER' && <option value="ALL">🏢 Tất Cả Cơ Sở (Toàn Hệ Thống)</option>}
+              {(branches || [])
+                .filter((b) => currentUser?.role !== 'MANAGER' || b.id === currentUser.branchId || b.code === currentUser.branchId)
+                .map((branch) => (
+                  <option key={branch.id} value={branch.id}>
+                    📍 {branch.name} {branch.code ? `(${branch.code})` : ''}
+                  </option>
+                ))}
             </select>
             <Building2 className="w-4 h-4 text-amber-500 dark:text-amber-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none stroke-[1.75]" />
           </div>

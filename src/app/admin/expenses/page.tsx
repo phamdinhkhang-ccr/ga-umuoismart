@@ -67,9 +67,18 @@ export default function ExpensesManagementPage() {
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const availableBranches = (currentUser?.role === 'MANAGER' && currentUser.branchIds && currentUser.branchIds.length > 0)
+  const availableBranches = (currentUser?.role === 'MANAGER' && currentUser.branchId)
+    ? branches.filter((b) => b.id === currentUser.branchId || b.code === currentUser.branchId)
+    : (currentUser?.role === 'MANAGER' && currentUser.branchIds && currentUser.branchIds.length > 0)
     ? branches.filter((b) => currentUser.branchIds!.includes(b.id) || currentUser.branchIds!.includes(b.code))
     : branches;
+
+  useEffect(() => {
+    if (currentUser?.role === 'MANAGER' && currentUser.branchId) {
+      setBranchFilter(currentUser.branchId);
+      setFormBranchId(currentUser.branchId);
+    }
+  }, [currentUser]);
 
   const [summary, setSummary] = useState({
     totalCount: 0,

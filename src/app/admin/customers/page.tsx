@@ -39,6 +39,7 @@ import {
 import PhoneActionCell from '@/components/PhoneActionCell';
 import * as XLSX from 'xlsx';
 import { useBranches } from '@/hooks/useBranches';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface CustomerRecord {
   id: string;
@@ -83,8 +84,9 @@ interface ProductItem {
 
 export default function CustomerCRMPage() {
   const { branches } = useBranches();
+  const { user: currentUser } = useAuth();
   const BRANCHES = useMemo(() => {
-    return branches.length > 0
+    const list = branches.length > 0
       ? branches.map((b) => ({ id: b.id, name: `📍 ${b.code ? b.code + ' - ' : ''}${b.name}` }))
       : [
           { id: 'cs1', name: '📍 CS1 - Cầu Giấy' },
@@ -94,7 +96,11 @@ export default function CustomerCRMPage() {
           { id: 'cs5', name: '📍 CS5 - Tây Hồ' },
           { id: 'cs6', name: '📍 CS6 - Nam Từ Liêm' },
         ];
-  }, [branches]);
+    if (currentUser?.role === 'MANAGER' && currentUser.branchId) {
+      return list.filter((b) => b.id === currentUser.branchId || b.id.toLowerCase() === currentUser.branchId.toLowerCase());
+    }
+    return list;
+  }, [branches, currentUser]);
 
   const [customers, setCustomers] = useState<CustomerRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -112,6 +118,13 @@ export default function CustomerCRMPage() {
   const [categoryFilter, setCategoryFilter] = useState('ALL'); // ALL, VIP, REGULAR, NEW, CHURN_RISK, NEED_CARE_7D, NEED_CARE_14D
   const [careStatusFilter, setCareStatusFilter] = useState('ALL'); // ALL, NEW, CONTACTED, NEED_FOLLOW_UP
   const [branchFilter, setBranchFilter] = useState('all');
+
+  useEffect(() => {
+    if (currentUser?.role === 'MANAGER' && currentUser.branchId) {
+      setBranchFilter(currentUser.branchId);
+      setFormBranchId(currentUser.branchId);
+    }
+  }, [currentUser]);
 
   // Care Scripts State
   const [careScripts, setCareScripts] = useState<CareScript[]>([]);

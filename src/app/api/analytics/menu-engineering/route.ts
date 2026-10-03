@@ -1,14 +1,28 @@
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
+import { verifyJWT } from '@/lib/auth';
 
 export async function GET(req: Request) {
   try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get('auth_token')?.value;
+    const userPayload = token ? await verifyJWT(token) : null;
+    const userRole = (userPayload?.role || '').toUpperCase();
+
     const { searchParams } = new URL(req.url);
-    const branchId = searchParams.get('branchId') || 'ALL';
+    let branchId = searchParams.get('branchId') || 'ALL';
     const timeRange = searchParams.get('timeRange') || '7days';
     const categoryId = searchParams.get('categoryId') || 'ALL';
     const customStart = searchParams.get('startDate');
     const customEnd = searchParams.get('endDate');
+
+    if (userPayload && (userRole === 'MANAGER' || userRole === 'STAFF' || userRole === 'CASHIER')) {
+      const allowedBranch = userPayload.branchId || (userPayload.branchIds && userPayload.branchIds[0]);
+      if (allowedBranch) {
+        branchId = allowedBranch;
+      }
+    }
 
     // Determine Date Range filter
     const now = new Date();

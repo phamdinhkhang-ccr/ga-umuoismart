@@ -107,8 +107,21 @@ function AdminLayoutInner({ children }: { children: React.ReactNode }) {
     }
 
     if (userRole === 'MANAGER') {
-      const forbiddenPaths = ['/admin/store', '/admin/branches'];
-      return navItems.filter((item) => !forbiddenPaths.includes(item.href));
+      const allowedPaths = [
+        '/admin',
+        '/admin/shifts/active',
+        '/admin/shifts',
+        '/admin/orders',
+        '/admin/expenses',
+        '/admin/product-analytics',
+        '/admin/products',
+        '/admin/attendance-management',
+        '/admin/customers',
+        '/admin/inventory/inbound',
+        '/admin/inventory/outbound',
+        '/admin/inventory/stock',
+      ];
+      return navItems.filter((item) => allowedPaths.includes(item.href));
     }
 
     // ADMIN has full access
@@ -144,9 +157,32 @@ function AdminLayoutInner({ children }: { children: React.ReactNode }) {
         router.push('/admin/orders');
       }
     } else if (role === 'MANAGER') {
-      const forbiddenPaths = ['/admin/store', '/admin/branches'];
-      if (forbiddenPaths.includes(pathname)) {
-        router.push('/admin/orders');
+      const allowedPaths = [
+        '/admin',
+        '/admin/reports',
+        '/admin/reports/profitability',
+        '/admin/reports/product-profitability',
+        '/admin/shifts/active',
+        '/admin/shifts/open-close',
+        '/admin/shift-pos',
+        '/admin/shifts',
+        '/admin/orders',
+        '/admin/expenses',
+        '/admin/product-analytics',
+        '/admin/analytics/products',
+        '/admin/products',
+        '/admin/attendance',
+        '/admin/attendance-management',
+        '/admin/customers',
+        '/admin/inventory/inbound',
+        '/admin/inventory-import',
+        '/admin/inventory/outbound',
+        '/admin/inventory-export',
+        '/admin/inventory/stock',
+        '/admin/inventory-check',
+      ];
+      if (!allowedPaths.includes(pathname)) {
+        router.push('/admin');
       }
     }
   }, [currentUser, authLoading, pathname, router]);

@@ -54,11 +54,16 @@ export async function GET(request: NextRequest) {
     }
 
     const userRole = (userPayload?.role || '').toUpperCase();
-    if (userPayload && userRole === 'MANAGER' && userPayload.branchIds && userPayload.branchIds.length > 0) {
-      if (branchId && branchId !== 'ALL' && userPayload.branchIds.includes(branchId)) {
-        whereCondition.branchId = branchId;
-      } else {
-        whereCondition.branchId = { in: userPayload.branchIds };
+    if (userPayload && userRole === 'MANAGER') {
+      const allowedBranches = (userPayload.branchIds && userPayload.branchIds.length > 0)
+        ? userPayload.branchIds
+        : (userPayload.branchId ? [userPayload.branchId] : []);
+      if (allowedBranches.length > 0) {
+        if (branchId && branchId !== 'ALL' && allowedBranches.includes(branchId)) {
+          whereCondition.branchId = branchId;
+        } else {
+          whereCondition.branchId = allowedBranches.length === 1 ? allowedBranches[0] : { in: allowedBranches };
+        }
       }
     } else if (
       userPayload &&
