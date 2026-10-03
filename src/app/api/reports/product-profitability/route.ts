@@ -142,12 +142,22 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: 'desc' },
     });
 
-    // 5. Query Product Catalog
+    // 5. Query Product Catalog & DB Categories
+    const dbCategories = await prisma.category.findMany({
+      where: { isActive: true },
+      orderBy: { createdAt: 'asc' },
+    });
+
     const catalogProducts = await prisma.product.findMany({
       include: {
+        category: true,
         comboItems: {
           include: {
-            product: true,
+            product: {
+              include: {
+                category: true,
+              },
+            },
           },
         },
       },
@@ -168,6 +178,8 @@ export async function GET(request: NextRequest) {
         id: string;
         name: string;
         unit: string;
+        categoryId: string | null;
+        categoryName: string;
         costPrice: number;
         sellingPrice: number;
         directQty: number;
@@ -187,13 +199,15 @@ export async function GET(request: NextRequest) {
           id: p.id,
           name: p.name,
           unit: p.unit || 'Phần',
+          categoryId: p.categoryId || null,
+          categoryName: p.category?.name || 'Khác',
           costPrice: p.costPrice || 0,
           sellingPrice: p.price,
           directQty: 0,
           directRevenue: 0,
           comboQty: 0,
           totalQty: 0,
-          categoryTag: getCategoryTag(p.name),
+          categoryTag: getCategoryTag(p.name, p.category?.name),
           comboBreakdownMap: {},
           recentOrderList: [],
         };
@@ -221,13 +235,15 @@ export async function GET(request: NextRequest) {
                   id: childId,
                   name: childName,
                   unit: ci.product?.unit || 'Phần',
+                  categoryId: ci.product?.categoryId || null,
+                  categoryName: ci.product?.category?.name || 'Khác',
                   costPrice: ci.product?.costPrice || 0,
                   sellingPrice: ci.product?.price || 0,
                   directQty: 0,
                   directRevenue: 0,
                   comboQty: 0,
                   totalQty: 0,
-                  categoryTag: getCategoryTag(childName),
+                  categoryTag: getCategoryTag(childName, ci.product?.category?.name),
                   comboBreakdownMap: {},
                   recentOrderList: [],
                 };
@@ -268,13 +284,15 @@ export async function GET(request: NextRequest) {
               id: pId,
               name: item.productName,
               unit: prod?.unit || 'Phần',
+              categoryId: prod?.categoryId || null,
+              categoryName: prod?.category?.name || 'Khác',
               costPrice: prod?.costPrice || (item.price * 0.6),
               sellingPrice: item.price,
               directQty: 0,
               directRevenue: 0,
               comboQty: 0,
               totalQty: 0,
-              categoryTag: getCategoryTag(item.productName),
+              categoryTag: getCategoryTag(item.productName, prod?.category?.name),
               comboBreakdownMap: {},
               recentOrderList: [],
             };
@@ -334,22 +352,17 @@ export async function GET(request: NextRequest) {
       orderBy: { date: 'desc' },
     });
 
-    // Group expenses by targetCategory / category: Gà, Nem, Khác / Chung
-    const chickenExpensesList: any[] = [];
-    const springRollExpensesList: any[] = [];
-    const otherExpensesList: any[] = [];
+    // Group expenses into Direct Product, Category-level, and General Operating Expenses (OPEX)
+    const directProductExpensesMap: Record<string, any[]> = {};
+    const categoryExpensesMap: Record<string, any[]> = {};
+    const generalExpensesList: any[] = [];
 
-    let expenseChickenTotal = 0;
-    let expenseSpringRollTotal = 0;
-    let expenseOtherTotal = 0;
+    let totalDirectProductExpenses_Sum = 0;
+    let totalCategoryExpenses_Sum = 0;
+    let totalGeneralExpenses_Sum = 0;
 
     expenses.forEach((e: any) => {
-      const catLower = (e.category || '').toLowerCase();
-      const titleLower = (e.title || '' + ' ' + (e.note || '')).toLowerCase();
-      const noteLower = (e.note || '').toLowerCase();
       const bName = branchNameMap[e.branchId || 'cs1'] || 'Cơ Sở';
-      const targetCat = (e.targetCategory || '').toUpperCase();
-
       const expItem = {
         id: e.id,
         expenseCode: e.expenseCode || `EXP-${e.id.slice(-4).toUpperCase()}`,
@@ -364,19 +377,27 @@ export async function GET(request: NextRequest) {
         note: e.note || '-',
       };
 
-      if (targetCat === 'NEM_NGUA' || catLower.includes('nem') || titleLower.includes('nem') || noteLower.includes('nem') || catLower === 'spring_roll') {
-        expenseSpringRollTotal += e.amount;
-        springRollExpensesList.push(expItem);
-      } else if (targetCat === 'GA_U_MUOI' || catLower.includes('gà') || catLower.includes('chicken') || titleLower.includes('gà') || titleLower.includes('chicken') || noteLower.includes('gà')) {
-        expenseChickenTotal += e.amount;
-        chickenExpensesList.push(expItem);
+      if (e.productId) {
+        if (!directProductExpensesMap[e.productId]) directProductExpensesMap[e.productId] = [];
+        directProductExpensesMap[e.productId].push(expItem);
+        totalDirectProductExpenses_Sum += e.amount;
+      } else if (e.targetCategory && e.targetCategory !== 'GENERAL') {
+        const targetCat = e.targetCategory;
+        // Match with db category
+        const matchedCat = dbCategories.find(
+          (c) => c.id === targetCat || c.slug === targetCat || c.name.toLowerCase() === targetCat.toLowerCase()
+        );
+        const catKey = matchedCat ? matchedCat.id : targetCat;
+        if (!categoryExpensesMap[catKey]) categoryExpensesMap[catKey] = [];
+        categoryExpensesMap[catKey].push(expItem);
+        totalCategoryExpenses_Sum += e.amount;
       } else {
-        expenseOtherTotal += e.amount;
-        otherExpensesList.push(expItem);
+        generalExpensesList.push(expItem);
+        totalGeneralExpenses_Sum += e.amount;
       }
     });
 
-    const totalExpenses_Sum = expenseChickenTotal + expenseSpringRollTotal + expenseOtherTotal;
+    const totalExpenses_Sum = totalDirectProductExpenses_Sum + totalCategoryExpenses_Sum + totalGeneralExpenses_Sum;
 
     // First pass: Calculate (C_i) COGS and (B_i) Net Revenue for each product
     const preliminaryRows = Object.values(consumptionMap)
@@ -404,80 +425,69 @@ export async function GET(request: NextRequest) {
         };
       });
 
-    // Subtotal Net Revenue and COGS by category for proportional dedicated expense allocation
-    let netRevenueChicken = 0;
-    let netRevenueSpringRoll = 0;
-    let cogsChicken = 0;
-    let cogsSpringRoll = 0;
-
+    // Subtotal Net Revenue and COGS by category
+    const categoryTotalsMap: Record<string, { netRevenue: number; cogs: number }> = {};
     preliminaryRows.forEach((r) => {
-      if (r.categoryTag === 'CHICKEN') {
-        netRevenueChicken += r.B_i;
-        cogsChicken += r.C_i;
-      } else if (r.categoryTag === 'SPRING_ROLL') {
-        netRevenueSpringRoll += r.B_i;
-        cogsSpringRoll += r.C_i;
+      const catKey = r.categoryId || (r.categoryTag === 'CHICKEN' ? 'GA_U_MUOI' : r.categoryTag === 'SPRING_ROLL' ? 'NEM_NGUA' : 'OTHER');
+      if (!categoryTotalsMap[catKey]) {
+        categoryTotalsMap[catKey] = { netRevenue: 0, cogs: 0 };
+      }
+      categoryTotalsMap[catKey].netRevenue += r.B_i;
+      categoryTotalsMap[catKey].cogs += r.C_i;
+
+      // Also map for GA_U_MUOI / NEM_NGUA tags
+      if (r.categoryTag === 'CHICKEN' && catKey !== 'GA_U_MUOI') {
+        if (!categoryTotalsMap['GA_U_MUOI']) categoryTotalsMap['GA_U_MUOI'] = { netRevenue: 0, cogs: 0 };
+        categoryTotalsMap['GA_U_MUOI'].netRevenue += r.B_i;
+        categoryTotalsMap['GA_U_MUOI'].cogs += r.C_i;
+      }
+      if (r.categoryTag === 'SPRING_ROLL' && catKey !== 'NEM_NGUA') {
+        if (!categoryTotalsMap['NEM_NGUA']) categoryTotalsMap['NEM_NGUA'] = { netRevenue: 0, cogs: 0 };
+        categoryTotalsMap['NEM_NGUA'].netRevenue += r.B_i;
+        categoryTotalsMap['NEM_NGUA'].cogs += r.C_i;
       }
     });
 
-    // Second pass: Calculate (D_i) Dedicated + Prorated Expense and (A_i) Net Profit
+    // Second pass: Calculate (D_i) Dedicated Direct Expense and Profit
     const productRows = preliminaryRows
       .map((item) => {
         const { C_i, costSharePercent, B_i } = item;
 
-        // Dedicated Expense Allocation:
-        let D_dedicated = 0;
-        let matchingExpensesList: any[] = [];
+        // 1. Direct product-specific expenses
+        const directList = directProductExpensesMap[item.id] || [];
+        const directProdExpTotal = directList.reduce((sum: number, e: any) => sum + e.amount, 0);
 
-        if (item.categoryTag === 'SPRING_ROLL') {
-          if (netRevenueSpringRoll > 0) {
-            D_dedicated = Math.round(expenseSpringRollTotal * (B_i / netRevenueSpringRoll));
-          } else if (cogsSpringRoll > 0) {
-            D_dedicated = Math.round(expenseSpringRollTotal * (C_i / cogsSpringRoll));
+        // 2. Category-level prorated expenses
+        let proratedCatExp = 0;
+        let matchedCatExpenses: any[] = [];
+
+        const catKey = item.categoryId || (item.categoryTag === 'CHICKEN' ? 'GA_U_MUOI' : item.categoryTag === 'SPRING_ROLL' ? 'NEM_NGUA' : 'OTHER');
+        const catExpenses = [
+          ...(categoryExpensesMap[catKey] || []),
+          ...(item.categoryTag === 'CHICKEN' && catKey !== 'GA_U_MUOI' ? (categoryExpensesMap['GA_U_MUOI'] || []) : []),
+          ...(item.categoryTag === 'SPRING_ROLL' && catKey !== 'NEM_NGUA' ? (categoryExpensesMap['NEM_NGUA'] || []) : []),
+        ];
+
+        if (catExpenses.length > 0) {
+          matchedCatExpenses = catExpenses;
+          const totalCatExpAmount = catExpenses.reduce((sum: number, e: any) => sum + e.amount, 0);
+          const catTotal = categoryTotalsMap[catKey] || { netRevenue: 0, cogs: 0 };
+
+          if (catTotal.netRevenue > 0) {
+            proratedCatExp = Math.round(totalCatExpAmount * (B_i / catTotal.netRevenue));
+          } else if (catTotal.cogs > 0) {
+            proratedCatExp = Math.round(totalCatExpAmount * (C_i / catTotal.cogs));
           } else {
-            D_dedicated = expenseSpringRollTotal;
+            proratedCatExp = Math.round(totalCatExpAmount / Math.max(1, preliminaryRows.filter((p) => p.categoryId === item.categoryId).length));
           }
-          matchingExpensesList = [...springRollExpensesList, ...otherExpensesList];
-        } else if (item.categoryTag === 'CHICKEN') {
-          if (netRevenueChicken > 0) {
-            D_dedicated = Math.round(expenseChickenTotal * (B_i / netRevenueChicken));
-          } else if (cogsChicken > 0) {
-            D_dedicated = Math.round(expenseChickenTotal * (C_i / cogsChicken));
-          } else {
-            D_dedicated = 0;
-          }
-          matchingExpensesList = [...chickenExpensesList, ...otherExpensesList];
-        } else {
-          D_dedicated = 0;
-          matchingExpensesList = otherExpensesList;
         }
 
-        // Direct product-specific expenses check
-        const directProductExpenses = expenses.filter((e: any) => e.productId === item.id);
-        const directProductExpenseTotal = directProductExpenses.reduce((sum: number, e: any) => sum + e.amount, 0);
-        if (directProductExpenseTotal > 0) {
-          D_dedicated += directProductExpenseTotal;
-        }
+        // Total Dedicated Expense for this product
+        const dedicatedExpense = directProdExpTotal + proratedCatExp;
 
-        // General / Other Expense Allocation (by Net Revenue share or COGS share)
-        let D_general = 0;
-        if (totalNetRevenue_Sum > 0) {
-          D_general = Math.round(expenseOtherTotal * (B_i / totalNetRevenue_Sum));
-        } else if (totalCOGS_Sum > 0) {
-          D_general = Math.round(expenseOtherTotal * (C_i / totalCOGS_Sum));
-        } else {
-          D_general = 0;
-        }
-
-        const D_i = D_dedicated + D_general;
-
-        // Gross Profit per product = Revenue - COGS - Dedicated Category Expense
-        const grossProfit = B_i - C_i - D_dedicated;
-        const grossMarginPercent = B_i > 0 ? Number(((grossProfit / B_i) * 100).toFixed(1)) : 0;
-
-        // (A_i) Final Net Profit
-        const A_i = B_i - C_i - D_i;
-        const marginPercent = B_i > 0 ? Number(((A_i / B_i) * 100).toFixed(1)) : 0;
+        // Actual Product Profit = Revenue - COGS - Dedicated Expense
+        const actualProductProfit = B_i - C_i - dedicatedExpense;
+        const marginPercent = B_i > 0 ? Number(((actualProductProfit / B_i) * 100).toFixed(1)) : 0;
 
         const comboBreakdown = Object.values(item.comboBreakdownMap);
 
@@ -485,6 +495,8 @@ export async function GET(request: NextRequest) {
           id: item.id,
           name: item.name,
           unit: item.unit,
+          categoryId: item.categoryId,
+          categoryName: item.categoryName,
           categoryTag: item.categoryTag,
           directQty: item.directQty,
           directRevenue: item.directRevenue,
@@ -495,66 +507,87 @@ export async function GET(request: NextRequest) {
           cogs: C_i,
           costSharePercent,
           netRevenue: B_i,
-          expense: D_i,
-          dedicatedExpense: D_dedicated,
-          generalExpense: D_general,
-          grossProfit,
-          grossMarginPercent,
-          netProfit: A_i,
+          expense: dedicatedExpense, // Dedicated expense
+          dedicatedExpense,
+          directProductExpense: directProdExpTotal,
+          categoryProratedExpense: proratedCatExp,
+          grossProfit: actualProductProfit,
+          grossMarginPercent: marginPercent,
+          netProfit: actualProductProfit,
           marginPercent,
           comboBreakdown,
           recentOrders: item.recentOrderList,
-          categoryExpenses: matchingExpensesList,
+          categoryExpenses: [...directList, ...matchedCatExpenses],
         };
       })
       .sort((a, b) => b.netRevenue - a.netRevenue);
 
-    // Grouping summary by Category (Gà Ủ Muối, Nem Ngựa, Khác)
-    const categorySummary = [
-      {
-        key: 'GA_U_MUOI',
-        name: '🍗 Dòng Gà Ủ Muối',
-        revenue: productRows.filter((p) => p.categoryTag === 'CHICKEN').reduce((sum, p) => sum + p.netRevenue, 0),
-        cogs: productRows.filter((p) => p.categoryTag === 'CHICKEN').reduce((sum, p) => sum + p.cogs, 0),
-        dedicatedExpense: expenseChickenTotal,
-        totalDirectCost: productRows.filter((p) => p.categoryTag === 'CHICKEN').reduce((sum, p) => sum + p.cogs, 0) + expenseChickenTotal,
-        grossProfit: productRows.filter((p) => p.categoryTag === 'CHICKEN').reduce((sum, p) => sum + p.netRevenue, 0) - (productRows.filter((p) => p.categoryTag === 'CHICKEN').reduce((sum, p) => sum + p.cogs, 0) + expenseChickenTotal),
-        marginPercent: productRows.filter((p) => p.categoryTag === 'CHICKEN').reduce((sum, p) => sum + p.netRevenue, 0) > 0
-          ? Number((((productRows.filter((p) => p.categoryTag === 'CHICKEN').reduce((sum, p) => sum + p.netRevenue, 0) - (productRows.filter((p) => p.categoryTag === 'CHICKEN').reduce((sum, p) => sum + p.cogs, 0) + expenseChickenTotal)) / productRows.filter((p) => p.categoryTag === 'CHICKEN').reduce((sum, p) => sum + p.netRevenue, 0)) * 100).toFixed(1))
-          : 0,
-      },
-      {
-        key: 'NEM_NGUA',
-        name: '🥩 Dòng Nem Ngựa Smart',
-        revenue: productRows.filter((p) => p.categoryTag === 'SPRING_ROLL').reduce((sum, p) => sum + p.netRevenue, 0),
-        cogs: productRows.filter((p) => p.categoryTag === 'SPRING_ROLL').reduce((sum, p) => sum + p.cogs, 0),
-        dedicatedExpense: expenseSpringRollTotal,
-        totalDirectCost: productRows.filter((p) => p.categoryTag === 'SPRING_ROLL').reduce((sum, p) => sum + p.cogs, 0) + expenseSpringRollTotal,
-        grossProfit: productRows.filter((p) => p.categoryTag === 'SPRING_ROLL').reduce((sum, p) => sum + p.netRevenue, 0) - (productRows.filter((p) => p.categoryTag === 'SPRING_ROLL').reduce((sum, p) => sum + p.cogs, 0) + expenseSpringRollTotal),
-        marginPercent: productRows.filter((p) => p.categoryTag === 'SPRING_ROLL').reduce((sum, p) => sum + p.netRevenue, 0) > 0
-          ? Number((((productRows.filter((p) => p.categoryTag === 'SPRING_ROLL').reduce((sum, p) => sum + p.netRevenue, 0) - (productRows.filter((p) => p.categoryTag === 'SPRING_ROLL').reduce((sum, p) => sum + p.cogs, 0) + expenseSpringRollTotal)) / productRows.filter((p) => p.categoryTag === 'SPRING_ROLL').reduce((sum, p) => sum + p.netRevenue, 0)) * 100).toFixed(1))
-          : 0,
-      },
-      {
-        key: 'OTHER',
-        name: '📦 Nước Chấm & Sản Phẩm Khác',
-        revenue: productRows.filter((p) => p.categoryTag === 'OTHER').reduce((sum, p) => sum + p.netRevenue, 0),
-        cogs: productRows.filter((p) => p.categoryTag === 'OTHER').reduce((sum, p) => sum + p.cogs, 0),
-        dedicatedExpense: 0,
-        totalDirectCost: productRows.filter((p) => p.categoryTag === 'OTHER').reduce((sum, p) => sum + p.cogs, 0),
-        grossProfit: productRows.filter((p) => p.categoryTag === 'OTHER').reduce((sum, p) => sum + p.netRevenue, 0) - productRows.filter((p) => p.categoryTag === 'OTHER').reduce((sum, p) => sum + p.cogs, 0),
-        marginPercent: productRows.filter((p) => p.categoryTag === 'OTHER').reduce((sum, p) => sum + p.netRevenue, 0) > 0
-          ? Number((((productRows.filter((p) => p.categoryTag === 'OTHER').reduce((sum, p) => sum + p.netRevenue, 0) - productRows.filter((p) => p.categoryTag === 'OTHER').reduce((sum, p) => sum + p.cogs, 0)) / productRows.filter((p) => p.categoryTag === 'OTHER').reduce((sum, p) => sum + p.netRevenue, 0)) * 100).toFixed(1))
-          : 0,
-      },
-    ];
+    // Grouping summary by Category (Dynamic Categories from DB)
+    const categorySummaryList = dbCategories.map((cat) => {
+      const catProds = productRows.filter((p) => p.categoryId === cat.id || (cat.name.toLowerCase().includes('gà') && p.categoryTag === 'CHICKEN') || (cat.name.toLowerCase().includes('nem') && p.categoryTag === 'SPRING_ROLL'));
+      const catRevenue = catProds.reduce((sum, p) => sum + p.netRevenue, 0);
+      const catCogs = catProds.reduce((sum, p) => sum + p.cogs, 0);
+      const catDedicatedExpense = catProds.reduce((sum, p) => sum + p.dedicatedExpense, 0);
+      const catGrossProfit = catRevenue - catCogs - catDedicatedExpense;
+      const catMargin = catRevenue > 0 ? Number(((catGrossProfit / catRevenue) * 100).toFixed(1)) : 0;
+
+      return {
+        id: cat.id,
+        key: cat.slug || cat.id,
+        name: cat.name,
+        revenue: catRevenue,
+        cogs: catCogs,
+        dedicatedExpense: catDedicatedExpense,
+        totalDirectCost: catCogs + catDedicatedExpense,
+        grossProfit: catGrossProfit,
+        marginPercent: catMargin,
+      };
+    });
+
+    // Legacy structured object for categorySummary card compatibility
+    const gaUMuoiObj = categorySummaryList.find((c) => c.name.toLowerCase().includes('gà') || c.key.includes('ga')) || {
+      revenue: productRows.filter((p) => p.categoryTag === 'CHICKEN').reduce((sum, p) => sum + p.netRevenue, 0),
+      cogs: productRows.filter((p) => p.categoryTag === 'CHICKEN').reduce((sum, p) => sum + p.cogs, 0),
+      dedicatedExpense: productRows.filter((p) => p.categoryTag === 'CHICKEN').reduce((sum, p) => sum + p.dedicatedExpense, 0),
+      grossProfit: productRows.filter((p) => p.categoryTag === 'CHICKEN').reduce((sum, p) => sum + p.grossProfit, 0),
+      marginPercent: 0,
+    };
+    gaUMuoiObj.marginPercent = gaUMuoiObj.revenue > 0 ? Number(((gaUMuoiObj.grossProfit / gaUMuoiObj.revenue) * 100).toFixed(1)) : 0;
+
+    const nemNguaObj = categorySummaryList.find((c) => c.name.toLowerCase().includes('nem') || c.key.includes('nem')) || {
+      revenue: productRows.filter((p) => p.categoryTag === 'SPRING_ROLL').reduce((sum, p) => sum + p.netRevenue, 0),
+      cogs: productRows.filter((p) => p.categoryTag === 'SPRING_ROLL').reduce((sum, p) => sum + p.cogs, 0),
+      dedicatedExpense: productRows.filter((p) => p.categoryTag === 'SPRING_ROLL').reduce((sum, p) => sum + p.dedicatedExpense, 0),
+      grossProfit: productRows.filter((p) => p.categoryTag === 'SPRING_ROLL').reduce((sum, p) => sum + p.grossProfit, 0),
+      marginPercent: 0,
+    };
+    nemNguaObj.marginPercent = nemNguaObj.revenue > 0 ? Number(((nemNguaObj.grossProfit / nemNguaObj.revenue) * 100).toFixed(1)) : 0;
+
+    const otherObj = {
+      revenue: productRows.filter((p) => p.categoryTag === 'OTHER').reduce((sum, p) => sum + p.netRevenue, 0),
+      cogs: productRows.filter((p) => p.categoryTag === 'OTHER').reduce((sum, p) => sum + p.cogs, 0),
+      dedicatedExpense: productRows.filter((p) => p.categoryTag === 'OTHER').reduce((sum, p) => sum + p.dedicatedExpense, 0),
+      grossProfit: productRows.filter((p) => p.categoryTag === 'OTHER').reduce((sum, p) => sum + p.grossProfit, 0),
+      marginPercent: 0,
+    };
+    otherObj.marginPercent = otherObj.revenue > 0 ? Number(((otherObj.grossProfit / otherObj.revenue) * 100).toFixed(1)) : 0;
 
     // Summary Totals
-    const totalGrossProfit_Sum = categorySummary.reduce((sum, c) => sum + c.grossProfit, 0);
-    const generalOperatingExpenses = expenseOtherTotal;
+    const totalDedicatedExpenses_Sum = totalDirectProductExpenses_Sum + totalCategoryExpenses_Sum;
+    const totalGrossProfit_Sum = totalNetRevenue_Sum - totalCOGS_Sum - totalDedicatedExpenses_Sum;
+    const generalOperatingExpenses = totalGeneralExpenses_Sum;
     const totalNetProfit_Sum = totalGrossProfit_Sum - generalOperatingExpenses;
     const overallMarginPercent =
       totalNetRevenue_Sum > 0 ? Number(((totalNetProfit_Sum / totalNetRevenue_Sum) * 100).toFixed(1)) : 0;
+
+    const categorySummary = {
+      list: categorySummaryList,
+      gaUMuoi: gaUMuoiObj,
+      nemNgua: nemNguaObj,
+      other: otherObj,
+      generalExpenses: generalOperatingExpenses,
+      overallMarginPercent,
+    };
 
     return NextResponse.json({
       success: true,
@@ -567,7 +600,7 @@ export async function GET(request: NextRequest) {
       summary: {
         totalNetRevenue: totalNetRevenue_Sum,
         totalCOGS: totalCOGS_Sum,
-        totalDedicatedExpenses: expenseChickenTotal + expenseSpringRollTotal,
+        totalDedicatedExpenses: totalDedicatedExpenses_Sum,
         totalGrossProfit: totalGrossProfit_Sum,
         generalOperatingExpenses,
         totalExpenses: totalExpenses_Sum,

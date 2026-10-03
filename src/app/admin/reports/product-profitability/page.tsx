@@ -108,16 +108,16 @@ export default function ProductProfitabilityPage() {
     csvContent += `Kỳ báo cáo,${period}\n`;
     csvContent += `Cơ sở,${data.selectedBranchName}\n\n`;
 
-    csvContent += 'Sản Phẩm,SL Xuất Bán (Tổng),SL Bán Lẻ,SL Trong Combo,Đơn Giá Vốn (VNĐ),(C) Tổng Giá Vốn (VNĐ),Tỷ Trọng Giá Vốn (%),(B) Doanh Thu Thuần (VNĐ),(D) Chi Phí Sổ Quỹ (VNĐ),(A) Lợi Nhuận Ròng (VNĐ),Tỷ Suất Lợi Nhuận (%)\n';
+    csvContent += 'Sản Phẩm,SL Xuất Bán (Tổng),SL Bán Lẻ,SL Trong Combo,Đơn Giá Vốn (VNĐ),(C) Tổng Giá Vốn (VNĐ),Tỷ Trọng Giá Vốn (%),(B) Doanh Thu Thuần (VNĐ),(D) Chi Phí Đích Danh (VNĐ),(A) Lợi Nhuận Thực Tế (VNĐ),Tỷ Suất Lợi Nhuận (%)\n';
 
     data.products.forEach((p: any) => {
-      csvContent += `"${p.name}",${p.totalQty},${p.directQty},${p.comboQty},${p.costPrice},${p.cogs},${p.costSharePercent}%,${p.netRevenue},${p.expense},${p.netProfit},${p.marginPercent}%\n`;
+      csvContent += `"${p.name}",${p.totalQty},${p.directQty},${p.comboQty},${p.costPrice},${p.cogs},${p.costSharePercent}%,${p.netRevenue},${p.dedicatedExpense || p.expense},${p.netProfit},${p.marginPercent}%\n`;
     });
 
     if (data.summary) {
       const s = data.summary;
       const totalQty = data.products.reduce((sum: number, p: any) => sum + p.totalQty, 0);
-      csvContent += `\nTỔNG CỘNG,${totalQty},,,${s.totalCOGS},100%,${s.totalNetRevenue},${s.totalExpenses},${s.totalNetProfit},${s.overallMarginPercent}%\n`;
+      csvContent += `\nTỔNG CỘNG,${totalQty},,,${s.totalCOGS},100%,${s.totalNetRevenue},${s.totalDedicatedExpenses || s.totalExpenses},${s.totalNetProfit},${s.overallMarginPercent}%\n`;
     }
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -338,11 +338,11 @@ export default function ProductProfitabilityPage() {
               </div>
             </div>
 
-            {/* KPI 3: Tổng Chi Phí Sổ Quỹ (D) */}
+            {/* KPI 3: Tổng Chi Phí Đích Danh (D) */}
             <div className="p-5 rounded-2xl dark:bg-[#12141A] bg-white border dark:border-neutral-800/80 border-stone-200 shadow-sm relative overflow-hidden group">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold dark:text-neutral-400 text-stone-500 uppercase tracking-wider">
-                  (∑ D) Chi Phí Trực Tiếp
+                  (∑ D) Chi Phí Đích Danh
                 </span>
                 <div className="w-9 h-9 rounded-xl bg-purple-500/10 text-purple-500 flex items-center justify-center font-bold">
                   <Receipt className="w-5 h-5" />
@@ -350,19 +350,19 @@ export default function ProductProfitabilityPage() {
               </div>
               <div className="mt-3">
                 <h2 className="text-2xl font-black text-purple-500 tracking-tight">
-                  {(summary.totalExpenses || 0).toLocaleString('vi-VN')} <span className="text-sm font-semibold">đ</span>
+                  {((summary.totalDedicatedExpenses ?? summary.totalExpenses) || 0).toLocaleString('vi-VN')} <span className="text-sm font-semibold">đ</span>
                 </h2>
                 <p className="text-[11px] dark:text-neutral-400 text-stone-500 mt-1">
-                  Tiền chi Sổ Quỹ (Gà, Nem, Khác)
+                  Đã phân bổ riêng theo từng món / nhóm
                 </p>
               </div>
             </div>
 
-            {/* KPI 4: Tổng Lợi Nhuận Ròng (A = B - C - D) */}
+            {/* KPI 4: Tổng Lợi Nhuận Ròng Toàn Quán */}
             <div className="p-5 rounded-2xl dark:bg-[#12141A] bg-white border dark:border-neutral-800/80 border-stone-200 shadow-sm relative overflow-hidden group">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold dark:text-neutral-400 text-stone-500 uppercase tracking-wider">
-                  (∑ A) Lợi Nhuận Ròng
+                  (∑ A) LN Ròng Toàn Quán
                 </span>
                 <div
                   className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold ${
@@ -395,7 +395,7 @@ export default function ProductProfitabilityPage() {
             </div>
           </div>
 
-          {/* 3.5 Báo Cáo Phân Tích P&L Theo Từng Dòng Hàng (Gà Ủ Muối vs Nem Ngựa vs Chi Tiêu Chung) */}
+          {/* 3.5 Báo Cáo Phân Tích P&L Theo Từng Dòng Hàng & Chi Phí Chung */}
           {data.categorySummary && (
             <div className="p-6 rounded-2xl dark:bg-[#12141A] bg-white border dark:border-neutral-800/80 border-stone-200 shadow-sm space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b dark:border-neutral-800 border-stone-100 pb-3">
@@ -408,103 +408,82 @@ export default function ProductProfitabilityPage() {
                 </span>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* Dòng Gà Ủ Muối */}
-                <div className="p-4 rounded-2xl bg-amber-500/5 border border-amber-500/20 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="font-extrabold text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
-                      🍗 DÒNG GÀ Ủ MUỐI
-                    </span>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
-                      Biên: {data.categorySummary.gaUMuoi?.marginPercent || 0}%
-                    </span>
-                  </div>
-                  <div className="space-y-1.5 text-xs">
-                    <div className="flex justify-between dark:text-neutral-300 text-stone-700">
-                      <span>Doanh thu thuần:</span>
-                      <b className="font-bold text-amber-500">{(data.categorySummary.gaUMuoi?.revenue || 0).toLocaleString('vi-VN')} đ</b>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {/* Dynamic Category Cards */}
+                {(data.categorySummary.list && data.categorySummary.list.length > 0
+                  ? data.categorySummary.list
+                  : [
+                      { key: 'ga', name: '🍗 Dòng Gà Ủ Muối', ...data.categorySummary.gaUMuoi },
+                      { key: 'nem', name: '🥩 Dòng Nem Ngựa', ...data.categorySummary.nemNgua },
+                      { key: 'other', name: '📦 Nhóm Khác', ...data.categorySummary.other },
+                    ]
+                ).map((catItem: any, idx: number) => {
+                  const isPositive = (catItem.grossProfit || 0) >= 0;
+                  return (
+                    <div
+                      key={catItem.id || catItem.key || idx}
+                      className="p-4 rounded-2xl bg-amber-500/5 border border-amber-500/20 space-y-3 flex flex-col justify-between"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-extrabold text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1.5 uppercase tracking-wide truncate">
+                          🏷️ {catItem.name}
+                        </span>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 shrink-0">
+                          Biên: {catItem.marginPercent || 0}%
+                        </span>
+                      </div>
+                      <div className="space-y-1.5 text-xs">
+                        <div className="flex justify-between dark:text-neutral-300 text-stone-700">
+                          <span>Doanh thu thuần:</span>
+                          <b className="font-bold text-amber-500">{(catItem.revenue || 0).toLocaleString('vi-VN')} đ</b>
+                        </div>
+                        <div className="flex justify-between text-rose-500">
+                          <span>(-) Giá vốn hàng bán:</span>
+                          <b className="font-semibold">-{(catItem.cogs || 0).toLocaleString('vi-VN')} đ</b>
+                        </div>
+                        <div className="flex justify-between text-purple-500">
+                          <span>(-) Chi phí đích danh:</span>
+                          <b className="font-semibold">-{(catItem.dedicatedExpense || 0).toLocaleString('vi-VN')} đ</b>
+                        </div>
+                        <div className="pt-2 border-t dark:border-neutral-800 border-stone-200 flex justify-between font-black text-sm">
+                          <span className="dark:text-white text-stone-900">Lợi nhuận gộp:</span>
+                          <span className={isPositive ? 'text-emerald-500' : 'text-rose-500'}>
+                            {(catItem.grossProfit || 0).toLocaleString('vi-VN')} đ
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex justify-between text-rose-500">
-                      <span>(-) Giá vốn hàng bán:</span>
-                      <b className="font-semibold">-{(data.categorySummary.gaUMuoi?.cogs || 0).toLocaleString('vi-VN')} đ</b>
-                    </div>
-                    <div className="flex justify-between text-purple-500">
-                      <span>(-) Chi phí riêng sổ quỹ:</span>
-                      <b className="font-semibold">-{(data.categorySummary.gaUMuoi?.dedicatedExpense || 0).toLocaleString('vi-VN')} đ</b>
-                    </div>
-                    <div className="pt-2 border-t dark:border-neutral-800 border-stone-200 flex justify-between font-black text-sm">
-                      <span className="dark:text-white text-stone-900">Lợi nhuận gộp dòng:</span>
-                      <span className={(data.categorySummary.gaUMuoi?.grossProfit || 0) >= 0 ? 'text-emerald-500' : 'text-rose-500'}>
-                        {(data.categorySummary.gaUMuoi?.grossProfit || 0).toLocaleString('vi-VN')} đ
-                      </span>
-                    </div>
-                  </div>
-                </div>
+                  );
+                })}
 
-                {/* Dòng Nem Ngựa */}
-                <div className="p-4 rounded-2xl bg-rose-500/5 border border-rose-500/20 space-y-3">
+                {/* Tổng Hợp Chi Phí Chung & Lợi Nhuận Ròng Toàn Quán */}
+                <div className="p-4 rounded-2xl bg-blue-500/5 border border-blue-500/20 space-y-3 flex flex-col justify-between">
                   <div className="flex items-center justify-between">
-                    <span className="font-extrabold text-xs text-rose-600 dark:text-rose-400 flex items-center gap-1.5">
-                      🥩 DÒNG NEM NGỰA
-                    </span>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30">
-                      Biên: {data.categorySummary.nemNgua?.marginPercent || 0}%
-                    </span>
-                  </div>
-                  <div className="space-y-1.5 text-xs">
-                    <div className="flex justify-between dark:text-neutral-300 text-stone-700">
-                      <span>Doanh thu thuần:</span>
-                      <b className="font-bold text-amber-500">{(data.categorySummary.nemNgua?.revenue || 0).toLocaleString('vi-VN')} đ</b>
-                    </div>
-                    <div className="flex justify-between text-rose-500">
-                      <span>(-) Giá vốn hàng bán:</span>
-                      <b className="font-semibold">-{(data.categorySummary.nemNgua?.cogs || 0).toLocaleString('vi-VN')} đ</b>
-                    </div>
-                    <div className="flex justify-between text-purple-500">
-                      <span>(-) Chi phí riêng sổ quỹ:</span>
-                      <b className="font-semibold">-{(data.categorySummary.nemNgua?.dedicatedExpense || 0).toLocaleString('vi-VN')} đ</b>
-                    </div>
-                    <div className="pt-2 border-t dark:border-neutral-800 border-stone-200 flex justify-between font-black text-sm">
-                      <span className="dark:text-white text-stone-900">Lợi nhuận gộp dòng:</span>
-                      <span className={(data.categorySummary.nemNgua?.grossProfit || 0) >= 0 ? 'text-emerald-500' : 'text-rose-500'}>
-                        {(data.categorySummary.nemNgua?.grossProfit || 0).toLocaleString('vi-VN')} đ
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Tổng Hợp Chi Phí Chung & Lợi Nhuận Ròng */}
-                <div className="p-4 rounded-2xl bg-blue-500/5 border border-blue-500/20 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="font-extrabold text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
-                      🏢 TỔNG HỢP & CHI PHÍ CHUNG
+                    <span className="font-extrabold text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1.5 uppercase">
+                      🏢 CHI PHÍ CHUNG & LN RÒNG
                     </span>
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30">
-                      Biên ròng: {data.categorySummary.overallMarginPercent || 0}%
+                      Biên ròng: {summary.overallMarginPercent || 0}%
                     </span>
                   </div>
                   <div className="space-y-1.5 text-xs">
                     <div className="flex justify-between dark:text-neutral-300 text-stone-700">
-                      <span>Tổng LN gộp các dòng:</span>
+                      <span>Tổng LN gộp các món:</span>
                       <b className="font-bold text-amber-500">
-                        {(
-                          (data.categorySummary.gaUMuoi?.grossProfit || 0) +
-                          (data.categorySummary.nemNgua?.grossProfit || 0) +
-                          (data.categorySummary.other?.grossProfit || 0)
-                        ).toLocaleString('vi-VN')} đ
+                        {(summary.totalGrossProfit || 0).toLocaleString('vi-VN')} đ
                       </b>
                     </div>
                     <div className="flex justify-between text-purple-500">
                       <span>(-) Chi phí vận hành chung:</span>
-                      <b className="font-semibold">-{(data.categorySummary.generalExpenses || 0).toLocaleString('vi-VN')} đ</b>
+                      <b className="font-semibold">-{(summary.generalOperatingExpenses || 0).toLocaleString('vi-VN')} đ</b>
                     </div>
                     <div className="text-[10px] text-neutral-400 italic">
                       (Điện, nước, ship, mặt bằng, vật tư chung)
                     </div>
                     <div className="pt-2 border-t dark:border-neutral-800 border-stone-200 flex justify-between font-black text-sm">
-                      <span className="dark:text-white text-stone-900">Lợi Nhuận Ròng (Net):</span>
-                      <span className={(data.categorySummary.netProfit || 0) >= 0 ? 'text-emerald-500' : 'text-rose-500'}>
-                        {(data.categorySummary.netProfit || 0).toLocaleString('vi-VN')} đ
+                      <span className="dark:text-white text-stone-900">Lợi Nhuận Ròng:</span>
+                      <span className={(summary.totalNetProfit || 0) >= 0 ? 'text-emerald-500' : 'text-rose-500'}>
+                        {(summary.totalNetProfit || 0).toLocaleString('vi-VN')} đ
                       </span>
                     </div>
                   </div>
@@ -517,10 +496,10 @@ export default function ProductProfitabilityPage() {
           <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-xs dark:text-amber-200 text-amber-900 space-y-1.5">
             <div className="font-bold flex items-center gap-2 text-amber-600 dark:text-amber-400">
               <Sparkles className="w-4 h-4" />
-              <span>CƠ CHẾ PHÂN BỔ DOANH THU & LỢI NHUẬN RÒNG SẢN PHẨM:</span>
+              <span>CƠ CHẾ PHÂN BỔ DOANH THU & LỢI NHUẬN SẢN PHẨM:</span>
             </div>
             <p>
-              • <b>(A) Lợi Nhuận Ròng Sản Phẩm</b> = (B) Doanh Thu Thuần - (C) Tổng Giá Vốn - (D) Chi Phí Sổ Quỹ.
+              • <b>(A) Lợi Nhuận Thực Tế Sản Phẩm</b> = (B) Doanh Thu Thuần - (C) Tổng Giá Vốn - (D) Chi Phí Đích Danh.
             </p>
             <p>
               • <b>(B) Doanh Thu Thuần</b> = Doanh thu bán lẻ thực nhận từ đơn hàng (đã trừ voucher/chiết khấu, bóc tách tỷ trọng từ combo).
@@ -529,10 +508,10 @@ export default function ProductProfitabilityPage() {
               • <b>(C) Tổng Giá Vốn</b> = Đơn Giá Vốn × SL Xuất Bán (Bóc tách lẻ + combo). <b>% Tỷ Trọng Giá Vốn</b> = (C / ∑C) × 100%.
             </p>
             <p>
-              • <b>(D) Chi Phí Sổ Quỹ</b> = <b>Chi Phí Đích Danh</b> (khoản chi Sổ Quỹ trực tiếp cho Nem/Gà) + <b>Chi Phí Vận Hành Chung (Khác)</b> được phân bổ theo tỷ trọng doanh thu thuần của món.
+              • <b>(D) Chi Phí Đích Danh</b> = Khoản chi Sổ Quỹ phân bổ riêng cho từng món ăn hoặc nhóm hàng tương ứng.
             </p>
             <p>
-              • <b>(∑ D) Chi Phí Trực Tiếp</b> = Tổng các phiếu chi phát sinh từ phân hệ Sổ Quỹ (hoàn toàn không tính tiền nhập kho hàng).
+              • <b>🏢 Chi Phí Vận Hành Chung (OPEX)</b> = Được tổng hợp ở nhóm riêng, trừ vào Lợi Nhuận Ròng Toàn Quán (không cào bằng vào giá thành món).
             </p>
           </div>
 
@@ -541,7 +520,7 @@ export default function ProductProfitabilityPage() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b dark:border-neutral-800 border-stone-100 pb-3">
               <h3 className="font-extrabold text-sm dark:text-white text-stone-900 flex items-center gap-2">
                 <Calculator className="w-4 h-4 text-amber-500" />
-                <span>Bảng Chi Tiết Phân Tích Lợi Nhuận Ròng Từng Sản Phẩm Cốt Lõi</span>
+                <span>Bảng Chi Tiết Phân Tích Lợi Nhuận Thực Tế Từng Sản Phẩm Cốt Lõi</span>
               </h3>
 
               <div className="flex items-center gap-3 shrink-0">
@@ -566,8 +545,8 @@ export default function ProductProfitabilityPage() {
                     <th className="pb-3 px-2 text-right">(C) TỔNG GIÁ VỐN</th>
                     <th className="pb-3 px-2 text-right">TỶ TRỌNG (%)</th>
                     <th className="pb-3 px-2 text-right">(B) DOANH THU THUẦN</th>
-                    <th className="pb-3 px-2 text-right">(D) CHI PHÍ SỔ QUỸ</th>
-                    <th className="pb-3 px-2 text-right">(A) LỢI NHUẬN RÒNG</th>
+                    <th className="pb-3 px-2 text-right">(D) CHI PHÍ ĐÍCH DANH</th>
+                    <th className="pb-3 px-2 text-right">(A) LỢI NHUẬN THỰC TẾ</th>
                     <th className="pb-3 px-2 text-right">BIÊN LỢI NHUẬN (%)</th>
                     <th className="pb-3 px-2 text-center">THAO TÁC</th>
                   </tr>
@@ -612,12 +591,12 @@ export default function ProductProfitabilityPage() {
                           {p.netRevenue.toLocaleString('vi-VN')} đ
                         </td>
 
-                        {/* (D) Allocated Direct Expense */}
+                        {/* (D) Allocated Dedicated Expense */}
                         <td className="py-3.5 px-2 text-right font-medium text-purple-500">
-                          {p.expense.toLocaleString('vi-VN')} đ
+                          {(p.dedicatedExpense ?? p.expense).toLocaleString('vi-VN')} đ
                         </td>
 
-                        {/* (A) Final Net Profit with Visual Indicator */}
+                        {/* (A) Final Actual Profit with Visual Indicator */}
                         <td className="py-3.5 px-2 text-right">
                           <span
                             className={`font-extrabold text-sm block ${
@@ -687,7 +666,7 @@ export default function ProductProfitabilityPage() {
                       {summary.totalNetRevenue.toLocaleString('vi-VN')} đ
                     </td>
                     <td className="py-4 px-2 text-right text-purple-500">
-                      {summary.totalExpenses.toLocaleString('vi-VN')} đ
+                      {(summary.totalDedicatedExpenses ?? summary.totalExpenses).toLocaleString('vi-VN')} đ
                     </td>
                     <td
                       className={`py-4 px-2 text-right text-base font-black ${

@@ -63,6 +63,7 @@ export default function ExpensesManagementPage() {
   const { branches } = useBranches();
   const { user: currentUser } = useAuth();
   const [expenses, setExpenses] = useState<ExpenseRecord[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -104,7 +105,8 @@ export default function ExpensesManagementPage() {
   const [formPaymentMethod, setFormPaymentMethod] = useState('CASH'); // CASH, BANK_TRANSFER
   const [formAmountStr, setFormAmountStr] = useState('');
   const [formCategory, setFormCategory] = useState('🚚 Tiền Ship / Vận Chuyển');
-  const [formTargetCategory, setFormTargetCategory] = useState<'GA_U_MUOI' | 'NEM_NGUA' | 'GENERAL'>('GENERAL');
+  const [formAllocationType, setFormAllocationType] = useState<'GENERAL' | 'CATEGORY' | 'PRODUCT'>('GENERAL');
+  const [formTargetCategory, setFormTargetCategory] = useState<string>('GENERAL');
   const [formProductId, setFormProductId] = useState<string>('');
   const [formTitle, setFormTitle] = useState('');
   const [formCreatorName, setFormCreatorName] = useState('Quản trị viên');
@@ -187,21 +189,28 @@ export default function ExpensesManagementPage() {
     }
   };
 
-  const fetchProducts = async () => {
+  const fetchCategoriesAndProducts = async () => {
     try {
-      const res = await fetch('/api/products?type=ALL', { cache: 'no-store' });
-      const data = await res.json();
-      if (data.success && data.products) {
-        setProducts(data.products);
+      const [resCat, resProd] = await Promise.all([
+        fetch('/api/categories', { cache: 'no-store' }),
+        fetch('/api/products?type=ALL', { cache: 'no-store' }),
+      ]);
+      const dataCat = await resCat.json();
+      const dataProd = await resProd.json();
+      if (dataCat.success && Array.isArray(dataCat.categories)) {
+        setCategories(dataCat.categories);
+      }
+      if (dataProd.success && Array.isArray(dataProd.products)) {
+        setProducts(dataProd.products);
       }
     } catch (e) {
-      console.error('Error fetching products list:', e);
+      console.error('Error fetching categories and products list:', e);
     }
   };
 
   useEffect(() => {
     fetchExpenses();
-    fetchProducts();
+    fetchCategoriesAndProducts();
   }, []);
 
   const handleApplyFilter = () => {
@@ -242,6 +251,7 @@ export default function ExpensesManagementPage() {
     setFormPaymentMethod('CASH');
     setFormAmountStr('');
     setFormCategory('🚚 Tiền Ship / Vận Chuyển');
+    setFormAllocationType('GENERAL');
     setFormTargetCategory('GENERAL');
     setFormProductId('');
     setFormTitle('');
@@ -268,8 +278,20 @@ export default function ExpensesManagementPage() {
     else if (c.includes('lương') || t.includes('lương')) catVal = '💼 Lương & Phụ Cấp';
     setFormCategory(catVal);
 
-    setFormTargetCategory((expense.targetCategory as any) || 'GENERAL');
-    setFormProductId(expense.productId || '');
+    if (expense.productId) {
+      setFormAllocationType('PRODUCT');
+      setFormProductId(expense.productId);
+      setFormTargetCategory(expense.targetCategory || 'PRODUCT');
+    } else if (expense.targetCategory && expense.targetCategory !== 'GENERAL') {
+      setFormAllocationType('CATEGORY');
+      setFormTargetCategory(expense.targetCategory);
+      setFormProductId('');
+    } else {
+      setFormAllocationType('GENERAL');
+      setFormTargetCategory('GENERAL');
+      setFormProductId('');
+    }
+
     setFormTitle(expense.title || '');
     setFormCreatorName(expense.creatorName || 'Quản trị viên');
     setFormReceiptPhoto(expense.receiptPhoto || null);
@@ -456,17 +478,26 @@ export default function ExpensesManagementPage() {
             />
           </div>
 
-          {/* Target Category Filter (Gà Ủ Muối / Nem Ngựa / Chung) */}
+          {/* Target Category Filter (Dynamic Categories & General Expense) */}
           <div>
             <select
               value={targetCategoryFilter}
               onChange={(e) => setTargetCategoryFilter(e.target.value)}
               className="w-full px-3 py-2 rounded-xl dark:bg-neutral-900 bg-stone-50 border dark:border-neutral-700 border-stone-300 dark:text-amber-400 text-stone-900 text-xs font-bold focus:outline-none focus:border-amber-500 cursor-pointer"
             >
-              <option value="ALL">🎯 Tất Cả Nhóm Hàng</option>
-              <option value="GA_U_MUOI">🍗 Dòng Gà Ủ Muối</option>
-              <option value="NEM_NGUA">🥩 Dòng Nem Ngựa</option>
-              <option value="GENERAL">🏢 Chi Phí Chung Hệ Thống</option>
+              <option value="ALL">🎯 Tất Cả Nhóm / Sản Phẩm</option>
+              <option value="GENERAL">📦 Chi Tiêu Chung (Vận Hành)</option>
+              {categories.map((cat) => (
+                <option key={cat.id} value={cat.id}>
+                  🏷️ {cat.name}
+                </option>
+              ))}
+              {!categories.some((c) => c.id === 'GA_U_MUOI' || c.slug === 'ga-u-muoi') && (
+                <option value="GA_U_MUOI">🍗 Dòng Gà Ủ Muối</option>
+              )}
+              {!categories.some((c) => c.id === 'NEM_NGUA' || c.slug === 'nem-ngua') && (
+                <option value="NEM_NGUA">🥩 Dòng Nem Ngựa</option>
+              )}
             </select>
           </div>
 
@@ -707,20 +738,44 @@ export default function ExpensesManagementPage() {
                       <td className="py-3.5 px-4 max-w-sm">
                         <div className="space-y-1">
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            {/* Target Category Badge */}
-                            {expense.targetCategory === 'GA_U_MUOI' ? (
-                              <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 inline-flex items-center gap-1">
-                                🍗 Gà Ủ Muối
-                              </span>
-                            ) : expense.targetCategory === 'NEM_NGUA' ? (
-                              <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30 inline-flex items-center gap-1">
-                                🥩 Nem Ngựa
-                              </span>
-                            ) : (
-                              <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-slate-500/15 text-slate-600 dark:text-slate-400 border border-slate-500/30 inline-flex items-center gap-1">
-                                🏢 Chi Chung
-                              </span>
-                            )}
+                            {/* Target Category or Specific Product Badge */}
+                            {(() => {
+                              if (expense.productId) {
+                                const prod = products.find((p) => p.id === expense.productId);
+                                return (
+                                  <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 inline-flex items-center gap-1">
+                                    🍽️ {prod ? prod.name : 'Món đích danh'}
+                                  </span>
+                                );
+                              }
+                              if (expense.targetCategory === 'GA_U_MUOI') {
+                                return (
+                                  <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 inline-flex items-center gap-1">
+                                    🍗 Gà Ủ Muối
+                                  </span>
+                                );
+                              }
+                              if (expense.targetCategory === 'NEM_NGUA') {
+                                return (
+                                  <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30 inline-flex items-center gap-1">
+                                    🥩 Nem Ngựa
+                                  </span>
+                                );
+                              }
+                              const matchedCat = categories.find((c) => c.id === expense.targetCategory || c.slug === expense.targetCategory);
+                              if (matchedCat) {
+                                return (
+                                  <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 inline-flex items-center gap-1">
+                                    🏷️ {matchedCat.name}
+                                  </span>
+                                );
+                              }
+                              return (
+                                <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-slate-500/15 text-slate-600 dark:text-slate-400 border border-slate-500/30 inline-flex items-center gap-1">
+                                  📦 Chi Chung
+                                </span>
+                              );
+                            })()}
 
                             {/* OPEX Sub-category */}
                             {(() => {
@@ -889,45 +944,16 @@ export default function ExpensesManagementPage() {
                 <label className="font-bold dark:text-neutral-300 text-stone-700 block mb-1">
                   Phân Bổ Chi Phí Cho Sản Phẩm / Nhóm Hàng (*)
                 </label>
-                <div className="grid grid-cols-3 gap-2 mb-2">
+                <div className="grid grid-cols-3 gap-2 mb-2.5">
                   <button
                     type="button"
                     onClick={() => {
-                      setFormTargetCategory('GA_U_MUOI');
-                    }}
-                    className={`py-2 px-1 rounded-xl text-[11px] font-bold transition border cursor-pointer flex flex-col items-center gap-1 text-center ${
-                      formTargetCategory === 'GA_U_MUOI'
-                        ? 'bg-amber-500/20 text-amber-500 border-amber-500 shadow-sm'
-                        : 'dark:bg-neutral-900 bg-stone-100 text-neutral-400 border-transparent'
-                    }`}
-                  >
-                    <span>🍗 Gà Ủ Muối</span>
-                    <span className="text-[9px] font-normal opacity-80">Dòng gà ủ muối</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFormTargetCategory('NEM_NGUA');
-                    }}
-                    className={`py-2 px-1 rounded-xl text-[11px] font-bold transition border cursor-pointer flex flex-col items-center gap-1 text-center ${
-                      formTargetCategory === 'NEM_NGUA'
-                        ? 'bg-rose-500/20 text-rose-500 border-rose-500 shadow-sm'
-                        : 'dark:bg-neutral-900 bg-stone-100 text-neutral-400 border-transparent'
-                    }`}
-                  >
-                    <span>🥩 Nem Ngựa</span>
-                    <span className="text-[9px] font-normal opacity-80">Dòng nem chua</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
+                      setFormAllocationType('GENERAL');
                       setFormTargetCategory('GENERAL');
                       setFormProductId('');
                     }}
                     className={`py-2 px-1 rounded-xl text-[11px] font-bold transition border cursor-pointer flex flex-col items-center gap-1 text-center ${
-                      formTargetCategory === 'GENERAL'
+                      formAllocationType === 'GENERAL'
                         ? 'bg-blue-500/20 text-blue-400 border-blue-500 shadow-sm'
                         : 'dark:bg-neutral-900 bg-stone-100 text-neutral-400 border-transparent'
                     }`}
@@ -935,32 +961,99 @@ export default function ExpensesManagementPage() {
                     <span>📦 Chi Tiêu Chung</span>
                     <span className="text-[9px] font-normal opacity-80">Vận hành chung</span>
                   </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFormAllocationType('CATEGORY');
+                      setFormProductId('');
+                      if (formTargetCategory === 'GENERAL' || !formTargetCategory) {
+                        setFormTargetCategory(categories[0]?.id || 'GA_U_MUOI');
+                      }
+                    }}
+                    className={`py-2 px-1 rounded-xl text-[11px] font-bold transition border cursor-pointer flex flex-col items-center gap-1 text-center ${
+                      formAllocationType === 'CATEGORY'
+                        ? 'bg-amber-500/20 text-amber-500 border-amber-500 shadow-sm'
+                        : 'dark:bg-neutral-900 bg-stone-100 text-neutral-400 border-transparent'
+                    }`}
+                  >
+                    <span>🏷️ Theo Danh Mục</span>
+                    <span className="text-[9px] font-normal opacity-80">Theo nhóm hàng</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFormAllocationType('PRODUCT');
+                      if (!formProductId && products.length > 0) {
+                        setFormProductId(products[0].id);
+                        setFormTargetCategory(products[0].categoryId || 'PRODUCT');
+                      }
+                    }}
+                    className={`py-2 px-1 rounded-xl text-[11px] font-bold transition border cursor-pointer flex flex-col items-center gap-1 text-center ${
+                      formAllocationType === 'PRODUCT'
+                        ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500 shadow-sm'
+                        : 'dark:bg-neutral-900 bg-stone-100 text-neutral-400 border-transparent'
+                    }`}
+                  >
+                    <span>🍽️ Món Đích Danh</span>
+                    <span className="text-[9px] font-normal opacity-80">Chi cho 1 món</span>
+                  </button>
                 </div>
 
-                {/* Optional Specific Product Dropdown */}
-                {formTargetCategory !== 'GENERAL' && (
+                {/* Dropdown for Category Selection */}
+                {formAllocationType === 'CATEGORY' && (
                   <div className="mt-2">
                     <label className="text-[11px] font-semibold dark:text-neutral-400 text-stone-600 block mb-1">
-                      Chọn Sản Phẩm Đích Danh (Tùy chọn nếu chi riêng cho 1 món):
+                      Chọn Danh Mục Sản Phẩm Chịu Chi Phí:
+                    </label>
+                    <select
+                      value={formTargetCategory}
+                      onChange={(e) => {
+                        setFormTargetCategory(e.target.value);
+                        setFormProductId('');
+                      }}
+                      className="w-full px-3 py-2 rounded-xl dark:bg-neutral-900 bg-stone-50 border dark:border-neutral-700 border-stone-300 font-bold dark:text-amber-400 text-stone-900 focus:outline-none focus:border-amber-500 cursor-pointer"
+                    >
+                      {categories.map((cat) => (
+                        <option key={cat.id} value={cat.id}>
+                          🏷️ {cat.name}
+                        </option>
+                      ))}
+                      {!categories.some((c) => c.id === 'GA_U_MUOI' || c.slug === 'ga-u-muoi') && (
+                        <option value="GA_U_MUOI">🍗 Dòng Gà Ủ Muối</option>
+                      )}
+                      {!categories.some((c) => c.id === 'NEM_NGUA' || c.slug === 'nem-ngua') && (
+                        <option value="NEM_NGUA">🥩 Dòng Nem Ngựa</option>
+                      )}
+                    </select>
+                  </div>
+                )}
+
+                {/* Dropdown for Specific Product Selection */}
+                {formAllocationType === 'PRODUCT' && (
+                  <div className="mt-2">
+                    <label className="text-[11px] font-semibold dark:text-neutral-400 text-stone-600 block mb-1">
+                      Chọn Món Ăn Đích Danh Chịu Chi Phí:
                     </label>
                     <select
                       value={formProductId}
-                      onChange={(e) => setFormProductId(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl dark:bg-neutral-900 bg-stone-50 border dark:border-neutral-700 border-stone-300 font-medium dark:text-white text-stone-900 focus:outline-none focus:border-amber-500 cursor-pointer"
+                      onChange={(e) => {
+                        const pId = e.target.value;
+                        setFormProductId(pId);
+                        const matchedP = products.find((p) => p.id === pId);
+                        if (matchedP) {
+                          setFormTargetCategory(matchedP.categoryId || 'PRODUCT');
+                        }
+                      }}
+                      className="w-full px-3 py-2 rounded-xl dark:bg-neutral-900 bg-stone-50 border dark:border-neutral-700 border-stone-300 font-bold dark:text-emerald-400 text-stone-900 focus:outline-none focus:border-amber-500 cursor-pointer"
                     >
-                      <option value="">-- Phân bổ cho toàn bộ dòng hàng (Mặc định) --</option>
-                      {products
-                        .filter((p) => {
-                          const pName = (p.name || '').toLowerCase();
-                          if (formTargetCategory === 'GA_U_MUOI') return pName.includes('gà') || p.type === 'SINGLE';
-                          if (formTargetCategory === 'NEM_NGUA') return pName.includes('nem');
-                          return true;
-                        })
-                        .map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.name} ({p.price?.toLocaleString('vi-VN')} đ)
-                          </option>
-                        ))}
+                      <option value="">-- Chọn món ăn --</option>
+                      {products.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          🍽️ {p.name} ({p.price?.toLocaleString('vi-VN')} đ)
+                        </option>
+                      ))}
                     </select>
                   </div>
                 )}
